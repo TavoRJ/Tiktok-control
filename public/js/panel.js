@@ -358,6 +358,20 @@ function updateUIWithConfig(config) {
             logoEl.style.display = 'block';
         }
     }
+
+    // Dynamic artist name for mockup track index 0
+    if (currentTrackIndex === 0 && (!config.spotifyConnected || !config.spotifyEnabled)) {
+        const artistEl = document.getElementById('mockup-artist');
+        if (artistEl) {
+            if (themeName === 'majo') {
+                artistEl.textContent = 'Majo Vibe';
+            } else if (themeName === 'naya') {
+                artistEl.textContent = 'Naya Vibe';
+            } else {
+                artistEl.textContent = 'Live Vibe';
+            }
+        }
+    }
     if (setupThemeEl) setupThemeEl.value = themeName;
     if (spotActiveEl) spotActiveEl.checked = !!config.spotifyEnabled;
     if (spotClientEl) spotClientEl.value = config.spotifyClientId || '';
@@ -1087,7 +1101,19 @@ function loadMockupTrack(index) {
     const titleEl = document.getElementById('mockup-title');
     const artistEl = document.getElementById('mockup-artist');
     if (titleEl) titleEl.textContent = track.title;
-    if (artistEl) artistEl.textContent = track.artist;
+    
+    let artistName = track.artist;
+    if (index === 0) {
+        const theme = (chatbotConfig && chatbotConfig.themeName) || 'neutral';
+        if (theme === 'majo') {
+            artistName = 'Majo Vibe';
+        } else if (theme === 'naya') {
+            artistName = 'Naya Vibe';
+        } else {
+            artistName = 'Live Vibe';
+        }
+    }
+    if (artistEl) artistEl.textContent = artistName;
     
     // Set artwork
     const imgEl = document.getElementById('mockup-album-img');
@@ -1408,7 +1434,7 @@ if (devDetails) {
                 e.stopPropagation();
                 
                 const password = prompt('Acceso Restringido - Ingresa la contraseña de Desarrollador:');
-                if (password === 'naya_dev') {
+                if (password === 'tavo_dev' || password === 'naya_dev') {
                     isDeveloperAuthenticated = true;
                     devDetails.open = true;
                 } else {
@@ -1945,7 +1971,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(chatbotConfig, null, 2));
             const downloadAnchor = document.createElement('a');
             downloadAnchor.setAttribute("href",     dataStr);
-            downloadAnchor.setAttribute("download", `naya_chatbot_settings_${new Date().toISOString().slice(0,10)}.json`);
+            downloadAnchor.setAttribute("download", `${chatbotConfig.themeName || 'neutral'}_chatbot_settings_${new Date().toISOString().slice(0,10)}.json`);
             document.body.appendChild(downloadAnchor);
             downloadAnchor.click();
             downloadAnchor.remove();
