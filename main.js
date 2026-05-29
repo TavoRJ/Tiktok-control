@@ -21,7 +21,7 @@ function createWindow() {
         height: 800,
         minWidth: 800,
         minHeight: 600,
-        title: "TikTok Live Panel",
+        title: "GRLive",
         icon: path.join(__dirname, 'public', 'assets', 'icon.png'), // Puedes crear un ícono luego
         autoHideMenuBar: true,
         webPreferences: {

@@ -353,7 +353,7 @@ function updateUIWithConfig(config) {
     document.body.className = 'theme-' + themeName;
     const logoEl = document.querySelector('.brand-logo');
     if (themeName === 'neutral') {
-        document.title = "TikTok Live - Control Panel";
+        document.title = "GRLive - Control Panel";
         if (logoEl) {
             logoEl.src = `assets/neutral-logo.jpg`;
             logoEl.alt = 'GR Logo';

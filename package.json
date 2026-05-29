@@ -11,7 +11,7 @@
   },
   "build": {
     "appId": "com.tavorj.tiktoklive",
-    "productName": "TikTok Live Panel",
+    "productName": "GRLive",
     "publish": [
       {
         "provider": "github",
