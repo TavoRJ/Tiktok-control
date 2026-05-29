@@ -15,6 +15,13 @@ let localProgressMs = 0;
 let progressInterval = null;
 const defaultCover = "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%22%20height%3D%22100%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%2523ff3377%22%2F%3E%3Ccircle%20cx%3D%2250%22%20cy%3D%2250%22%20r%3D%2210%22%20fill%3D%22%2523111%22%2F%3E%3C%2Fsvg%3E";
 
+function getFallbackCover() {
+    if (currentSettings && currentSettings.themeName === 'naya') {
+        return 'assets/naya-logo.png';
+    }
+    return defaultCover;
+}
+
 // Listen to Spotify settings updates
 socket.on('chatbot_settings_updated', (config) => {
     if (!config) return;
@@ -50,6 +57,11 @@ socket.on('chatbot_settings_updated', (config) => {
     
     // Sync vinyl surface (e.g. Picture Disc)
     syncVinylDesign();
+    
+    // If offline, update the default cover to match the active theme fallback
+    if (!currentTrack || !currentTrack.title) {
+        albumArt.src = getFallbackCover();
+    }
 });
 
 // Listen to Spotify track updates from backend
@@ -82,7 +94,7 @@ socket.on('spotify_track', (track) => {
             albumArt.src = track.albumArt;
         }
     } else {
-        albumArt.src = defaultCover;
+        albumArt.src = getFallbackCover();
     }
     
     // Sync vinyl surface in case of Picture Disc design
@@ -115,7 +127,7 @@ function syncVinylDesign() {
     const isFullArt = wrapper && wrapper.classList.contains('design-full-art');
     
     if (isFullArt) {
-        const artUrl = currentTrack && currentTrack.albumArt ? currentTrack.albumArt : defaultCover;
+        const artUrl = currentTrack && currentTrack.albumArt ? currentTrack.albumArt : getFallbackCover();
         vinylDisc.style.backgroundImage = `url('${artUrl}')`;
     } else {
         vinylDisc.style.backgroundImage = '';
@@ -125,7 +137,7 @@ function syncVinylDesign() {
 function setOfflineState() {
     songTitle.textContent = "Sin música sonando";
     songArtist.textContent = "Spotify en espera";
-    albumArt.src = defaultCover;
+    albumArt.src = getFallbackCover();
     
     const requesterEl = document.getElementById('song-requester');
     if (requesterEl) requesterEl.style.display = 'none';

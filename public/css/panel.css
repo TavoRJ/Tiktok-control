@@ -12,8 +12,22 @@
 }
 
 body.theme-naya {
-    --accent-red: #d900ff;
-    --accent-red-hover: #ff33ff;
+    --bg-dark: #0f070b;
+    --bg-panel: #160e13;
+    --bg-card: rgba(255, 105, 180, 0.08);
+    --bg-glass: rgba(25, 15, 22, 0.6);
+    --border-color: rgba(255, 105, 180, 0.2);
+    --accent-red: #ff69b4;
+    --accent-red-hover: #ff1493;
+    --shadow-soft: 0 4px 24px rgba(255, 105, 180, 0.15);
+}
+
+body.theme-naya .brand-logo {
+    filter: drop-shadow(0 0 10px rgba(255, 105, 180, 0.5)) !important;
+}
+
+body.theme-naya .brand-logo:hover {
+    filter: drop-shadow(0 0 18px rgba(255, 105, 180, 0.9)) !important;
 }
 
 body.theme-majo {

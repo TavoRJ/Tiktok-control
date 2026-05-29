@@ -1192,9 +1192,19 @@ function loadMockupTrack(index) {
     // Set artwork
     const imgEl = document.getElementById('mockup-album-img');
     const bgArtEl = document.getElementById('mockup-bg-art');
-    if (imgEl) imgEl.src = track.cover;
+    if (imgEl) {
+        if (index === 0 && ((chatbotConfig && chatbotConfig.themeName) || 'neutral') === 'naya') {
+            imgEl.src = 'assets/naya-logo.png';
+        } else {
+            imgEl.src = track.cover;
+        }
+    }
     if (bgArtEl) {
-        bgArtEl.style.background = track.bgGradient;
+        if (index === 0 && ((chatbotConfig && chatbotConfig.themeName) || 'neutral') === 'naya') {
+            bgArtEl.style.background = 'linear-gradient(135deg, #ff69b4, #2a0b16)';
+        } else {
+            bgArtEl.style.background = track.bgGradient;
+        }
     }
     
     // Time & Progress reset
