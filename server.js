@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const { EdgeTTS } = require('node-edge-tts');
 const os = require('os');
+const packageJson = require('./package.json');
 
 const writableDir = process.env.USER_DATA_PATH || __dirname;
 const SETTINGS_FILE = path.join(writableDir, 'chatbot_settings.json');
@@ -1278,6 +1279,7 @@ io.on('connection', (socket) => {
     
     // Send current chatbot settings on connection
     socket.emit('chatbot_settings_updated', chatbotSettings);
+    socket.emit('app_version', packageJson.version);
 
     // Send local IPs on connection
     socket.emit('local_ips', getLocalIPs());

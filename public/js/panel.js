@@ -51,6 +51,13 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Socket.io Events
+socket.on('app_version', (version) => {
+    const versionLabel = document.getElementById('app-version-label');
+    if (versionLabel) {
+        versionLabel.textContent = `v${version}`;
+    }
+});
+
 socket.on('system', (data) => {
     if (data.type === 'connected') {
         statusText.textContent = data.message;
