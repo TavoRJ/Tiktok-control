@@ -968,7 +968,6 @@ function processAndSpeak(data) {
     if (chatbotConfig.playLocation === 'overlay' && isPanel) return;
     if (chatbotConfig.playLocation === 'panel' && !isPanel) return;
     
-    const uniqueId = (data.uniqueId || '').toLowerCase();
     const nickname = data.nickname || data.uniqueId || 'Usuario';
     let comment = data.comment || '';
     
