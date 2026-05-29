@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Naya's - Music Overlay</title>
+    <!-- Google Fonts: Outfit or Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/music-widget.css">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <div class="widget-wrapper">
+        <!-- Letrero de Neón -->
+        <div class="neon-sign">
+            <span class="glowing-text">Live de Naya</span>
+        </div>
+        
+        <!-- Cuerpo del Tocadiscos -->
+        <div class="tocadiscos" id="tocadiscos-player">
+            <!-- Detalles Decorativos -->
+            <div class="knob volume-knob"></div>
+            <div class="knob pitch-slider">
+                <div class="slider-handle"></div>
+            </div>
+            
+            <!-- El Plato y Vinilo -->
+            <div class="platter-area">
+                <div class="vinyl-record" id="vinyl-disc">
+                    <!-- Art del album en el centro -->
+                    <div class="vinyl-center">
+                        <img src="data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%22%20height%3D%22100%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%2523ff3377%22%2F%3E%3Ccircle%20cx%3D%2250%22%20cy%3D%2250%22%20r%3D%2210%22%20fill%3D%22%2523111%22%2F%3E%3C%2Fsvg%3E" id="album-art" alt="Album Cover">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Brazo Fonocaptor (Tonearm) -->
+            <div class="tonearm-container">
+                <div class="tonearm" id="tonearm-needle">
+                    <div class="arm-shaft"></div>
+                    <div class="headshell"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Info de Canción -->
+        <div class="song-info">
+            <div class="text-container">
+                <h2 id="song-title">Sin música sonando</h2>
+                <h3 id="song-artist">Spotify en espera</h3>
+            </div>
+            
+            <!-- Barra de Progreso -->
+            <div class="progress-container">
+                <div class="progress-bar-fill" id="progress-fill"></div>
+            </div>
+            
+            <!-- Quién pidió la canción (Neón) -->
+            <div id="song-requester" class="song-requester" style="display: none;"></div>
+        </div>
+        
+        <!-- Personaje Chibi Animado (Luffy) -->
+        <div class="chibi-character" id="widget-chibi-character"></div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/music-widget.js"></script>
+</body>
+</html>

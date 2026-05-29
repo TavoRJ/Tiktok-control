@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Naya's - Overlay</title>
+    <link rel="stylesheet" href="css/overlay.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@900&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <!-- Tabla Versus Persistente -->
+    <div id="versus-container" class="versus-container hidden">
+        <div class="vs-side host-side">
+            <span id="vs-host-name">Host</span>
+        </div>
+        <div class="vs-badge">
+            <span>VS</span>
+        </div>
+        <div class="vs-side opponent-side">
+            <span id="vs-opponent-name">Esperando...</span>
+        </div>
+    </div>
+
+    <!-- Mini Alertas para Regalos Pequeños -->
+    <div id="mini-alerts-container" class="mini-alerts-container"></div>
+
+    <!-- Capa Trasera (Background Animations) -->
+    <div id="layer-back" class="layer"></div>
+
+    <!-- Capa Delantera (Foreground Animations) -->
+    <div id="layer-front" class="layer"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/overlay.js"></script>
+</body>
+
+</html>

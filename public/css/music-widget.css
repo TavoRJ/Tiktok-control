@@ -1,0 +1,933 @@
+:root {
+    --accent-color: #ff0077;
+    --accent-glow: rgba(255, 0, 119, 0.4);
+    --accent-glow-light: rgba(255, 0, 119, 0.15);
+}
+
+/* Accent Color Overrides */
+.color-pink {
+    --accent-color: #ff0077;
+    --accent-glow: rgba(255, 0, 119, 0.4);
+    --accent-glow-light: rgba(255, 0, 119, 0.15);
+}
+
+.color-purple {
+    --accent-color: #9900ff;
+    --accent-glow: rgba(153, 0, 255, 0.4);
+    --accent-glow-light: rgba(153, 0, 255, 0.15);
+}
+
+.color-cyan {
+    --accent-color: #00f0ff;
+    --accent-glow: rgba(0, 240, 255, 0.4);
+    --accent-glow-light: rgba(0, 240, 255, 0.15);
+}
+
+.color-mint {
+    --accent-color: #00ffcc;
+    --accent-glow: rgba(0, 255, 204, 0.4);
+    --accent-glow-light: rgba(0, 255, 204, 0.15);
+}
+
+.color-rose-gold {
+    --accent-color: #ff9a9e;
+    --accent-glow: rgba(255, 154, 158, 0.4);
+    --accent-glow-light: rgba(255, 154, 158, 0.15);
+}
+
+body, html {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background-color: transparent; /* Transparente para OBS */
+    font-family: 'Outfit', 'Inter', sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Contenedor del Widget */
+.widget-wrapper {
+    position: relative;
+    width: 350px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(10, 5, 15, 0.65);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--accent-glow);
+    border-radius: 28px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 30px var(--accent-glow-light);
+    animation: fadeIn 0.8s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+    transition: all 0.5s ease-in-out;
+}
+
+/* Letrero Neón */
+.neon-sign {
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.glowing-text {
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #ffffff;
+    text-shadow: 
+        0 0 5px #fff,
+        0 0 10px var(--accent-color),
+        0 0 20px var(--accent-color),
+        0 0 40px var(--accent-color);
+    animation: pulseNeon 2s infinite alternate;
+}
+
+/* Cuerpo del Tocadiscos */
+.tocadiscos {
+    position: relative;
+    width: 220px;
+    height: 220px;
+    background: linear-gradient(135deg, var(--accent-glow-light) 0%, rgba(20, 10, 30, 0.85) 100%);
+    border: 1px solid var(--accent-glow);
+    border-radius: 20px;
+    box-shadow: 
+        inset 0 0 20px var(--accent-glow-light),
+        0 15px 35px rgba(0, 0, 0, 0.5);
+    overflow: visible; /* Permitir que el brazo salga del cuadro */
+    margin-bottom: 20px;
+    transition: all 0.5s ease-in-out;
+}
+
+/* Detalles: Perillas y Ajustes */
+.knob {
+    position: absolute;
+    background: #111;
+    border: 2px solid var(--accent-color);
+    border-radius: 50%;
+}
+
+.volume-knob {
+    width: 18px;
+    height: 18px;
+    bottom: 20px;
+    left: 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+}
+
+.pitch-slider {
+    position: absolute;
+    width: 8px;
+    height: 60px;
+    background: #000;
+    border-radius: 4px;
+    right: 25px;
+    bottom: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.slider-handle {
+    position: absolute;
+    width: 14px;
+    height: 8px;
+    background: var(--accent-color);
+    border-radius: 2px;
+    left: -4px;
+    top: 25px;
+    box-shadow: 0 0 5px var(--accent-color);
+}
+
+/* Plato y Vinilo */
+.platter-area {
+    position: absolute;
+    width: 180px;
+    height: 180px;
+    top: 20px;
+    left: 20px;
+    border-radius: 50%;
+    background: #000;
+    border: 3px solid var(--accent-glow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+    transition: all 0.5s ease-in-out;
+}
+
+.vinyl-record {
+    width: 170px;
+    height: 170px;
+    border-radius: 50%;
+    background: repeating-radial-gradient(
+        circle,
+        #0c0c0e,
+        #121216 2px,
+        #0c0c0e 4px
+    );
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.7);
+    transition: transform 0.8s cubic-bezier(0.25, 0.8, 0.25, 1), background 0.5s ease;
+}
+
+/* Center image is enlarged to 85px to be clearly visible */
+.vinyl-center {
+    width: 85px;
+    height: 85px;
+    border-radius: 50%;
+    border: 4px solid #111;
+    overflow: hidden;
+    position: relative;
+    background: var(--accent-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    transition: all 0.5s ease;
+}
+
+.vinyl-center::after {
+    content: '';
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background: #000;
+    border-radius: 50%;
+    z-index: 5;
+}
+
+.vinyl-center img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+}
+
+/* Animación de Rotación de Vinilo */
+@keyframes spinVinyl {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Custom speed controls classes */
+.speed-normal .vinyl-record.spinning {
+    animation: spinVinyl 6s linear infinite;
+}
+.speed-fast .vinyl-record.spinning {
+    animation: spinVinyl 3s linear infinite;
+}
+.speed-slow .vinyl-record.spinning {
+    animation: spinVinyl 12s linear infinite;
+}
+.speed-static .vinyl-record.spinning {
+    animation: none;
+}
+
+/* Vinyl Custom Designs */
+.design-pink-glow .vinyl-record {
+    background: repeating-radial-gradient(
+        circle,
+        rgba(255, 0, 119, 0.85),
+        rgba(255, 50, 150, 0.95) 2px,
+        rgba(255, 0, 119, 0.85) 4px
+    );
+    box-shadow: 0 8px 25px rgba(255, 0, 119, 0.5), 0 0 15px rgba(255, 0, 119, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.design-retro-white .vinyl-record {
+    background: repeating-radial-gradient(
+        circle,
+        #e5e5e8,
+        #ffffff 2px,
+        #e5e5e8 4px
+    );
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+.design-retro-white .vinyl-center {
+    border: 4px solid #dcdcdc;
+}
+
+/* Picture disc design (whole vinyl is the album cover) */
+.design-full-art .vinyl-record {
+    background-size: cover;
+    background-position: center;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.6);
+    border: 2px solid rgba(255, 255, 255, 0.15);
+}
+.design-full-art .vinyl-record::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    border-radius: 50%;
+    background: repeating-radial-gradient(
+        circle,
+        rgba(0, 0, 0, 0) 0px,
+        rgba(0, 0, 0, 0.18) 2px,
+        rgba(0, 0, 0, 0) 4px
+    );
+    pointer-events: none;
+    z-index: 1;
+}
+.design-full-art .vinyl-center {
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(255,255,255,0.7);
+    background: #000;
+}
+.design-full-art .vinyl-center img {
+    display: none;
+}
+
+/* Brazo Fonocaptor (Tonearm) */
+.tonearm-container {
+    position: absolute;
+    top: -5px;
+    right: 15px;
+    width: 50px;
+    height: 50px;
+    z-index: 10;
+}
+
+.tonearm {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    width: 25px;
+    height: 120px;
+    transform-origin: 12px 12px;
+    transform: rotate(0deg); /* 0deg es reposo, ~26deg es reproduciendo */
+    transition: transform 1.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.tonearm::before {
+    content: '';
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #555 0%, #111 100%);
+    border: 2px solid var(--accent-color);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5), 0 0 8px var(--accent-glow);
+    z-index: 5;
+}
+
+.arm-shaft {
+    position: absolute;
+    width: 4px;
+    height: 90px;
+    background: linear-gradient(90deg, #aaa, #fff, #555);
+    left: 10px;
+    top: 12px;
+    border-radius: 2px;
+    transform-origin: 2px 0;
+}
+
+.arm-shaft::after {
+    content: '';
+    position: absolute;
+    width: 4px;
+    height: 25px;
+    background: linear-gradient(90deg, #aaa, #fff, #555);
+    bottom: -22px;
+    left: 4px;
+    transform: rotate(15deg);
+    border-radius: 2px;
+}
+
+.headshell {
+    position: absolute;
+    width: 10px;
+    height: 18px;
+    background: var(--accent-color);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 2px;
+    left: 12px;
+    top: 108px;
+    transform: rotate(15deg);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.6), 0 0 5px var(--accent-glow);
+}
+
+.tonearm::after {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 10px;
+    background: #000;
+    border: 1px solid #444;
+    top: -5px;
+    left: 5px;
+    border-radius: 2px;
+}
+
+.tonearm.active {
+    transform: rotate(26deg);
+}
+
+/* Info de la Canción */
+.song-info {
+    width: 100%;
+    text-align: center;
+    margin-top: 5px;
+    z-index: 5;
+}
+
+.text-container {
+    height: 60px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
+}
+
+#song-title {
+    font-size: 18px;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 4px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+
+#song-artist {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent-color);
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: color 0.5s ease;
+}
+
+/* Barra de Progreso */
+.progress-container {
+    width: 80%;
+    margin: 15px auto 0;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent-color), #ff66b2);
+    border-radius: 2px;
+    box-shadow: 0 0 8px var(--accent-color);
+    transition: width 0.1s linear;
+}
+
+/* Song Requester Credit (OBS Neon style) */
+.song-requester {
+    font-size: 11px;
+    font-weight: 800;
+    color: #ffb3d9;
+    margin-top: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    text-shadow: 
+        0 0 4px var(--accent-color),
+        0 0 8px var(--accent-color);
+    animation: fadeInRequester 0.5s ease-out forwards;
+}
+
+/* ==========================================
+   THEME STYLES IMPLEMENTATION
+   ========================================== */
+
+/* 1. Theme Minimalist Transparent */
+.theme-transparent {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+/* 2. Theme Apple Music (Clean White & Rose Gold Glass) */
+.theme-apple-music {
+    background: rgba(255, 255, 255, 0.45) !important;
+    border: 1px solid rgba(255, 255, 255, 0.6) !important;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.08), 0 0 30px rgba(255, 255, 255, 0.25) !important;
+    backdrop-filter: blur(25px) !important;
+    -webkit-backdrop-filter: blur(25px) !important;
+}
+.theme-apple-music .glowing-text {
+    color: #333333 !important;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 0 0 20px rgba(255, 0, 119, 0.15) !important;
+    animation: none !important;
+}
+.theme-apple-music .tocadiscos {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(240, 240, 245, 0.95) 100%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.8) !important;
+    box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.8), 0 10px 25px rgba(0, 0, 0, 0.04) !important;
+}
+.theme-apple-music .platter-area {
+    background: #eaeaea !important;
+    border: 3px solid rgba(255, 255, 255, 0.8) !important;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.03) !important;
+}
+.theme-apple-music #song-title {
+    color: #111111 !important;
+    text-shadow: none !important;
+}
+.theme-apple-music #song-artist {
+    color: var(--accent-color) !important;
+    font-weight: 700;
+}
+.theme-apple-music .progress-container {
+    background: rgba(0, 0, 0, 0.07) !important;
+}
+.theme-apple-music .progress-bar-fill {
+    background: linear-gradient(90deg, var(--accent-color), #ff8da1) !important;
+    box-shadow: 0 0 8px rgba(255, 0, 119, 0.25) !important;
+}
+.theme-apple-music .song-requester {
+    color: var(--accent-color) !important;
+    text-shadow: none !important;
+}
+
+/* 3. Theme Coquette Hearts (Pastel Femenino Coqueto) */
+.theme-coquette-hearts {
+    background: rgba(255, 240, 245, 0.88) !important;
+    border: 2px solid #ffb3d9 !important;
+    box-shadow: 0 20px 50px rgba(255, 179, 217, 0.3), 0 0 30px rgba(255, 179, 217, 0.15) !important;
+    border-radius: 35px !important;
+}
+.theme-coquette-hearts .glowing-text {
+    color: #ff5599 !important;
+    font-family: 'Outfit', cursive, sans-serif;
+    text-shadow: 0 2px 5px rgba(255, 85, 153, 0.15) !important;
+    animation: heartPulse 1.5s infinite alternate !important;
+}
+@keyframes heartPulse {
+    from { transform: scale(1); }
+    to { transform: scale(1.03); }
+}
+.theme-coquette-hearts .tocadiscos {
+    background: linear-gradient(135deg, #fff0f5 0%, #ffe4e1 100%) !important;
+    border: 2px dashed #ffb3d9 !important;
+    box-shadow: inset 0 0 10px rgba(255, 179, 217, 0.15), 0 10px 25px rgba(255, 179, 217, 0.08) !important;
+    border-radius: 25px !important;
+}
+.theme-coquette-hearts .platter-area {
+    background: #ffe4e1 !important;
+    border: 3px solid #ffb3d9 !important;
+}
+.theme-coquette-hearts #song-title {
+    color: #d13d7a !important;
+    text-shadow: none !important;
+}
+.theme-coquette-hearts #song-artist {
+    color: #ff5599 !important;
+}
+.theme-coquette-hearts .progress-container {
+    background: rgba(255, 179, 217, 0.2) !important;
+    height: 5px !important;
+    border-radius: 5px !important;
+}
+.theme-coquette-hearts .progress-bar-fill {
+    background: #ff5599 !important;
+    box-shadow: 0 0 8px rgba(255, 85, 153, 0.3) !important;
+}
+.theme-coquette-hearts .song-requester {
+    color: #d13d7a !important;
+    text-shadow: none !important;
+    font-style: italic;
+}
+.theme-coquette-hearts::after {
+    content: '🌸';
+    position: absolute;
+    font-size: 20px;
+    top: 15px;
+    right: 15px;
+    opacity: 0.65;
+    animation: floatDecor 4s ease-in-out infinite alternate;
+}
+.theme-coquette-hearts::before {
+    content: '🎀';
+    position: absolute;
+    font-size: 20px;
+    bottom: 15px;
+    left: 15px;
+    opacity: 0.65;
+    animation: floatDecor 4s ease-in-out infinite alternate-reverse;
+}
+@keyframes floatDecor {
+    from { transform: translateY(0) rotate(0deg); }
+    to { transform: translateY(-6px) rotate(12deg); }
+}
+
+/* 4. Theme Anime Luffy (Subtle yellow straw-hat background, blue, red accents, floating chibi Luffy) */
+.theme-anime-luffy {
+    background: linear-gradient(135deg, rgba(255, 248, 210, 0.93) 0%, rgba(255, 230, 160, 0.93) 100%) !important;
+    border: 3px solid #e62e2d !important;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35), 0 0 35px rgba(255, 210, 80, 0.3) !important;
+    border-radius: 32px !important;
+}
+.theme-anime-luffy .glowing-text {
+    color: #e62e2d !important;
+    text-shadow: 2px 2px 0px #ffcc00, -1.5px -1.5px 0px #0055ff !important;
+    font-family: 'Outfit', 'Arial Black', sans-serif;
+    letter-spacing: 1px;
+    animation: animePulse 1.2s infinite alternate !important;
+}
+@keyframes animePulse {
+    from { transform: scale(1); }
+    to { transform: scale(1.02); }
+}
+.theme-anime-luffy .tocadiscos {
+    background: linear-gradient(135deg, #0055ff 0%, #002288 100%) !important; /* Luffy Blue Shorts style */
+    border: 2.5px solid #ffcc00 !important; /* Straw hat yellow */
+    box-shadow: inset 0 0 15px rgba(0,0,0,0.5), 0 8px 20px rgba(0,0,0,0.3) !important;
+}
+.theme-anime-luffy .platter-area {
+    background: #111115 !important;
+    border: 3px solid #e62e2d !important; /* Luffy Red vest outer platter border */
+}
+.theme-anime-luffy .knob {
+    border: 2px solid #ffcc00 !important;
+}
+.theme-anime-luffy .slider-handle {
+    background: #e62e2d !important;
+    box-shadow: 0 0 6px #e62e2d !important;
+}
+.theme-anime-luffy #song-title {
+    color: #111111 !important;
+    font-weight: 900;
+    text-shadow: none !important;
+}
+.theme-anime-luffy #song-artist {
+    color: #e62e2d !important;
+    font-weight: 800;
+}
+.theme-anime-luffy .progress-container {
+    background: rgba(0, 0, 0, 0.12) !important;
+    height: 5px !important;
+}
+.theme-anime-luffy .progress-bar-fill {
+    background: linear-gradient(90deg, #e62e2d, #ff4444) !important;
+    box-shadow: 0 0 8px rgba(230, 46, 45, 0.4) !important;
+}
+.theme-anime-luffy .song-requester {
+    color: #0055ff !important;
+    font-weight: 900;
+    text-shadow: 0 0 4px rgba(0, 85, 255, 0.25) !important;
+}
+.theme-anime-luffy #widget-chibi-character {
+    display: block !important;
+    background-image: url('../assets/luffy-3d.png') !important; /* Use 3D Luffy */
+    bottom: -10px;
+    right: -10px;
+    width: 120px;
+    height: 120px;
+    animation: bobbingLuffy 3.5s ease-in-out infinite alternate;
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.35));
+}
+@keyframes bobbingLuffy {
+    from { transform: translateY(0) rotate(-3deg); }
+    to { transform: translateY(-8px) rotate(4deg); }
+}
+
+/* 5. Theme Spotify Classic */
+.theme-spotify-classic {
+    background: #121212 !important;
+    border: 1px solid #282828 !important;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.9) !important;
+}
+.theme-spotify-classic .glowing-text {
+    color: #1db954 !important;
+    text-shadow: 0 0 10px rgba(29, 185, 84, 0.4) !important;
+    animation: none !important;
+}
+.theme-spotify-classic .tocadiscos {
+    background: #181818 !important;
+    border: 1px solid #282828 !important;
+    box-shadow: none !important;
+}
+.theme-spotify-classic .platter-area {
+    border: 3px solid #282828 !important;
+}
+.theme-spotify-classic #song-artist {
+    color: #1db954 !important;
+}
+.theme-spotify-classic .progress-bar-fill {
+    background: #1db954 !important;
+    box-shadow: 0 0 8px rgba(29, 185, 84, 0.5) !important;
+}
+.theme-spotify-classic .song-requester {
+    color: #1db954 !important;
+    text-shadow: none !important;
+}
+
+/* 6. Theme Naya Chibi (Beautiful pastel pink, floating heart/chibi Naya, glowing neon accents) */
+.theme-naya-chibi {
+    background: linear-gradient(135deg, rgba(255, 235, 240, 0.95) 0%, rgba(255, 205, 220, 0.95) 100%) !important;
+    border: 3px solid #ff69b4 !important; /* Hot pink border */
+    box-shadow: 0 20px 50px rgba(255, 105, 180, 0.25), 0 0 35px rgba(255, 182, 193, 0.4) !important;
+    border-radius: 32px !important;
+}
+.theme-naya-chibi .glowing-text {
+    color: #ff1493 !important; /* Deep pink */
+    text-shadow: 0 0 10px rgba(255, 20, 147, 0.5), 0 0 20px rgba(255, 105, 180, 0.3) !important;
+    font-family: 'Outfit', 'Inter', sans-serif;
+    font-weight: 800;
+    letter-spacing: 1px;
+    animation: nayaPulse 1.5s infinite alternate !important;
+}
+@keyframes nayaPulse {
+    from { transform: scale(1); filter: drop-shadow(0 0 2px rgba(255, 20, 147, 0.3)); }
+    to { transform: scale(1.03); filter: drop-shadow(0 0 8px rgba(255, 20, 147, 0.6)); }
+}
+.theme-naya-chibi .tocadiscos {
+    background: linear-gradient(135deg, #ffe4e1 0%, #ffc0cb 100%) !important; /* Rose gold and pink platter base */
+    border: 2.5px solid #ff69b4 !important;
+    box-shadow: inset 0 0 15px rgba(255,105,180,0.3), 0 8px 20px rgba(0,0,0,0.15) !important;
+}
+.theme-naya-chibi .platter-area {
+    background: #ffffff !important; /* White platter for premium clean look */
+    border: 3px solid #ffb6c1 !important;
+}
+.theme-naya-chibi .knob {
+    border: 2px solid #ff69b4 !important;
+    background: #fff0f5 !important;
+}
+.theme-naya-chibi .slider-handle {
+    background: #ff1493 !important;
+    box-shadow: 0 0 6px #ff1493 !important;
+}
+.theme-naya-chibi #song-title {
+    color: #4a2c3a !important; /* Dark chocolate pink */
+    font-weight: 900;
+    text-shadow: none !important;
+}
+.theme-naya-chibi #song-artist {
+    color: #ff1493 !important;
+    font-weight: 800;
+}
+.theme-naya-chibi .progress-container {
+    background: rgba(255, 182, 193, 0.3) !important;
+    height: 5px !important;
+}
+.theme-naya-chibi .progress-bar-fill {
+    background: linear-gradient(90deg, #ff69b4, #ff1493) !important;
+    box-shadow: 0 0 8px rgba(255, 20, 147, 0.4) !important;
+}
+.theme-naya-chibi .song-requester {
+    color: #ff1493 !important;
+    font-weight: 900;
+    text-shadow: 0 0 4px rgba(255, 20, 147, 0.3) !important;
+}
+.theme-naya-chibi #widget-chibi-character {
+    display: block !important;
+    background-image: url('../assets/naya-logo.png') !important; /* Use Naya Chibi Logo */
+    bottom: -15px;
+    right: -15px;
+    width: 120px;
+    height: 120px;
+    animation: floatingNaya 4s ease-in-out infinite alternate;
+    filter: drop-shadow(0 4px 12px rgba(255, 105, 180, 0.5));
+}
+@keyframes floatingNaya {
+    0% { transform: translateY(0) rotate(-4deg); }
+    100% { transform: translateY(-8px) rotate(6deg); }
+}
+
+/* 7. Theme Anime Gojo (Purple and blue Jujutsu Kaisen theme, with chibi Gojo) */
+.theme-anime-gojo {
+    background: linear-gradient(135deg, rgba(15, 10, 25, 0.95) 0%, rgba(5, 5, 15, 0.95) 100%) !important;
+    border: 3px solid #00f0ff !important; /* Cyan border */
+    box-shadow: 0 20px 50px rgba(0, 240, 255, 0.25), 0 0 35px rgba(153, 0, 255, 0.3) !important;
+    border-radius: 32px !important;
+}
+.theme-anime-gojo .glowing-text {
+    color: #00f0ff !important;
+    text-shadow: 0 0 8px #00f0ff, 0 0 15px #9900ff !important;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 800;
+    letter-spacing: 1px;
+    animation: gojoPulse 1.4s infinite alternate !important;
+}
+@keyframes gojoPulse {
+    from { transform: scale(1); }
+    to { transform: scale(1.02); }
+}
+.theme-anime-gojo .tocadiscos {
+    background: linear-gradient(135deg, #180033 0%, #0c001a 100%) !important; /* Purple base */
+    border: 2.5px solid #00f0ff !important;
+    box-shadow: inset 0 0 15px rgba(0, 240, 255, 0.3), 0 8px 20px rgba(0,0,0,0.5) !important;
+}
+.theme-anime-gojo .platter-area {
+    background: #05050a !important;
+    border: 3px solid #9900ff !important; /* Purple platter edge */
+}
+.theme-anime-gojo .knob {
+    border: 2px solid #00f0ff !important;
+}
+.theme-anime-gojo .slider-handle {
+    background: #9900ff !important;
+    box-shadow: 0 0 6px #9900ff !important;
+}
+.theme-anime-gojo #song-title {
+    color: #ffffff !important;
+    font-weight: 900;
+    text-shadow: 0 0 4px rgba(255,255,255,0.2) !important;
+}
+.theme-anime-gojo #song-artist {
+    color: #00f0ff !important;
+    font-weight: 800;
+}
+.theme-anime-gojo .progress-container {
+    background: rgba(255, 255, 255, 0.08) !important;
+    height: 5px !important;
+}
+.theme-anime-gojo .progress-bar-fill {
+    background: linear-gradient(90deg, #00f0ff, #9900ff) !important;
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.5) !important;
+}
+.theme-anime-gojo .song-requester {
+    color: #9900ff !important;
+    font-weight: 900;
+}
+.theme-anime-gojo #widget-chibi-character {
+    display: block !important;
+    background-image: url('../assets/gojo-chibi.png') !important; /* Use Gojo Chibi */
+    bottom: -15px;
+    right: -10px;
+    width: 120px;
+    height: 120px;
+    animation: floatingGojo 3.8s ease-in-out infinite alternate;
+    filter: drop-shadow(0 4px 12px rgba(0, 240, 255, 0.4));
+}
+@keyframes floatingGojo {
+    0% { transform: translateY(0) rotate(-2deg); }
+    100% { transform: translateY(-8px) rotate(4deg); }
+}
+
+/* 8. Theme Majo Spider (Purple, Gold & Black, with Majo Spider Heart logo) */
+.theme-majo-spider {
+    background: linear-gradient(135deg, rgba(20, 10, 30, 0.95) 0%, rgba(5, 2, 10, 0.95) 100%) !important;
+    border: 3px solid #ffd700 !important; /* Gold border */
+    box-shadow: 0 20px 50px rgba(255, 215, 0, 0.18), 0 0 35px rgba(153, 0, 255, 0.25) !important;
+    border-radius: 32px !important;
+}
+.theme-majo-spider .glowing-text {
+    color: #ffd700 !important; /* Gold text */
+    text-shadow: 0 0 8px #ffd700, 0 0 15px #9900ff !important;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    animation: majoPulse 1.6s infinite alternate !important;
+}
+@keyframes majoPulse {
+    from { transform: scale(1); }
+    to { transform: scale(1.02); }
+}
+.theme-majo-spider .tocadiscos {
+    background: linear-gradient(135deg, #120024 0%, #06000d 100%) !important; /* Dark purple/black */
+    border: 2.5px solid #ffd700 !important;
+    box-shadow: inset 0 0 15px rgba(153, 0, 255, 0.3), 0 8px 20px rgba(0,0,0,0.6) !important;
+}
+.theme-majo-spider .platter-area {
+    background: #08020e !important;
+    border: 3px solid #9900ff !important; /* Purple platter edge */
+}
+.theme-majo-spider .knob {
+    border: 2px solid #ffd700 !important;
+    background: #120024 !important;
+}
+.theme-majo-spider .slider-handle {
+    background: #ffd700 !important;
+    box-shadow: 0 0 6px #ffd700 !important;
+}
+.theme-majo-spider #song-title {
+    color: #ffffff !important;
+    font-weight: 900;
+}
+.theme-majo-spider #song-artist {
+    color: #ffd700 !important;
+    font-weight: 800;
+}
+.theme-majo-spider .progress-container {
+    background: rgba(255, 255, 255, 0.05) !important;
+    height: 5px !important;
+}
+.theme-majo-spider .progress-bar-fill {
+    background: linear-gradient(90deg, #9900ff, #ffd700) !important;
+    box-shadow: 0 0 8px rgba(153, 0, 255, 0.4) !important;
+}
+.theme-majo-spider .song-requester {
+    color: #ffd700 !important;
+    font-weight: 900;
+}
+.theme-majo-spider #widget-chibi-character {
+    display: block !important;
+    background-image: url('../assets/majo-logo.png') !important; /* Use Majo Logo */
+    bottom: -15px;
+    right: -15px;
+    width: 120px;
+    height: 120px;
+    animation: floatingMajo 4s ease-in-out infinite alternate;
+    filter: drop-shadow(0 4px 12px rgba(153, 0, 255, 0.5));
+}
+@keyframes floatingMajo {
+    0% { transform: translateY(0) rotate(-4deg); }
+    100% { transform: translateY(-8px) rotate(6deg); }
+}
+
+/* ==========================================
+   CHIBBY STYLES AND UTILITIES
+   ========================================== */
+.chibi-character {
+    display: none;
+    position: absolute;
+    width: 80px;
+    height: 80px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    z-index: 100;
+    pointer-events: none;
+    transition: all 0.5s ease;
+}
+
+/* Animación de entrada general del widget */
+@keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulseNeon {
+    from {
+        text-shadow: 
+            0 0 5px #fff,
+            0 0 10px var(--accent-color),
+            0 0 20px var(--accent-color),
+            0 0 40px var(--accent-color);
+    }
+    to {
+        text-shadow: 
+            0 0 3px #fff,
+            0 0 6px var(--accent-color),
+            0 0 12px var(--accent-color),
+            0 0 25px var(--accent-color);
+    }
+}
+
+@keyframes fadeInRequester {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}

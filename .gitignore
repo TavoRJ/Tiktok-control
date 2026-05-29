@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Local configuration and credentials (CRITICAL: Prevents leaking Spotify credentials!)
+chatbot_settings.json
+.env
+
+# Build outputs
+dist/
+out/
+
+# Temp files
+temp_*.mp3
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

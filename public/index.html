@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Naya's - Control Panel</title>
+    <link rel="stylesheet" href="css/panel.css">
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/panel.css">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="brand">
+                <img src="" alt="Logo" class="brand-logo" style="display: none;">
+            </div>
+            <nav class="menu">
+                <a href="#" class="menu-item active" data-target="overlays-view">
+                    <i data-lucide="monitor-play" class="icon"></i>
+                    <span>OVERLAYS</span>
+                </a>
+                <a href="#" class="menu-item" data-target="music-view">
+                    <i data-lucide="music" class="icon"></i>
+                    <span>MÚSICA</span>
+                </a>
+                <a href="#" class="menu-item" data-target="chatbot-view">
+                    <i data-lucide="message-square" class="icon"></i>
+                    <span>BOT DE CHAT</span>
+                </a>
+                <a href="#" class="menu-item" data-target="log-view">
+                    <i data-lucide="terminal" class="icon"></i>
+                    <span>LOG / SCANNER</span>
+                </a>
+                <a href="#" class="menu-item" data-target="setup-view">
+                    <i data-lucide="settings" class="icon"></i>
+                    <span>SETUP / AJUSTES</span>
+                </a>
+                <a href="/overlay" target="_blank" class="menu-item" style="margin-top: auto; border-top: 1px solid var(--border-color);">
+                    <i data-lucide="external-link" class="icon"></i>
+                    <span>ABRIR OVERLAY</span>
+                </a>
+            </nav>
+            <div class="version">
+                v1.0.0
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <button id="btn-toggle-sidebar" class="btn-icon">
+                    <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                </button>
+                <div class="header-right">
+                    <div class="user-control">
+                        <input type="text" id="username-input" placeholder="@usuario_tiktok" value="nayamorningstar">
+                        <button id="btn-connect" class="btn secondary small">Conectar</button>
+                        <button id="btn-disconnect" class="btn primary danger small" style="background-color: transparent; border: 1px solid var(--accent-red); color: var(--accent-red);">Desconectar</button>
+                    </div>
+                    <div class="status-indicator">
+                        <span class="status-dot"></span>
+                        <span id="connection-status">CONECTANDO...</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- View: Overlays -->
+            <section id="overlays-view" class="view active">
+                <div class="view-header">
+                    <h2>OVERLAYS</h2>
+                    <p>CLICK EN UN PACK PARA ACTIVARLO EN OBS/TIKTOK LIVE</p>
+                </div>
+
+                <!-- Versus Table Controls -->
+                <div class="versus-controls-card">
+                    <div class="versus-info">
+                        <h3>TABLA VERSUS</h3>
+                        <p>Controla la visibilidad de la tabla en el Overlay</p>
+                    </div>
+                    <div class="versus-buttons">
+                        <button class="btn secondary" id="btn-vs-show">Mostrar Tabla</button>
+                        <button class="btn secondary" id="btn-vs-hide">Ocultar</button>
+                        <button class="btn secondary" id="btn-vs-reset">Reiniciar / Limpiar</button>
+                    </div>
+                </div>
+
+                <!-- Input oculto para subir archivos de animaciones maestras -->
+                <input type="file" id="upload-master-file-input" accept="image/*,video/*,audio/*" style="display: none;">
+
+                <div class="cards-grid">
+                    <!-- Card: Guante Pro -->
+                    <div class="card" data-event="trigger_glove">
+                        <div class="card-menu-container">
+                            <button class="card-menu-btn" onclick="toggleCardMenu(event, 'trigger_glove')">
+                                <i data-lucide="more-vertical" class="icon-small"></i>
+                            </button>
+                            <div class="card-menu-dropdown" id="dropdown-trigger_glove">
+                                <button onclick="uploadMasterAnimationFile(event, 'trigger_glove')">Subir archivo</button>
+                                <button onclick="deleteMasterAnimationFile(event, 'trigger_glove')" class="danger">Borrar archivo actual</button>
+                            </div>
+                        </div>
+                        <div class="card-image bg-glow-red">
+                            <img src="assets/glove.png" alt="Guante"
+                                onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiMzMyMiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZmlsbD0iI2ZmZiIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+R1VBTlRFPC90ZXh0Pjwvc3ZnPg=='">
+                        </div>
+                        <div class="card-info">
+                            <h3>GUANTE PRO</h3>
+                            <div class="card-meta">
+                                <span class="badge pro">PRO</span>
+                                <span class="position">BACK + FRONT</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card: Level Up -->
+                    <div class="card" data-event="trigger_levelup">
+                        <div class="card-menu-container">
+                            <button class="card-menu-btn" onclick="toggleCardMenu(event, 'trigger_levelup')">
+                                <i data-lucide="more-vertical" class="icon-small"></i>
+                            </button>
+                            <div class="card-menu-dropdown" id="dropdown-trigger_levelup">
+                                <button onclick="uploadMasterAnimationFile(event, 'trigger_levelup')">Subir archivo</button>
+                                <button onclick="deleteMasterAnimationFile(event, 'trigger_levelup')" class="danger">Borrar archivo actual</button>
+                            </div>
+                        </div>
+                        <div class="card-image bg-glow-red">
+                            <img src="assets/levelup.png" alt="Level Up"
+                                onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiMzMyMiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZmlsbD0iI2ZmZiIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+TEVWRUwgVVA8L3RleHQ+PC9zdmc+'">
+                        </div>
+                        <div class="card-info">
+                            <h3>LEVEL UP</h3>
+                            <div class="card-meta">
+                                <span class="badge pro">PRO</span>
+                                <span class="position">BACK + FRONT</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card: Quiereme -->
+                    <div class="card" data-event="trigger_quiereme">
+                        <div class="card-menu-container">
+                            <button class="card-menu-btn" onclick="toggleCardMenu(event, 'trigger_quiereme')">
+                                <i data-lucide="more-vertical" class="icon-small"></i>
+                            </button>
+                            <div class="card-menu-dropdown" id="dropdown-trigger_quiereme">
+                                <button onclick="uploadMasterAnimationFile(event, 'trigger_quiereme')">Subir archivo</button>
+                                <button onclick="deleteMasterAnimationFile(event, 'trigger_quiereme')" class="danger">Borrar archivo actual</button>
+                            </div>
+                        </div>
+                        <div class="card-image bg-glow-red">
+                            <img src="assets/quiereme.png" alt="Quiéreme"
+                                onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiMzMyMiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZmlsbD0iI2ZmZiIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+UVVJxSJFSkU8L3RleHQ+PC9zdmc+'">
+                        </div>
+                        <div class="card-info">
+                            <h3>QUIÉREME</h3>
+                            <div class="card-meta">
+                                <span class="badge pro">PRO</span>
+                                <span class="position">BACK + FRONT</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card: x2 -->
+                    <div class="card" data-event="trigger_x2">
+                        <div class="card-menu-container">
+                            <button class="card-menu-btn" onclick="toggleCardMenu(event, 'trigger_x2')">
+                                <i data-lucide="more-vertical" class="icon-small"></i>
+                            </button>
+                            <div class="card-menu-dropdown" id="dropdown-trigger_x2">
+                                <button onclick="uploadMasterAnimationFile(event, 'trigger_x2')">Subir archivo</button>
+                                <button onclick="deleteMasterAnimationFile(event, 'trigger_x2')" class="danger">Borrar archivo actual</button>
+                            </div>
+                        </div>
+                        <div class="card-image bg-glow-red">
+                            <img src="assets/x2.png" alt="x2"
+                                onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiMzMyMiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZmlsbD0iI2ZmZiIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+WDI8L3RleHQ+PC9zdmc+'">
+                        </div>
+                        <div class="card-info">
+                            <h3>X2 BATTLE MODE</h3>
+                            <div class="card-meta">
+                                <span class="badge pro">PRO</span>
+                                <span class="position">BACK + FRONT</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Custom Animations Section -->
+                <div class="card-config" style="margin-top: 30px;">
+                    <div class="card-config-header">
+                        <i data-lucide="folder-open" class="icon-accent"></i>
+                        <h3>Subir y Gestionar Animaciones Personalizadas</h3>
+                    </div>
+                    <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">
+                        Sube tus archivos de animación (WebM, MP4, GIF, PNG, MP3). Podrás probarlos directamente, asignarlos a las entradas MVP o utilizarlos como fuentes de navegador individuales en tu OBS o TikTok Live Studio copiando su URL.
+                    </p>
+                    
+                    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                        <!-- Upload Form -->
+                        <form id="upload-animation-form" style="flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 15px; background: rgba(0,0,0,0.15); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <h4 style="margin: 0; font-size: 15px; color: var(--text-main);">Subir Nueva Animación</h4>
+                            
+                            <div class="form-group">
+                                <label for="anim-name">Nombre de la Animación:</label>
+                                <input type="text" id="anim-name" placeholder="Ej. Lluvia de Corazones" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="anim-text">Texto en Pantalla (Opcional):</label>
+                                <input type="text" id="anim-text" placeholder="Ej. ¡Llegó el MVP!">
+                            </div>
+                            
+                            <div style="display: flex; gap: 15px;">
+                                <div class="form-group flex-1">
+                                    <label for="anim-layer">Capa de Renderizado:</label>
+                                    <select id="anim-layer">
+                                        <option value="front">Frente (Frente del avatar)</option>
+                                        <option value="back">Atrás (Detrás del avatar)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group flex-1">
+                                    <label for="anim-duration">Duración (segundos):</label>
+                                    <input type="number" id="anim-duration" value="5" min="1" max="60" required>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="anim-file">Seleccionar Archivo (Video, Audio, Imagen):</label>
+                                <input type="file" id="anim-file" accept="image/*,video/*,audio/*" required style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 6px; border: 1px dashed var(--border-color); font-size: 13px;">
+                            </div>
+                            
+                            <button type="submit" class="btn" style="justify-content: center; background-color: var(--accent-red); font-weight: 800;">
+                                <i data-lucide="upload" style="width: 16px; height: 16px;"></i> Subir y Guardar
+                            </button>
+                        </form>
+                        
+                        <!-- List of Custom Animations -->
+                        <div style="flex: 2; min-width: 400px; display: flex; flex-direction: column; gap: 15px;">
+                            <h4 style="margin: 0; font-size: 15px; color: var(--text-main);">Animaciones Disponibles</h4>
+                            <div class="queue-table-container" style="max-height: 380px;">
+                                <table class="queue-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Nombre</th>
+                                            <th>Duración</th>
+                                            <th>Capa</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="custom-animations-list">
+                                        <tr>
+                                            <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 20px;">Cargando animaciones...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MVP Entrances Section -->
+                <div class="card-config" style="margin-top: 30px;">
+                    <div class="card-config-header">
+                        <i data-lucide="crown" class="icon-accent"></i>
+                        <h3>Entradas Especiales para MVP</h3>
+                    </div>
+                    <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">
+                        Asigna animaciones únicas a usuarios específicos para cuando entren a tu transmisión en vivo. Si un MVP entra y sale repetidamente, puedes desactivar temporalmente su entrada para evitar spam visual.
+                    </p>
+                    
+                    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                        <!-- MVP Register Form -->
+                        <form id="register-mvp-form" style="flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 15px; background: rgba(0,0,0,0.15); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <h4 style="margin: 0; font-size: 15px; color: var(--text-main);">Registrar Nuevo MVP</h4>
+                            
+                            <div class="form-group">
+                                <label for="mvp-username">Usuario de TikTok (Sin @):</label>
+                                <input type="text" id="mvp-username" placeholder="Ej. nayamorningstar" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="mvp-animation">Animación a Reproducir:</label>
+                                <select id="mvp-animation" required>
+                                    <option value="trigger_glove">Guante Pro (Default)</option>
+                                    <option value="trigger_levelup">Level Up (Default)</option>
+                                    <option value="trigger_quiereme">Quiéreme (Default)</option>
+                                    <option value="trigger_x2">X2 Battle (Default)</option>
+                                </select>
+                            </div>
+                            
+                            <button type="submit" class="btn" style="justify-content: center; background-color: var(--accent-red); font-weight: 800;">
+                                <i data-lucide="plus-circle" style="width: 16px; height: 16px;"></i> Registrar MVP
+                            </button>
+                        </form>
+                        
+                        <!-- List of MVP Entrances -->
+                        <div style="flex: 2; min-width: 400px; display: flex; flex-direction: column; gap: 15px;">
+                            <h4 style="margin: 0; font-size: 15px; color: var(--text-main);">Listado de MVPs Registrados</h4>
+                            <div class="queue-table-container" style="max-height: 250px;">
+                                <table class="queue-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Usuario</th>
+                                            <th>Animación</th>
+                                            <th style="text-align: center;">Activo</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="mvp-list">
+                                        <tr>
+                                            <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 20px;">Cargando MVPs...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- View: Log / Scanner -->
+            <section id="log-view" class="view" style="display: none;">
+                <div class="view-header">
+                    <h2>RAW EVENT SCANNER</h2>
+                    <p>UTILIZA ESTA VISTA PARA DESCUBRIR IDs DE REGALOS Y EVENTOS</p>
+                </div>
+
+                <div class="log-controls">
+                    <button id="clear-log" class="btn secondary">Limpiar Log</button>
+                    <label>
+                        <input type="checkbox" id="filter-gifts" checked> Solo Regalos/Batallas
+                    </label>
+                </div>
+
+                <div class="log-container" id="event-log">
+                    <div class="log-entry system">
+                        <span class="timestamp">[SISTEMA]</span>
+                        <span class="content">Escáner iniciado. Esperando eventos de TikTok...</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- View: Chat Bot Config -->
+            <section id="chatbot-view" class="view" style="display: none;">
+                <div class="view-header">
+                    <h2>BOT DE CHAT TTS</h2>
+                    <p>CONFIGURA LA LECTURA DE COMENTARIOS POR VOZ EN TIEMPO REAL</p>
+                </div>
+
+                <div class="chatbot-grid">
+                    <!-- Column Left: Basic & Filters -->
+                    <div class="chatbot-col">
+                        <!-- Card: Activation -->
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="power" class="icon-accent"></i>
+                                <h3>Activación y Ubicación</h3>
+                            </div>
+                            <div class="form-group">
+                                <label class="switch-container">
+                                    <span>Activar Bot de Voz</span>
+                                    <input type="checkbox" id="bot-active">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label for="bot-play-location">Reproducir Audio En:</label>
+                                <select id="bot-play-location">
+                                    <option value="overlay">Solo en OBS (Overlay)</option>
+                                    <option value="panel">Solo en Panel de Control</option>
+                                    <option value="both">En Ambos (OBS y Panel)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Card: General Rules & Format -->
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="sliders" class="icon-accent"></i>
+                                <h3>Formato y Comandos</h3>
+                            </div>
+                            <div class="form-group">
+                                <label class="switch-container">
+                                    <span>Leer nombres de usuario (ej. "Nombre dice: mensaje")</span>
+                                    <input type="checkbox" id="bot-read-username">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label class="switch-container">
+                                    <span>Exigir comando / prefijo para hablar</span>
+                                    <input type="checkbox" id="bot-prefix-required">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label for="bot-prefixes">Comandos válidos (separados por coma):</label>
+                                <input type="text" id="bot-prefixes" placeholder="., /" value="., /">
+                            </div>
+                            <div class="form-group">
+                                <label for="bot-permission">¿Quiénes pueden usar el Bot?</label>
+                                <select id="bot-permission">
+                                    <option value="all">Todo el público (Cualquier usuario)</option>
+                                    <option value="subs">Solo Suscriptores / Fans Club y Moderadores</option>
+                                    <option value="mods">Solo Moderadores y Creador</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Card: Spam & Content Filters -->
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="shield-alert" class="icon-accent"></i>
+                                <h3>Filtros de Seguridad y Spam</h3>
+                            </div>
+                            <div class="form-group">
+                                <label class="switch-container">
+                                    <span>Bloquear caracteres raros (árabe, chino, hindi, cirílico, etc.)</span>
+                                    <input type="checkbox" id="bot-block-rare-languages" checked>
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label for="bot-max-characters">Límite de caracteres por comentario:</label>
+                                <input type="number" id="bot-max-characters" min="10" max="500" value="150">
+                            </div>
+                            <div class="form-group">
+                                <label for="bot-banned-words">Palabras prohibidas personalizadas (separadas por coma):</label>
+                                <textarea id="bot-banned-words" rows="3" placeholder="palabra1, albur2, trol3..."></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="bot-banned-action">Si se detecta palabra prohibida:</label>
+                                <select id="bot-banned-action">
+                                    <option value="skip">Ignorar y no leer comentario</option>
+                                    <option value="censor">Censurar palabra con asteriscos (***)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="bot-ignored-users">Lista negra de usuarios (separados por coma):</label>
+                                <input type="text" id="bot-ignored-users" placeholder="usuario1, usuario2">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column Right: Voice Config & Specific Users -->
+                    <div class="chatbot-col">
+                        <!-- Card: Default Voice Setup -->
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="volume-2" class="icon-accent"></i>
+                                <h3>Voz Predeterminada</h3>
+                            </div>
+                            <div class="form-group">
+                                <label for="bot-tts-engine">Motor de Voz:</label>
+                                <select id="bot-tts-engine">
+                                    <option value="cloud">Microsoft Neural Cloud (Online - Sin instalación)</option>
+                                    <option value="local">Sintetizador del Navegador (Local - Requiere instalar)</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="container-cloud-voice">
+                                <label for="bot-cloud-voice">Seleccionar Voz Cloud:</label>
+                                <select id="bot-cloud-voice">
+                                    <option value="es-CO-SalomeNeural">Salomé (Colombia 🇨🇴 - Femenino)</option>
+                                    <option value="es-CO-GonzaloNeural">Gonzalo (Colombia 🇨🇴 - Masculino)</option>
+                                    <option value="es-MX-DaliaNeural">Dalia (México 🇲🇽 - Femenino)</option>
+                                    <option value="es-MX-JorgeNeural">Jorge (México 🇲🇽 - Masculino)</option>
+                                    <option value="es-ES-ElviraNeural">Elvira (España 🇪🇸 - Femenino)</option>
+                                    <option value="es-ES-AlvaroNeural">Álvaro (España 🇪🇸 - Masculino)</option>
+                                    <option value="en-US-AriaNeural">Aria (EE.UU. 🇺🇸 - Femenino)</option>
+                                    <option value="en-US-GuyNeural">Guy (EE.UU. 🇺🇸 - Masculino)</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="container-local-voice" style="display: none;">
+                                <label for="bot-default-voice">Seleccionar Voz Local (instalada en PC):</label>
+                                <select id="bot-default-voice">
+                                    <option value="">(Cargando voces...)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <div class="slider-header">
+                                    <label for="bot-default-volume">Volumen:</label>
+                                    <span id="val-default-volume">100%</span>
+                                </div>
+                                <input type="range" id="bot-default-volume" min="0" max="1" step="0.05" value="1">
+                            </div>
+                            <div class="form-group">
+                                <div class="slider-header">
+                                    <label for="bot-default-pitch">Tono (Pitch):</label>
+                                    <span id="val-default-pitch">1.0</span>
+                                </div>
+                                <input type="range" id="bot-default-pitch" min="0.5" max="2" step="0.1" value="1">
+                            </div>
+                            <div class="form-group">
+                                <div class="slider-header">
+                                    <label for="bot-default-rate">Velocidad (Rate):</label>
+                                    <span id="val-default-rate">1.0</span>
+                                </div>
+                                <input type="range" id="bot-default-rate" min="0.5" max="2" step="0.1" value="1">
+                            </div>
+
+                            <div class="test-voice-container">
+                                <input type="text" id="bot-test-text" placeholder="Escribe un texto de prueba..." value="Hola, probando la voz del bot de chat">
+                                <button id="btn-test-default-voice" class="btn secondary small">
+                                    <i data-lucide="play" class="icon-small"></i> Probar Voz
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Card: Custom Voice Rules for Users -->
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="user-cog" class="icon-accent"></i>
+                                <h3>Voces Especiales por Usuario</h3>
+                            </div>
+                            
+                            <div class="user-rule-form">
+                                <div class="form-row">
+                                    <div class="form-group flex-1">
+                                        <label for="rule-username">Usuario TikTok (sin @):</label>
+                                        <input type="text" id="rule-username" placeholder="ej. juan_streamer">
+                                    </div>
+                                    <div class="form-group flex-1">
+                                        <label for="rule-voice">Voz Especial:</label>
+                                        <select id="rule-voice"></select>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group flex-1">
+                                        <div class="slider-header">
+                                            <label for="rule-volume">Vol:</label>
+                                            <span id="val-rule-volume">100%</span>
+                                        </div>
+                                        <input type="range" id="rule-volume" min="0" max="1" step="0.05" value="1">
+                                    </div>
+                                    <div class="form-group flex-1">
+                                        <div class="slider-header">
+                                            <label for="rule-pitch">Tono:</label>
+                                            <span id="val-rule-pitch">1.0</span>
+                                        </div>
+                                        <input type="range" id="rule-pitch" min="0.5" max="2" step="0.1" value="1">
+                                    </div>
+                                    <div class="form-group flex-1">
+                                        <div class="slider-header">
+                                            <label for="rule-rate">Velocidad:</label>
+                                            <span id="val-rule-rate">1.0</span>
+                                        </div>
+                                        <input type="range" id="rule-rate" min="0.5" max="2" step="0.1" value="1">
+                                    </div>
+                                </div>
+                                <button id="btn-add-user-rule" class="btn primary small width-100">
+                                    <i data-lucide="plus" class="icon-small"></i> Agregar Regla de Voz
+                                </button>
+                            </div>
+
+                            <!-- Rules Table -->
+                            <div class="rules-table-container">
+                                <table class="rules-table" id="rules-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Usuario</th>
+                                            <th>Voz / Config</th>
+                                            <th class="text-right">Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="rules-table-body">
+                                        <!-- Dynamic rules will go here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- View: Música (Spotify Integration) -->
+            <section id="music-view" class="view" style="display: none;">
+                <div class="view-header">
+                    <h2>MÚSICA (SPOTIFY OVERLAY)</h2>
+                    <p>MUESTRA LA CANCIÓN ACTUAL EN TU STREAM CON UN WIDGET PREMIUM</p>
+                </div>
+
+                <div class="chatbot-grid">
+                    <!-- Column Left: Spotify Config -->
+                    <div class="chatbot-col">
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="music-4" class="icon-accent"></i>
+                                <h3>Conexión Spotify</h3>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 10px;">
+                                <label class="switch-container">
+                                    <span>Activar Widget de Música</span>
+                                    <input type="checkbox" id="spotify-active">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+
+                            <!-- Spotify profile container when connected -->
+                            <div id="spotify-profile-container" style="display: none; align-items: center; gap: 15px; background: rgba(255, 255, 255, 0.03); padding: 15px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.08); margin-bottom: 15px;">
+                                <img id="spotify-avatar" src="data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2250%22%20height%3D%2250%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%2523222%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20fill%3D%22%2523aaa%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20font-size%3D%2220%22%3E%25E2%2599%25AB%3C%2Ftext%3E%3C%2Fsvg%3E" style="width: 50px; height: 50px; border-radius: 50%; border: 2px solid #1DB954; object-fit: cover;" alt="Avatar">
+                                <div style="flex-grow: 1;">
+                                    <span id="spotify-username-display" style="font-weight: bold; font-size: 15px; color: var(--text-main); display: block;">Usuario Spotify</span>
+                                    <span id="spotify-conn-status" style="color: #1DB954; font-weight: 800; font-size: 12px; display: block; margin-top: 3px; letter-spacing: 0.5px;">CONECTADO...</span>
+                                </div>
+                            </div>
+
+                            <!-- Spotify connect button when disconnected -->
+                            <button class="btn" id="btn-vincular-spotify" style="justify-content: center; width: 100%; border: none; background-color: #1DB954; color: black; font-weight: 900; gap: 10px; padding: 14px 20px; border-radius: 8px;">
+                                <i data-lucide="link"></i> Vincular Spotify
+                            </button>
+
+                            <!-- Spotify disconnect button when connected -->
+                            <button class="btn primary danger" id="btn-desvincular-spotify" style="justify-content: center; width: 100%; display: none; gap: 10px; padding: 12px 20px; border-radius: 8px;">
+                                <i data-lucide="unlink"></i> Desvincular Spotify
+                            </button>
+
+                            <!-- Collapsible advanced settings for developers -->
+                            <details id="dev-settings-details" style="margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
+                                <summary style="cursor: pointer; font-size: 12px; color: var(--text-muted); font-weight: 600; outline: none; user-select: none;">Ajustes de API Avanzados (Desarrollador)</summary>
+                                <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 12px;">
+                                    <div class="form-group">
+                                        <label for="spotify-client-id">Spotify Client ID (Sobrescribir):</label>
+                                        <input type="text" id="spotify-client-id" placeholder="Ingresa tu Client ID personalizado">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="spotify-client-secret">Spotify Client Secret (Sobrescribir):</label>
+                                        <input type="password" id="spotify-client-secret" placeholder="Ingresa tu Client Secret personalizado">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="spotify-redirect-uri">Redirect URI requerida en Spotify Dashboard:</label>
+                                        <div style="display: flex; gap: 10px;">
+                                            <input type="text" id="spotify-redirect-uri" value="http://127.0.0.1:3000/spotify-callback" readonly style="flex-grow: 1; background: rgba(255,255,255,0.05); color: var(--text-muted); font-family: monospace; font-size: 12px;">
+                                            <button class="btn secondary small" id="btn-copy-redirect" style="padding: 0 15px;">Copiar</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </details>
+                        </div>
+
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="layout" class="icon-accent"></i>
+                                <h3>Personalización del Widget</h3>
+                            </div>
+                            <div class="form-group">
+                                <label for="spotify-theme">Tema Visual:</label>
+                                <select id="spotify-theme">
+                                    <option value="apple-music">Apple Music (Efecto Frosted Glass - Blur)</option>
+                                    <option value="spotify-classic">Spotify Classic (Negro y Verde)</option>
+                                    <option value="neon-gradient">Vibrant Neon Gradient (Animado)</option>
+                                    <option value="transparent">Minimalist Transparent</option>
+                                    <option value="coquette-hearts">Decorativo Coquette (Pastel y Corazones)</option>
+                                    <option value="anime-luffy">Anime Luffy Chibi (Amarillo, Rojo y Azul)</option>
+                                    <option value="naya-chibi">Personalizado Naya Chibi (Rosa Pastel y Corazón)</option>
+                                    <option value="anime-gojo">Anime Gojo Chibi (Morado y Azul - Majo)</option>
+                                    <option value="majo-spider">Personalizado Majo Araña (Morado, Dorado y Negro)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="spotify-neon-color">Color de Brillo Neón:</label>
+                                <select id="spotify-neon-color">
+                                    <option value="pink">Rosa Dulce (Predeterminado)</option>
+                                    <option value="purple">Morado Mágico</option>
+                                    <option value="cyan">Celeste Neón</option>
+                                    <option value="mint">Verde Menta</option>
+                                    <option value="rose-gold">Oro Rosa (Femenino Elegante)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="spotify-vinyl-design">Diseño del Vinilo:</label>
+                                <select id="spotify-vinyl-design">
+                                    <option value="classic">Vinilo Clásico Negro</option>
+                                    <option value="pink-glow">Vinilo Rosa Brillante (Glow)</option>
+                                    <option value="full-art">Carátula de Álbum Completa (Giro Moderno)</option>
+                                    <option value="retro-white">Vinilo Blanco Vintage</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="spotify-vinyl-speed">Velocidad de Giro:</label>
+                                <select id="spotify-vinyl-speed">
+                                    <option value="normal">Normal (6s por vuelta)</option>
+                                    <option value="fast">Rápido (3s por vuelta)</option>
+                                    <option value="slow">Lento (12s por vuelta)</option>
+                                    <option value="static">Estático (Sin girar)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="spotify-position">Posición en OBS:</label>
+                                <select id="spotify-position">
+                                    <option value="bottom-left">Inferior Izquierda</option>
+                                    <option value="bottom-right">Inferior Derecha</option>
+                                    <option value="top-left">Superior Izquierda</option>
+                                    <option value="top-right">Superior Derecha</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column Right: Live Interactive Mockup (Apple style Blur) -->
+                    <div class="chatbot-col">
+                        <div class="card-config" style="padding: 0; overflow: hidden; background: none; border: none; box-shadow: none;">
+                            <div class="card-config-header" style="border: none; padding: 0 10px 10px; margin: 0;">
+                                <i data-lucide="eye" class="icon-accent"></i>
+                                <h3>Vista Previa en Tiempo Real</h3>
+                            </div>
+                            
+                            <!-- Apple Music Frosted Glass Player Mockup -->
+                            <div class="mockup-player-wrapper">
+                                <div class="mockup-player-glass" id="mockup-player">
+                                    <!-- Background blur artwork -->
+                                    <div class="mockup-bg-art" id="mockup-bg-art"></div>
+                                    
+                                    <div class="mockup-player-content">
+                                        <div class="mockup-album-container">
+                                            <div class="mockup-cd-ring"></div>
+                                            <img src="data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%232b2b2b%22%2F%3E%3Cpath%20d%3D%22M50%20100a50%2050%200%201%200%20100%200%2050%2050%200%201%200-100%200%22%20fill%3D%22none%22%20stroke%3D%22%23444%22%20stroke-width%3D%2210%22%2F%3E%3Ccircle%20cx%3D%22100%22%20cy%3D%22100%22%20r%3D%2215%22%20fill%3D%22%23d900ff%22%2F%3E%3C%2Fsvg%3E" id="mockup-album-img" class="mockup-album-art" alt="Album Cover">
+                                        </div>
+                                        
+                                        <div class="mockup-track-info">
+                                            <h4 id="mockup-title">Late Night Streams</h4>
+                                            <p id="mockup-artist">Naya Vibe</p>
+                                        </div>
+                                        
+                                        <!-- Interactive controls -->
+                                        <div class="mockup-controls">
+                                            <button class="mockup-btn" id="mockup-btn-prev">
+                                                <i data-lucide="skip-back"></i>
+                                            </button>
+                                            <button class="mockup-btn play" id="mockup-btn-play">
+                                                <i data-lucide="play" id="mockup-play-icon"></i>
+                                            </button>
+                                            <button class="mockup-btn" id="mockup-btn-next">
+                                                <i data-lucide="skip-forward"></i>
+                                            </button>
+                                        </div>
+                                        
+                                        <!-- Progress Bar -->
+                                        <div class="mockup-progress-container">
+                                            <span class="mockup-time" id="mockup-time-current">0:00</span>
+                                            <div class="mockup-progress-bar-bg" id="mockup-progress-click-area">
+                                                <div class="mockup-progress-bar-fill" id="mockup-progress-fill" style="width: 0%;"></div>
+                                            </div>
+                                            <span class="mockup-time" id="mockup-time-total">3:12</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-muted); text-align: center; margin-top: 10px;">
+                                * Presiona play para simular la reproducción interactiva con temas seleccionados
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Spotify Interactive Control Cards -->
+                <div class="chatbot-grid" style="margin-top: 30px;">
+                    <!-- Column Left: Ajustes & Comandos -->
+                    <div class="chatbot-col">
+                        <!-- Card: Ajustes de Música -->
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="sliders" class="icon-accent"></i>
+                                <h3>Ajustes de Música</h3>
+                            </div>
+                            <div class="form-group">
+                                <div class="slider-header">
+                                    <label for="spotify-volume-slider">Volumen de Reproductor (Spotify):</label>
+                                    <span id="spotify-volume-val">80%</span>
+                                </div>
+                                <input type="range" id="spotify-volume-slider" min="0" max="100" step="5" value="80">
+                            </div>
+                            <div class="form-group">
+                                <label class="switch-container">
+                                    <span>Habilitar Cola de Canciones del Chat</span>
+                                    <input type="checkbox" id="spotify-chat-queue-enabled" checked>
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label class="switch-container">
+                                    <span>Permitir Contenido Explícito</span>
+                                    <input type="checkbox" id="spotify-explicit-allowed">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Card: Comandos y Permisos del Chat -->
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="shield-check" class="icon-accent"></i>
+                                <h3>Comandos y Permisos del Chat</h3>
+                            </div>
+                            <div class="form-group">
+                                <label for="spotify-permission">¿Quiénes pueden pedir canciones?</label>
+                                <select id="spotify-permission">
+                                    <option value="all">Todo el público (Cualquier usuario)</option>
+                                    <option value="subs">Solo Suscriptores / Fans Club y Moderadores</option>
+                                    <option value="mods">Solo Moderadores y Creador</option>
+                                </select>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group flex-1">
+                                    <label for="spotify-command-prefix">Prefijo de comando:</label>
+                                    <input type="text" id="spotify-command-prefix" placeholder="!song" value="!song">
+                                </div>
+                                <div class="form-group flex-1">
+                                    <label for="spotify-voteskip-limit">Límite Votos Omitir (Skip):</label>
+                                    <input type="number" id="spotify-voteskip-limit" min="1" max="50" value="3">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label style="font-size: 12px; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px;">Comandos Disponibles en Chat</label>
+                                <div class="commands-list">
+                                    <div class="command-item">
+                                        <span class="cmd-name">!song [búsqueda]</span>
+                                        <span class="cmd-desc">Pide canción por nombre/artista</span>
+                                    </div>
+                                    <div class="command-item">
+                                        <span class="cmd-name">!song o !current</span>
+                                        <span class="cmd-desc">Ver canción actual sonando</span>
+                                    </div>
+                                    <div class="command-item">
+                                        <span class="cmd-name">!queue o !cola</span>
+                                        <span class="cmd-desc">Ver lista de canciones en cola</span>
+                                    </div>
+                                    <div class="command-item">
+                                        <span class="cmd-name">!skip o !omitir</span>
+                                        <span class="cmd-desc">Votar para pasar canción</span>
+                                    </div>
+                                    <div class="command-item">
+                                        <span class="cmd-name">!skipsong (Mod/Anfitrión)</span>
+                                        <span class="cmd-desc">Omitir canción de inmediato</span>
+                                    </div>
+                                    <div class="command-item">
+                                        <span class="cmd-name">!clearqueue (Mod/Anfitrión)</span>
+                                        <span class="cmd-desc">Vaciar cola de reproducción</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column Right: Lista en Cola -->
+                    <div class="chatbot-col">
+                        <div class="card-config" style="flex-grow: 1;">
+                            <div class="card-config-header" style="justify-content: space-between; align-items: center;">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <i data-lucide="list-music" class="icon-accent"></i>
+                                    <h3>Lista en Cola</h3>
+                                </div>
+                                <button class="btn primary danger small" id="btn-clear-spotify-queue" style="padding: 6px 12px; font-size: 11px;">Vaciar Cola</button>
+                            </div>
+                            
+                            <div class="queue-table-container">
+                                <table class="queue-table" id="spotify-queue-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Track</th>
+                                            <th>Pedido Por</th>
+                                            <th class="text-right">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="spotify-queue-body">
+                                        <tr>
+                                            <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 30px 15px;">
+                                                La cola de reproducción está vacía.
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- View: Setup / Ajustes -->
+            <section id="setup-view" class="view" style="display: none;">
+                <div class="view-header">
+                    <h2>SETUP Y AJUSTES DE LA APLICACIÓN</h2>
+                    <p>CONFIGURACIÓN DE OBS, RED LOCAL E INICIO AUTOMÁTICO</p>
+                </div>
+
+                <div class="chatbot-grid">
+                    <!-- Column Left: OBS Guide & IP Network -->
+                    <div class="chatbot-col">
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="tv" class="icon-accent"></i>
+                                <h3>Configuración para OBS Studio</h3>
+                            </div>
+                            <div style="font-size: 13px; line-height: 1.6; display: flex; flex-direction: column; gap: 15px;">
+                                <div>
+                                    <strong style="color: var(--accent-red); display: block; margin-bottom: 5px;">1. Copia la URL del Overlay Principal:</strong>
+                                    <div style="display: flex; gap: 10px;">
+                                        <input type="text" id="obs-overlay-url" value="http://localhost:3000/overlay" readonly style="flex-grow: 1; background: rgba(255,255,255,0.05); color: var(--text-main); font-family: monospace; border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 6px; font-size: 13px;">
+                                        <button class="btn secondary small" id="btn-copy-obs-url">Copiar</button>
+                                    </div>
+                                </div>
+                                <div style="border-top: 1px solid var(--border-color); padding-top: 10px;">
+                                    <strong style="color: #ff0077; display: block; margin-bottom: 5px;">2. Copia la URL del Widget de Música (Tocadiscos):</strong>
+                                    <div style="display: flex; gap: 10px;">
+                                        <input type="text" id="obs-music-url" value="http://localhost:3000/music-widget" readonly style="flex-grow: 1; background: rgba(255,255,255,0.05); color: var(--text-main); font-family: monospace; border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 6px; font-size: 13px;">
+                                        <button class="btn secondary small" id="btn-copy-obs-music">Copiar</button>
+                                    </div>
+                                </div>
+                                <div style="border-top: 1px solid var(--border-color); padding-top: 15px;">
+                                    <strong style="color: var(--text-main); display: block; margin-bottom: 5px;">3. Pasos en OBS Studio o TikTok Live Studio:</strong>
+                                    <ol style="margin-left: 20px; color: var(--text-muted); display: flex; flex-direction: column; gap: 8px;">
+                                        <li>Crea una nueva fuente de tipo <strong>Navegador (Browser Source)</strong>.</li>
+                                        <li>Para el Overlay Principal, pon el tamaño en <strong>1920x1080</strong> y marca <strong>"Controlar audio vía OBS"</strong>.</li>
+                                        <li>Para el Tocadiscos Rosa, pon el tamaño en <strong>360x420</strong>. Pega la URL del widget de música.</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="smartphone" class="icon-accent"></i>
+                                <h3>Control Remoto y Red Local</h3>
+                            </div>
+                            <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+                                Puedes abrir este Panel de Control en tu celular o tablet para monitorear los eventos del live sin cables. Ambos dispositivos deben estar conectados al mismo WiFi.
+                            </p>
+                            
+                            <div id="local-ip-container" style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+                                <div style="background: rgba(0,255,0,0.05); border: 1px dashed rgba(0,255,0,0.3); border-radius: 8px; padding: 12px; display: flex; align-items: center; gap: 15px;">
+                                    <div style="background: rgba(0,255,0,0.1); border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; color: #00ff00;">
+                                        <i data-lucide="wifi"></i>
+                                    </div>
+                                    <div style="flex-grow: 1;">
+                                        <small style="color: var(--text-muted); display: block; text-transform: uppercase; font-size: 10px; font-weight: 800; letter-spacing: 0.5px;">URL en red local</small>
+                                        <span id="local-ip-text" style="font-family: monospace; font-size: 14px; font-weight: bold; color: #00ff00;">Buscando IP local...</span>
+                                    </div>
+                                    <button class="btn secondary small" id="btn-copy-local-url" style="padding: 0 10px; height: 30px;">Copiar</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column Right: Auto-connect preferences -->
+                    <div class="chatbot-col">
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="settings-2" class="icon-accent"></i>
+                                <h3>Preferencia de Conexión</h3>
+                            </div>
+                            <div class="form-group">
+                                <label for="setup-tiktok-username">Usuario de TikTok Predeterminado:</label>
+                                <input type="text" id="setup-tiktok-username" placeholder="@usuario_tiktok">
+                            </div>
+                            <div class="form-group" style="display: none;">
+                                <label for="setup-theme">Perfil de Tema Visual:</label>
+                                <select id="setup-theme">
+                                    <option value="naya">Naya (Rosa / Luffy / Corazones)</option>
+                                    <option value="majo">Majo (Morado / Gojo / Araña)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="switch-container">
+                                    <span>Conectar automáticamente al iniciar el servidor</span>
+                                    <input type="checkbox" id="setup-auto-connect">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-muted); margin-top: 5px;">
+                                * Estos cambios se guardarán automáticamente en `chatbot_settings.json` y se aplicarán de inmediato.
+                            </div>
+                        </div>
+
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="database" class="icon-accent"></i>
+                                <h3>Copia de Seguridad</h3>
+                            </div>
+                            <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+                                Exporta o importa la configuración completa del bot (reglas de voz, MVPs y Spotify) para respaldar tus datos.
+                            </p>
+                            <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+                                <button class="btn secondary small" id="btn-export-settings" style="flex: 1; justify-content: center; font-size: 12px;">
+                                    <i data-lucide="download" style="width: 14px; height: 14px;"></i> Exportar
+                                </button>
+                                <button class="btn secondary small" id="btn-trigger-import" style="flex: 1; justify-content: center; font-size: 12px;">
+                                    <i data-lucide="upload" style="width: 14px; height: 14px;"></i> Importar
+                                </button>
+                                <input type="file" id="import-settings-file" accept=".json" style="display: none;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Footer Controls -->
+            <footer class="controls-footer">
+                <button class="btn primary danger" id="btn-stop-all">
+                    <span class="square"></span>
+                    DETENER TODO
+                </button>
+                <button class="btn secondary" id="btn-stop-front">DETENER FRENTE</button>
+                <button class="btn secondary" id="btn-stop-back">DETENER ATRÁS</button>
+            </footer>
+        </main>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/panel.js"></script>
+</body>
+
+</html>
