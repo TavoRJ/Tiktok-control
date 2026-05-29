@@ -21,7 +21,8 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "public/assets/icon.ico"
+      "icon": "public/assets/icon.ico",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
     }
   },
   "keywords": [],
