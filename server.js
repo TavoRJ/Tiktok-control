@@ -57,7 +57,9 @@ let chatbotSettings = {
     spotifyNeonColor: "pink",
     spotifyVinylSpeed: "normal",
     spotifyVinylDesign: "classic",
-    themeName: "neutral"
+    themeName: "neutral",
+    exclusiveTtsEnabled: false,
+    exclusiveTtsUser: ""
 };
 
 // Helper to get local IP addresses
@@ -108,10 +110,24 @@ try {
 
 // Helper to generate cloud TTS audio
 async function handleCloudTTS(data) {
-    if (!chatbotSettings || !chatbotSettings.active) return;
+    if (!chatbotSettings) return;
     if (chatbotSettings.ttsEngine !== 'cloud') return;
     
     const uniqueId = (data.uniqueId || '').toLowerCase();
+    const isExclusiveUser = chatbotSettings.exclusiveTtsEnabled && 
+                            chatbotSettings.exclusiveTtsUser && 
+                            uniqueId === chatbotSettings.exclusiveTtsUser.toLowerCase().trim();
+
+    // If chatbot is inactive, ONLY allow exclusive user (if enabled)
+    if (!chatbotSettings.active) {
+        if (!isExclusiveUser) return;
+    }
+
+    // If exclusive user mode is enabled, ONLY read from this user
+    if (chatbotSettings.exclusiveTtsEnabled) {
+        if (!isExclusiveUser) return;
+    }
+    
     const nickname = data.nickname || data.uniqueId || 'Usuario';
     let comment = data.comment || '';
     

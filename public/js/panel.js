@@ -287,6 +287,9 @@ if (window.speechSynthesis) {
 // Receive updated settings from server
 socket.on('chatbot_settings_updated', (config) => {
     chatbotConfig = config;
+    if (!config.active) {
+        stopAllTTS();
+    }
     updateUIWithConfig(config);
     updateMasterAnimationsUI(config);
 });
@@ -319,6 +322,12 @@ function updateUIWithConfig(config) {
     if (bannedWordsEl) bannedWordsEl.value = (config.bannedWords || []).join(', ');
     if (bannedActionEl) bannedActionEl.value = config.bannedWordsAction || 'skip';
     if (ignoredUsersEl) ignoredUsersEl.value = (config.ignoreUserList || []).join(', ');
+    
+    // Exclusive Voice Chat config fields
+    const exclusiveEnabledEl = document.getElementById('bot-exclusive-enabled');
+    const exclusiveUserEl = document.getElementById('bot-exclusive-user');
+    if (exclusiveEnabledEl) exclusiveEnabledEl.checked = !!config.exclusiveTtsEnabled;
+    if (exclusiveUserEl) exclusiveUserEl.value = config.exclusiveTtsUser || '';
     
     // Setup and Spotify values
     const setupUserEl = document.getElementById('setup-tiktok-username');
@@ -559,6 +568,8 @@ function sendUpdatedSettings() {
     const updated = {
         active: document.getElementById('bot-active').checked,
         playLocation: document.getElementById('bot-play-location').value,
+        exclusiveTtsEnabled: document.getElementById('bot-exclusive-enabled').checked,
+        exclusiveTtsUser: document.getElementById('bot-exclusive-user').value.trim().replace('@', ''),
         readUsername: document.getElementById('bot-read-username').checked,
         readPrefixRequired: document.getElementById('bot-prefix-required').checked,
         prefixes: prefixes,
@@ -605,6 +616,7 @@ const inputsToWatch = [
     'bot-active', 'bot-play-location', 'bot-read-username', 
     'bot-prefix-required', 'bot-permission', 'bot-block-rare-languages', 
     'bot-banned-action', 'bot-default-voice', 'bot-tts-engine', 'bot-cloud-voice',
+    'bot-exclusive-enabled',
     'setup-auto-connect', 'setup-theme', 'spotify-active', 'spotify-theme', 'spotify-position',
     'spotify-chat-queue-enabled', 'spotify-explicit-allowed', 'spotify-permission',
     'spotify-neon-color', 'spotify-vinyl-design', 'spotify-vinyl-speed'
@@ -635,6 +647,7 @@ inputsToWatch.forEach(id => {
 // For text inputs and textareas, update on 'blur' to avoid socket spam on typing
 const textInputsToWatch = [
     'bot-prefixes', 'bot-max-characters', 'bot-banned-words', 'bot-ignored-users',
+    'bot-exclusive-user',
     'setup-tiktok-username', 'spotify-client-id', 'spotify-client-secret',
     'spotify-command-prefix', 'spotify-voteskip-limit'
 ];
@@ -642,6 +655,23 @@ textInputsToWatch.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('blur', sendUpdatedSettings);
 });
+
+// Save button click event handler
+const btnSaveChatbot = document.getElementById('btn-save-chatbot-settings');
+if (btnSaveChatbot) {
+    btnSaveChatbot.addEventListener('click', () => {
+        sendUpdatedSettings();
+        const originalText = btnSaveChatbot.innerHTML;
+        btnSaveChatbot.innerHTML = '<i data-lucide="check"></i> ¡Guardado!';
+        btnSaveChatbot.style.backgroundColor = 'var(--accent-green)';
+        if (window.lucide) window.lucide.createIcons();
+        setTimeout(() => {
+            btnSaveChatbot.innerHTML = originalText;
+            btnSaveChatbot.style.backgroundColor = 'var(--accent-purple)';
+            if (window.lucide) window.lucide.createIcons();
+        }, 1500);
+    });
+}
 
 // Slider feedback & change
 const volEl = document.getElementById('bot-default-volume');
@@ -767,6 +797,24 @@ window.deleteUserRule = function(index) {
 // ==========================================
 const ttsQueue = [];
 let isPlayingTts = false;
+let currentAudioTts = null;
+
+function stopAllTTS() {
+    ttsQueue.length = 0; // Clear the queue array
+    isPlayingTts = false;
+    if (currentAudioTts) {
+        try {
+            currentAudioTts.pause();
+            currentAudioTts.src = "";
+        } catch (e) {}
+        currentAudioTts = null;
+    }
+    if (window.speechSynthesis) {
+        try {
+            window.speechSynthesis.cancel();
+        } catch (e) {}
+    }
+}
 
 function queueCloudTTS(base64Audio, playLocation) {
     ttsQueue.push({
@@ -774,6 +822,10 @@ function queueCloudTTS(base64Audio, playLocation) {
         base64Audio,
         playLocation
     });
+    // Cap queue to max 3 waiting items to prevent massive backlog (user request #1)
+    while (ttsQueue.length > 3) {
+        ttsQueue.shift();
+    }
     processTtsQueue();
 }
 
@@ -786,6 +838,10 @@ function queueLocalTTS(text, voiceName, volume, pitch, rate) {
         pitch,
         rate
     });
+    // Cap queue to max 3 waiting items to prevent massive backlog (user request #1)
+    while (ttsQueue.length > 3) {
+        ttsQueue.shift();
+    }
     processTtsQueue();
 }
 
@@ -803,31 +859,35 @@ function processTtsQueue() {
     
     if (item.type === 'cloud') {
         try {
-            const audio = new Audio("data:audio/mp3;base64," + item.base64Audio);
+            currentAudioTts = new Audio("data:audio/mp3;base64," + item.base64Audio);
             
             if (rateMultiplier > 1.0) {
-                audio.playbackRate = rateMultiplier;
+                currentAudioTts.playbackRate = rateMultiplier;
             }
             
-            audio.onended = () => {
+            currentAudioTts.onended = () => {
                 isPlayingTts = false;
+                currentAudioTts = null;
                 setTimeout(processTtsQueue, 400); // 400ms cooldown gap
             };
             
-            audio.onerror = (err) => {
+            currentAudioTts.onerror = (err) => {
                 console.error('Audio playback error:', err);
                 isPlayingTts = false;
+                currentAudioTts = null;
                 setTimeout(processTtsQueue, 100);
             };
             
-            audio.play().catch(err => {
+            currentAudioTts.play().catch(err => {
                 console.error('Audio play failed:', err);
                 isPlayingTts = false;
+                currentAudioTts = null;
                 setTimeout(processTtsQueue, 100);
             });
         } catch (err) {
             console.error('Audio setup error:', err);
             isPlayingTts = false;
+            currentAudioTts = null;
             setTimeout(processTtsQueue, 100);
         }
     } else {
@@ -885,8 +945,23 @@ socket.on('tiktok_event_raw', (payload) => {
 
 // Text-to-Speech Core Logic
 function processAndSpeak(data) {
-    if (!chatbotConfig || !chatbotConfig.active) return;
+    if (!chatbotConfig) return;
     if (chatbotConfig.ttsEngine === 'cloud') return; // Handled in backend by play_tts_audio!
+    
+    const uniqueId = (data.uniqueId || '').toLowerCase();
+    const isExclusiveUser = chatbotConfig.exclusiveTtsEnabled && 
+                            chatbotConfig.exclusiveTtsUser && 
+                            uniqueId === chatbotConfig.exclusiveTtsUser.toLowerCase().trim();
+
+    // If chatbot is inactive, ONLY allow exclusive user (if enabled)
+    if (!chatbotConfig.active) {
+        if (!isExclusiveUser) return;
+    }
+
+    // If exclusive user mode is enabled, ONLY read from this user
+    if (chatbotConfig.exclusiveTtsEnabled) {
+        if (!isExclusiveUser) return;
+    }
     
     // Check play location
     const isPanel = window.location.pathname === '/' || !window.location.pathname.includes('overlay');

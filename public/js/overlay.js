@@ -260,6 +260,24 @@ function showMiniAlert(data) {
 // ==========================================
 const ttsQueue = [];
 let isPlayingTts = false;
+let currentAudioTts = null;
+
+function stopAllTTS() {
+    ttsQueue.length = 0; // Clear the queue array
+    isPlayingTts = false;
+    if (currentAudioTts) {
+        try {
+            currentAudioTts.pause();
+            currentAudioTts.src = "";
+        } catch (e) {}
+        currentAudioTts = null;
+    }
+    if (window.speechSynthesis) {
+        try {
+            window.speechSynthesis.cancel();
+        } catch (e) {}
+    }
+}
 
 function queueCloudTTS(base64Audio, playLocation) {
     ttsQueue.push({
@@ -267,6 +285,10 @@ function queueCloudTTS(base64Audio, playLocation) {
         base64Audio,
         playLocation
     });
+    // Cap queue to max 3 waiting items to prevent massive backlog (user request #1)
+    while (ttsQueue.length > 3) {
+        ttsQueue.shift();
+    }
     processTtsQueue();
 }
 
@@ -279,6 +301,10 @@ function queueLocalTTS(text, voiceName, volume, pitch, rate) {
         pitch,
         rate
     });
+    // Cap queue to max 3 waiting items to prevent massive backlog (user request #1)
+    while (ttsQueue.length > 3) {
+        ttsQueue.shift();
+    }
     processTtsQueue();
 }
 
@@ -296,31 +322,35 @@ function processTtsQueue() {
     
     if (item.type === 'cloud') {
         try {
-            const audio = new Audio("data:audio/mp3;base64," + item.base64Audio);
+            currentAudioTts = new Audio("data:audio/mp3;base64," + item.base64Audio);
             
             if (rateMultiplier > 1.0) {
-                audio.playbackRate = rateMultiplier;
+                currentAudioTts.playbackRate = rateMultiplier;
             }
             
-            audio.onended = () => {
+            currentAudioTts.onended = () => {
                 isPlayingTts = false;
+                currentAudioTts = null;
                 setTimeout(processTtsQueue, 400); // 400ms cooldown gap
             };
             
-            audio.onerror = (err) => {
+            currentAudioTts.onerror = (err) => {
                 console.error('Audio playback error:', err);
                 isPlayingTts = false;
+                currentAudioTts = null;
                 setTimeout(processTtsQueue, 100);
             };
             
-            audio.play().catch(err => {
+            currentAudioTts.play().catch(err => {
                 console.error('Audio play failed:', err);
                 isPlayingTts = false;
+                currentAudioTts = null;
                 setTimeout(processTtsQueue, 100);
             });
         } catch (err) {
             console.error('Audio setup error:', err);
             isPlayingTts = false;
+            currentAudioTts = null;
             setTimeout(processTtsQueue, 100);
         }
     } else {
@@ -361,8 +391,13 @@ let chatbotConfig = null;
 // Keep settings in sync
 socket.on('chatbot_settings_updated', (config) => {
     chatbotConfig = config;
-    if (config && config.themeName) {
-        document.body.className = 'theme-' + config.themeName;
+    if (config) {
+        if (!config.active) {
+            stopAllTTS();
+        }
+        if (config.themeName) {
+            document.body.className = 'theme-' + config.themeName;
+        }
     }
 });
 

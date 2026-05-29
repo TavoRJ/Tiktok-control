@@ -380,6 +380,23 @@
                                     <option value="both">En Ambos (OBS y Panel)</option>
                                 </select>
                             </div>
+                            
+                            <!-- Voz Exclusiva (Urgente / Moderación) -->
+                            <div class="form-group" style="margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
+                                <label class="switch-container">
+                                    <strong style="color: var(--accent-orange); font-size: 13px;">Habilitar Voz Exclusiva (Urgencia)</strong>
+                                    <input type="checkbox" id="bot-exclusive-enabled">
+                                    <span class="switch-slider" style="background-color: var(--accent-orange);"></span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label for="bot-exclusive-user">Usuario Exclusivo (Sin @):</label>
+                                <input type="text" id="bot-exclusive-user" placeholder="Ej. moderador_principal">
+                            </div>
+                            
+                            <button id="btn-save-chatbot-settings" class="btn primary small" style="margin-top: 15px; width: 100%; justify-content: center; gap: 8px; font-weight: 800; background-color: var(--accent-purple);">
+                                <i data-lucide="save"></i> Guardar Cambios
+                            </button>
                         </div>
 
                         <!-- Card: General Rules & Format -->
