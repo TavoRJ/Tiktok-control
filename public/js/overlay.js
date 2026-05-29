@@ -201,7 +201,8 @@ function playAnimation(layerType, customClass, imgSrc, text) {
     label.innerText = text;
     
     container.appendChild(img);
-    container.appendChild(label);
+    // Commented out to only show the graphic/video animation on overlay, no text label
+    // container.appendChild(label);
     
     layer.appendChild(container);
     
@@ -563,7 +564,8 @@ function playCustomAnimation(layerType, fileUrl, textTemplate, durationMs, nickn
         const label = document.createElement('div');
         label.className = 'anim-text';
         label.innerText = displayText;
-        container.appendChild(label);
+        // Commented out to only show the graphic/video animation on overlay, no text label
+        // container.appendChild(label);
     }
     
     if (!isAudio) {

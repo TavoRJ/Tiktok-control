@@ -346,7 +346,9 @@ function updateUIWithConfig(config) {
     if (themeName === 'neutral') {
         document.title = "TikTok Live - Control Panel";
         if (logoEl) {
-            logoEl.style.display = 'none';
+            logoEl.src = `assets/neutral-logo.jpg`;
+            logoEl.alt = 'GR Logo';
+            logoEl.style.display = 'block';
         }
     } else {
         document.title = themeName === 'majo' ? "Majo's - Control Panel" : "Naya's - Control Panel";
