@@ -1166,6 +1166,7 @@ function toggleMockupPlayback() {
         playIconEl.setAttribute('data-lucide', 'pause');
         
         // Start progress timer
+        if (mockupInterval) clearInterval(mockupInterval);
         mockupInterval = setInterval(() => {
             const track = mockupTracks[currentTrackIndex];
             mockupTimeElapsed++;

@@ -1,6 +1,10 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 
+// Limit V8 heap memory and enable Chrome's low end device mode to significantly reduce RAM usage
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=128');
+app.commandLine.appendSwitch('enable-low-end-device-mode');
+
 // Pass writable userData path to the backend server (to store settings, uploads, and temp files outside app.asar)
 process.env.USER_DATA_PATH = app.getPath('userData');
 
