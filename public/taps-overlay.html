@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Top Tap Tap - Overlay</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --bg-glass: rgba(10, 10, 12, 0.6);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-main: #ffffff;
+            --text-muted: #a0a0ab;
+            --accent-glow: rgba(0, 113, 227, 0.4);
+            --accent-color: #0071e3;
+        }
+
+        body.theme-neutral {
+            --accent-glow: rgba(0, 113, 227, 0.4);
+            --accent-color: #0071e3;
+        }
+
+        body.theme-naya {
+            --accent-glow: rgba(255, 105, 180, 0.5);
+            --accent-color: #ff69b4;
+        }
+
+        body.theme-majo {
+            --accent-glow: rgba(153, 0, 255, 0.5);
+            --accent-color: #9900ff;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: transparent !important;
+            color: var(--text-main);
+            width: 320px;
+            height: 600px;
+            overflow: hidden;
+            padding: 15px;
+        }
+
+        .ranking-container {
+            width: 100%;
+            height: 100%;
+            background: var(--bg-glass);
+            border: 2px solid var(--border-color);
+            border-radius: 24px;
+            padding: 20px;
+            backdrop-filter: blur(15px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5), 0 0 20px var(--accent-glow);
+            display: flex;
+            flex-direction: column;
+            border-color: var(--accent-color);
+            transition: all 0.3s ease;
+        }
+
+        .ranking-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 15px;
+        }
+
+        .ranking-header h2 {
+            font-size: 20px;
+            font-weight: 900;
+            letter-spacing: 0.5px;
+            text-shadow: 0 0 10px var(--accent-glow);
+            text-transform: uppercase;
+        }
+
+        .ranking-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            flex-grow: 1;
+        }
+
+        .ranking-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            padding: 10px 14px;
+            border-radius: 14px;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            animation: slideIn 0.5s ease forwards;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(-30px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .ranking-item:hover {
+            background: rgba(255, 255, 255, 0.06);
+            transform: scale(1.03);
+            border-color: var(--accent-color);
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        .rank-badge {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 14px;
+            background: rgba(255,255,255,0.08);
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .rank-1 .rank-badge {
+            background: linear-gradient(135deg, #ffd700, #ffa500);
+            color: #111;
+            box-shadow: 0 0 12px rgba(255, 215, 0, 0.6);
+            font-size: 16px;
+        }
+        .rank-2 .rank-badge {
+            background: linear-gradient(135deg, #c0c0c0, #808080);
+            color: #111;
+            box-shadow: 0 0 10px rgba(192, 192, 192, 0.5);
+        }
+        .rank-3 .rank-badge {
+            background: linear-gradient(135deg, #cd7f32, #8b4513);
+            color: #fff;
+            box-shadow: 0 0 8px rgba(205, 127, 50, 0.4);
+        }
+
+        .user-info {
+            flex-grow: 1;
+            min-width: 0;
+        }
+
+        .nickname {
+            font-weight: 800;
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+        }
+
+        .username {
+            font-size: 10px;
+            color: var(--text-muted);
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .score-value {
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 15px;
+            color: var(--text-main);
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+
+        .unit-icon {
+            color: #ff4d6d;
+            display: inline-flex;
+            align-items: center;
+        }
+    </style>
+</head>
+<body class="theme-neutral">
+    <div class="ranking-container">
+        <div class="ranking-header">
+            <span class="unit-icon" style="font-size: 22px;"><i data-lucide="heart"></i></span>
+            <h2>Top Tap Tap</h2>
+        </div>
+        <div class="ranking-list" id="ranking-list">
+            <!-- Table rows dynamically populated -->
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const listContainer = document.getElementById('ranking-list');
+
+        // Sync theme
+        socket.on('chatbot_settings_updated', (config) => {
+            if (config && config.themeName) {
+                document.body.className = 'theme-' + config.themeName;
+            }
+        });
+
+        // Sync rankings
+        socket.on('rankings_updated', (rankings) => {
+            renderList(rankings.likes);
+        });
+
+        function renderList(users) {
+            if (!users || users.length === 0) {
+                listContainer.innerHTML = `
+                    <div style="text-align: center; color: var(--text-muted); padding: 60px 10px; font-size: 13px;">
+                        Esperando likes en este directo...
+                    </div>
+                `;
+                return;
+            }
+
+            listContainer.innerHTML = '';
+            // Only show top 5 in the overlay
+            users.slice(0, 5).forEach((user, index) => {
+                const item = document.createElement('div');
+                item.className = `ranking-item rank-${index + 1}`;
+                item.style.animationDelay = `${index * 0.08}s`;
+                
+                let medalEmoji = (index + 1).toString();
+                if (index === 0) medalEmoji = '🥇';
+                else if (index === 1) medalEmoji = '🥈';
+                else if (index === 2) medalEmoji = '🥉';
+
+                item.innerHTML = `
+                    <div class="rank-badge">${medalEmoji}</div>
+                    <div class="user-info">
+                        <span class="nickname">${escapeHtml(user.nickname)}</span>
+                        <span class="username">@${escapeHtml(user.username)}</span>
+                    </div>
+                    <div class="score-value">
+                        <span>${user.count.toLocaleString()}</span>
+                    </div>
+                `;
+                listContainer.appendChild(item);
+            });
+            
+            lucide.createIcons();
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.toString()
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        lucide.createIcons();
+    </script>
+</body>
+</html>

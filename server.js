@@ -60,8 +60,22 @@ let chatbotSettings = {
     spotifyVinylDesign: "classic",
     themeName: "neutral",
     exclusiveTtsEnabled: false,
-    exclusiveTtsUser: ""
+    exclusiveTtsUser: "",
+    // Event TTS settings
+    readFollowsEnabled: false,
+    readSharesEnabled: false,
+    readGiftsEnabled: false,
+    readLikesMilestoneEnabled: false,
+    likesMilestoneValue: 100
 };
+
+// Global in-memory rankings database for active stream session
+let rankings = {
+    likes: {},  // { username: { nickname, count } }
+    gifts: {},  // { username: { nickname, count } }
+    mvp: {}     // { username: { nickname, count } }
+};
+
 
 // Helper to get local IP addresses
 function getLocalIPs() {
@@ -1183,6 +1197,82 @@ app.get('/music-widget', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'music-widget.html'));
 });
 
+// Rankings update and retrieval helpers
+function updateMvp(username, nickname) {
+    const likes = rankings.likes[username] ? rankings.likes[username].count : 0;
+    const gifts = rankings.gifts[username] ? rankings.gifts[username].count : 0;
+    const mvpScore = (gifts * 10) + likes;
+    
+    if (mvpScore > 0) {
+        rankings.mvp[username] = { nickname, count: mvpScore };
+    }
+}
+
+function getTopRankings() {
+    const sortCategory = (cat) => {
+        return Object.entries(rankings[cat])
+            .map(([username, data]) => ({ username, nickname: data.nickname, count: data.count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 10);
+    };
+    
+    return {
+        likes: sortCategory('likes'),
+        gifts: sortCategory('gifts'),
+        mvp: sortCategory('mvp')
+    };
+}
+
+function broadcastRankings() {
+    const topRankings = getTopRankings();
+    io.emit('rankings_updated', topRankings);
+}
+
+// Custom TTS generator for follows, shares, likes milestone and gift events
+async function speakCustomTts(text) {
+    if (!chatbotSettings || !chatbotSettings.active) return;
+    if (chatbotSettings.ttsEngine !== 'cloud') return;
+    
+    let voiceName = chatbotSettings.cloudVoiceName || 'es-CO-SalomeNeural';
+    let volume = chatbotSettings.volume ?? 1;
+    let pitch = chatbotSettings.pitch ?? 1;
+    let rate = chatbotSettings.rate ?? 1;
+    
+    const tempFile = path.join(writableDir, `temp_tts_${Date.now()}_${Math.floor(Math.random() * 1000)}.mp3`);
+    
+    const ratePercentage = Math.round((rate - 1) * 100);
+    const rateStr = ratePercentage >= 0 ? `+${ratePercentage}%` : `${ratePercentage}%`;
+    const pitchPercentage = Math.round((pitch - 1) * 50);
+    const pitchStr = pitchPercentage >= 0 ? `+${pitchPercentage}Hz` : `${pitchPercentage}Hz`;
+    
+    try {
+        const tts = new EdgeTTS({
+            voice: voiceName,
+            rate: rateStr,
+            pitch: pitchStr
+        });
+        
+        await tts.ttsPromise(text, tempFile);
+        
+        if (fs.existsSync(tempFile)) {
+            const audioBuffer = fs.readFileSync(tempFile);
+            const base64Audio = audioBuffer.toString('base64');
+            
+            io.emit('play_tts_audio', {
+                base64Audio,
+                playLocation: chatbotSettings.playLocation
+            });
+            
+            fs.unlinkSync(tempFile);
+        }
+    } catch (error) {
+        console.error('Error generating custom event TTS:', error);
+        if (fs.existsSync(tempFile)) {
+            try { fs.unlinkSync(tempFile); } catch(e) {}
+        }
+    }
+}
+
 let tiktokLiveConnection = null;
 
 function connectToTikTok(username) {
@@ -1194,6 +1284,9 @@ function connectToTikTok(username) {
     
     tiktokLiveConnection.connect().then(state => {
         console.info(`Connected to roomId ${state.roomId}`);
+        // Reset session rankings
+        rankings = { likes: {}, gifts: {}, mvp: {} };
+        broadcastRankings();
         io.emit('system', { type: 'connected', message: `Conectado a @${username}` });
     }).catch(err => {
         console.error('Failed to connect', err);
@@ -1203,7 +1296,7 @@ function connectToTikTok(username) {
     const eventsToListen = [
         'gift', 'chat', 'like', 'member', 'roomUserSeq', 'social', 
         'envelope', 'questionNew', 'linkMicBattle', 'linkMicArmies', 
-        'liveIntro', 'emote', 'envelope'
+        'liveIntro', 'emote', 'envelope', 'follow', 'share'
     ];
 
     eventsToListen.forEach(eventType => {
@@ -1253,6 +1346,119 @@ function connectToTikTok(username) {
                     diamondCount: data.diamondCount,
                     extendedGiftInfo: data.extendedGiftInfo
                 });
+
+                const uniqueId = (data.uniqueId || '').toLowerCase();
+                const nickname = data.nickname || data.uniqueId;
+                const coins = data.diamondCount || 0;
+                
+                if (uniqueId && coins > 0) {
+                    if (!rankings.gifts[uniqueId]) {
+                        rankings.gifts[uniqueId] = { nickname, count: 0 };
+                    }
+                    rankings.gifts[uniqueId].count += coins;
+                    
+                    updateMvp(uniqueId, nickname);
+                    broadcastRankings();
+                }
+
+                // Blacklist check
+                const blacklist = (chatbotSettings.ignoreUserList || []).map(u => u.toLowerCase().trim());
+                if (!blacklist.includes(uniqueId)) {
+                    // Check if it is the end of a repeat combo or a single gift
+                    const isComboEnd = data.repeatEnd || !data.extendedGiftInfo || !data.extendedGiftInfo.combo;
+                    if (chatbotSettings.readGiftsEnabled && isComboEnd) {
+                        const giftName = data.giftName;
+                        const count = data.repeatCount || 1;
+                        let ttsText = "";
+                        const theme = chatbotSettings.themeName || 'neutral';
+                        if (theme === 'naya') {
+                            ttsText = `¡Wow, muchísimas gracias @${nickname} por regalar ${count} ${giftName} a Naya!`;
+                        } else if (theme === 'majo') {
+                            ttsText = `¡Gracias @${nickname} por enviar ${count} ${giftName} al directo de Majo!`;
+                        } else {
+                            ttsText = `¡Gracias @${nickname} por regalar ${count} ${giftName}!`;
+                        }
+                        speakCustomTts(ttsText);
+                    }
+                }
+            }
+
+            if (eventType === 'like') {
+                const uniqueId = (data.uniqueId || '').toLowerCase();
+                const nickname = data.nickname || data.uniqueId;
+                const count = data.likeCount || 1;
+                
+                if (uniqueId) {
+                    if (!rankings.likes[uniqueId]) {
+                        rankings.likes[uniqueId] = { nickname, count: 0 };
+                    }
+                    rankings.likes[uniqueId].count += count;
+                    
+                    updateMvp(uniqueId, nickname);
+                    broadcastRankings();
+                }
+
+                // Blacklist check
+                const blacklist = (chatbotSettings.ignoreUserList || []).map(u => u.toLowerCase().trim());
+                if (!blacklist.includes(uniqueId)) {
+                    // Cloud TTS milestone check
+                    if (chatbotSettings.readLikesMilestoneEnabled && count >= (chatbotSettings.likesMilestoneValue || 100)) {
+                        let ttsText = "";
+                        const theme = chatbotSettings.themeName || 'neutral';
+                        if (theme === 'naya') {
+                            ttsText = `¡Muchísimas gracias @${nickname} por esos ${count} corazones en la pantalla de Naya!`;
+                        } else if (theme === 'majo') {
+                            ttsText = `¡Gracias por esos ${count} likes a la telaraña de Majo, @${nickname}!`;
+                        } else {
+                            ttsText = `¡Gracias @${nickname} por enviar ${count} likes a la transmisión!`;
+                        }
+                        speakCustomTts(ttsText);
+                    }
+                }
+            }
+
+            if (eventType === 'follow') {
+                const uniqueId = (data.uniqueId || '').toLowerCase();
+                const nickname = data.nickname || data.uniqueId || 'Nuevo Seguidor';
+                
+                // Blacklist check
+                const blacklist = (chatbotSettings.ignoreUserList || []).map(u => u.toLowerCase().trim());
+                if (!blacklist.includes(uniqueId)) {
+                    if (chatbotSettings.readFollowsEnabled) {
+                        let ttsText = "";
+                        const theme = chatbotSettings.themeName || 'neutral';
+                        if (theme === 'naya') {
+                            ttsText = `¡Bienvenido @${nickname} a la transmisión de Naya! Gracias por seguirme, linda.`;
+                        } else if (theme === 'majo') {
+                            ttsText = `¡Bienvenido @${nickname} a la telaraña de Majo! Gracias por unirte a nosotros.`;
+                        } else {
+                            ttsText = `¡Bienvenido @${nickname}, gracias por seguir la cuenta!`;
+                        }
+                        speakCustomTts(ttsText);
+                    }
+                }
+            }
+
+            if (eventType === 'share') {
+                const uniqueId = (data.uniqueId || '').toLowerCase();
+                const nickname = data.nickname || data.uniqueId || 'Espectador';
+                
+                // Blacklist check
+                const blacklist = (chatbotSettings.ignoreUserList || []).map(u => u.toLowerCase().trim());
+                if (!blacklist.includes(uniqueId)) {
+                    if (chatbotSettings.readSharesEnabled) {
+                        let ttsText = "";
+                        const theme = chatbotSettings.themeName || 'neutral';
+                        if (theme === 'naya') {
+                            ttsText = `¡Muchísimas gracias @${nickname} por compartir el directo de Naya! Eres un sol.`;
+                        } else if (theme === 'majo') {
+                            ttsText = `¡Gracias @${nickname} por compartir el live de Majo! Súper genial.`;
+                        } else {
+                            ttsText = `¡Gracias @${nickname} por compartir la transmisión!`;
+                        }
+                        speakCustomTts(ttsText);
+                    }
+                }
             }
             
             if (eventType === 'linkMicBattle') {
@@ -1280,6 +1486,7 @@ io.on('connection', (socket) => {
     // Send current chatbot settings on connection
     socket.emit('chatbot_settings_updated', chatbotSettings);
     socket.emit('app_version', packageJson.version);
+    socket.emit('rankings_updated', getTopRankings());
 
     // Send local IPs on connection
     socket.emit('local_ips', getLocalIPs());

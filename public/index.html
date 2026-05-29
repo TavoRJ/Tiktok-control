@@ -35,6 +35,10 @@
                     <i data-lucide="message-square" class="icon"></i>
                     <span>BOT DE CHAT</span>
                 </a>
+                <a href="#" class="menu-item" data-target="rankings-view">
+                    <i data-lucide="trophy" class="icon"></i>
+                    <span>RANKINGS</span>
+                </a>
                 <a href="#" class="menu-item" data-target="log-view">
                     <i data-lucide="terminal" class="icon"></i>
                     <span>LOG / SCANNER</span>
@@ -432,6 +436,45 @@
                                 </select>
                             </div>
                         </div>
+                        <!-- Card: Read Events -->
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="bell" class="icon-accent" style="color: #ff69b4;"></i>
+                                <h3>Leer Eventos en Directo</h3>
+                            </div>
+                            <div class="form-group">
+                                <label class="switch-container">
+                                    <span>Leer cuando alguien comparta el live</span>
+                                    <input type="checkbox" id="bot-read-shares">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label class="switch-container">
+                                    <span>Leer nuevos seguidores / bienvenidas</span>
+                                    <input type="checkbox" id="bot-read-follows">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label class="switch-container">
+                                    <span>Leer regalos enviados</span>
+                                    <input type="checkbox" id="bot-read-gifts">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                            <div class="form-group" style="border-top: 1px dashed var(--border-color); padding-top: 15px; margin-top: 15px;">
+                                <label class="switch-container">
+                                    <span>Leer Tap Tap al llegar al mínimo</span>
+                                    <input type="checkbox" id="bot-read-likes">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label for="bot-likes-milestone">Mínimo de Tap Tap para leer:</label>
+                                <input type="number" id="bot-likes-milestone" min="10" max="10000" value="100">
+                            </div>
+                        </div>
 
                         <!-- Card: Spam & Content Filters -->
                         <div class="card-config">
@@ -591,6 +634,103 @@
                                     </thead>
                                     <tbody id="rules-table-body">
                                         <!-- Dynamic rules will go here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- View: Rankings -->
+            <section id="rankings-view" class="view" style="display: none;">
+                <div class="view-header">
+                    <h2>RANKING DE SEGUIDORES</h2>
+                    <p>ESTADÍSTICAS Y POSICIONES DE LA TRANSMISIÓN EN TIEMPO REAL</p>
+                </div>
+
+                <div class="chatbot-grid">
+                    <!-- Column: Donadores -->
+                    <div class="chatbot-col">
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="coins" class="icon-accent" style="color: #ffb703;"></i>
+                                <h3>Principales Donantes</h3>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;">
+                                Ranking de espectadores ordenados por monedas donadas.
+                            </div>
+                            <div class="rules-table-container">
+                                <table class="rules-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 60px;">Pos</th>
+                                            <th>Usuario</th>
+                                            <th class="text-right">Monedas</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ranking-gifts-body">
+                                        <tr>
+                                            <td colspan="3" class="text-center" style="color: var(--text-muted); padding: 20px;">Esperando datos...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column: Tap Tap -->
+                    <div class="chatbot-col">
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="heart" class="icon-accent" style="color: #ff4d6d;"></i>
+                                <h3>Top Tap Tap</h3>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;">
+                                Ranking de espectadores ordenados por cantidad de likes.
+                            </div>
+                            <div class="rules-table-container">
+                                <table class="rules-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 60px;">Pos</th>
+                                            <th>Usuario</th>
+                                            <th class="text-right">Likes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ranking-likes-body">
+                                        <tr>
+                                            <td colspan="3" class="text-center" style="color: var(--text-muted); padding: 20px;">Esperando datos...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column: MVP -->
+                    <div class="chatbot-col">
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="award" class="icon-accent" style="color: #9d4edd;"></i>
+                                <h3>Top MVP</h3>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;">
+                                Ranking de interacciones: (Monedas * 10) + Likes.
+                            </div>
+                            <div class="rules-table-container">
+                                <table class="rules-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 60px;">Pos</th>
+                                            <th>Usuario</th>
+                                            <th class="text-right">Puntos MVP</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ranking-mvp-body">
+                                        <tr>
+                                            <td colspan="3" class="text-center" style="color: var(--text-muted); padding: 20px;">Esperando datos...</td>
+                                        </tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -932,12 +1072,34 @@
                                         <button class="btn secondary small" id="btn-copy-obs-music">Copiar</button>
                                     </div>
                                 </div>
+                                <div style="border-top: 1px solid var(--border-color); padding-top: 10px;">
+                                    <strong style="color: #ffb703; display: block; margin-bottom: 5px;">3. Copia la URL del Overlay de Top Donadores (Regalos):</strong>
+                                    <div style="display: flex; gap: 10px;">
+                                        <input type="text" id="obs-donors-url" value="http://localhost:3000/donors-overlay.html" readonly style="flex-grow: 1; background: rgba(255,255,255,0.05); color: var(--text-main); font-family: monospace; border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 6px; font-size: 13px;">
+                                        <button class="btn secondary small" id="btn-copy-obs-donors">Copiar</button>
+                                    </div>
+                                </div>
+                                <div style="border-top: 1px solid var(--border-color); padding-top: 10px;">
+                                    <strong style="color: #ff4d6d; display: block; margin-bottom: 5px;">4. Copia la URL del Overlay de Top Tap Tap (Likes):</strong>
+                                    <div style="display: flex; gap: 10px;">
+                                        <input type="text" id="obs-taps-url" value="http://localhost:3000/taps-overlay.html" readonly style="flex-grow: 1; background: rgba(255,255,255,0.05); color: var(--text-main); font-family: monospace; border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 6px; font-size: 13px;">
+                                        <button class="btn secondary small" id="btn-copy-obs-taps">Copiar</button>
+                                    </div>
+                                </div>
+                                <div style="border-top: 1px solid var(--border-color); padding-top: 10px;">
+                                    <strong style="color: #9d4edd; display: block; margin-bottom: 5px;">5. Copia la URL del Overlay de Top MVP (Donaciones + Likes):</strong>
+                                    <div style="display: flex; gap: 10px;">
+                                        <input type="text" id="obs-mvp-url" value="http://localhost:3000/mvp-overlay.html" readonly style="flex-grow: 1; background: rgba(255,255,255,0.05); color: var(--text-main); font-family: monospace; border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 6px; font-size: 13px;">
+                                        <button class="btn secondary small" id="btn-copy-obs-mvp">Copiar</button>
+                                    </div>
+                                </div>
                                 <div style="border-top: 1px solid var(--border-color); padding-top: 15px;">
-                                    <strong style="color: var(--text-main); display: block; margin-bottom: 5px;">3. Pasos en OBS Studio o TikTok Live Studio:</strong>
+                                    <strong style="color: var(--text-main); display: block; margin-bottom: 5px;">6. Pasos en OBS Studio o TikTok Live Studio:</strong>
                                     <ol style="margin-left: 20px; color: var(--text-muted); display: flex; flex-direction: column; gap: 8px;">
                                         <li>Crea una nueva fuente de tipo <strong>Navegador (Browser Source)</strong>.</li>
                                         <li>Para el Overlay Principal, pon el tamaño en <strong>1920x1080</strong> y marca <strong>"Controlar audio vía OBS"</strong>.</li>
                                         <li>Para el Tocadiscos Rosa, pon el tamaño en <strong>360x420</strong>. Pega la URL del widget de música.</li>
+                                        <li>Para cada una de las tablas de Rankings, crea fuentes de tamaño <strong>320x600</strong> y pega sus respectivas URLs.</li>
                                     </ol>
                                 </div>
                             </div>

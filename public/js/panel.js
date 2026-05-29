@@ -335,6 +335,19 @@ function updateUIWithConfig(config) {
     const exclusiveUserEl = document.getElementById('bot-exclusive-user');
     if (exclusiveEnabledEl) exclusiveEnabledEl.checked = !!config.exclusiveTtsEnabled;
     if (exclusiveUserEl) exclusiveUserEl.value = config.exclusiveTtsUser || '';
+
+    // TTS direct event elements
+    const readFollowsEl = document.getElementById('bot-read-follows');
+    const readSharesEl = document.getElementById('bot-read-shares');
+    const readGiftsEl = document.getElementById('bot-read-gifts');
+    const readLikesEl = document.getElementById('bot-read-likes');
+    const likesMilestoneEl = document.getElementById('bot-likes-milestone');
+    
+    if (readFollowsEl) readFollowsEl.checked = !!config.readFollowsEnabled;
+    if (readSharesEl) readSharesEl.checked = !!config.readSharesEnabled;
+    if (readGiftsEl) readGiftsEl.checked = !!config.readGiftsEnabled;
+    if (readLikesEl) readLikesEl.checked = !!config.readLikesMilestoneEnabled;
+    if (likesMilestoneEl) likesMilestoneEl.value = config.likesMilestoneValue || 100;
     
     // Setup and Spotify values
     const setupUserEl = document.getElementById('setup-tiktok-username');
@@ -592,6 +605,13 @@ function sendUpdatedSettings() {
         volume: parseFloat(document.getElementById('bot-default-volume').value),
         pitch: parseFloat(document.getElementById('bot-default-pitch').value),
         rate: parseFloat(document.getElementById('bot-default-rate').value),
+        
+        // Direct events read settings
+        readFollowsEnabled: document.getElementById('bot-read-follows').checked,
+        readSharesEnabled: document.getElementById('bot-read-shares').checked,
+        readGiftsEnabled: document.getElementById('bot-read-gifts').checked,
+        readLikesMilestoneEnabled: document.getElementById('bot-read-likes').checked,
+        likesMilestoneValue: parseInt(document.getElementById('bot-likes-milestone').value) || 100,
         
         // New Settings fields
         tiktokUsername: document.getElementById('setup-tiktok-username').value.trim().replace('@', ''),
@@ -1130,6 +1150,48 @@ if (copyObsMusicBtn) {
     });
 }
 
+const copyObsDonorsBtn = document.getElementById('btn-copy-obs-donors');
+if (copyObsDonorsBtn) {
+    copyObsDonorsBtn.addEventListener('click', () => {
+        const input = document.getElementById('obs-donors-url');
+        if (input) {
+            navigator.clipboard.writeText(input.value).then(() => {
+                const originalText = copyObsDonorsBtn.textContent;
+                copyObsDonorsBtn.textContent = '¡Copiado!';
+                setTimeout(() => copyObsDonorsBtn.textContent = originalText, 1500);
+            });
+        }
+    });
+}
+
+const copyObsTapsBtn = document.getElementById('btn-copy-obs-taps');
+if (copyObsTapsBtn) {
+    copyObsTapsBtn.addEventListener('click', () => {
+        const input = document.getElementById('obs-taps-url');
+        if (input) {
+            navigator.clipboard.writeText(input.value).then(() => {
+                const originalText = copyObsTapsBtn.textContent;
+                copyObsTapsBtn.textContent = '¡Copiado!';
+                setTimeout(() => copyObsTapsBtn.textContent = originalText, 1500);
+            });
+        }
+    });
+}
+
+const copyObsMvpBtn = document.getElementById('btn-copy-obs-mvp');
+if (copyObsMvpBtn) {
+    copyObsMvpBtn.addEventListener('click', () => {
+        const input = document.getElementById('obs-mvp-url');
+        if (input) {
+            navigator.clipboard.writeText(input.value).then(() => {
+                const originalText = copyObsMvpBtn.textContent;
+                copyObsMvpBtn.textContent = '¡Copiado!';
+                setTimeout(() => copyObsMvpBtn.textContent = originalText, 1500);
+            });
+        }
+    });
+}
+
 // Spotify OAuth buttons
 const btnVincularSpotify = document.getElementById('btn-vincular-spotify');
 if (btnVincularSpotify) {
@@ -1386,6 +1448,52 @@ socket.on('local_ips', (ips) => {
 
     lucide.createIcons();
 });
+
+// Rankings update listener
+socket.on('rankings_updated', (rankings) => {
+    updateRankingTable('ranking-gifts-body', rankings.gifts, 'monedas');
+    updateRankingTable('ranking-likes-body', rankings.likes, 'likes');
+    updateRankingTable('ranking-mvp-body', rankings.mvp, 'puntos');
+});
+
+function updateRankingTable(elementId, dataList, unitLabel) {
+    const body = document.getElementById(elementId);
+    if (!body) return;
+    
+    if (!dataList || dataList.length === 0) {
+        body.innerHTML = `<tr><td colspan="3" class="text-center" style="color: var(--text-muted); padding: 20px;">Esperando datos de la transmisión...</td></tr>`;
+        return;
+    }
+    
+    body.innerHTML = '';
+    dataList.forEach((user, index) => {
+        const row = document.createElement('tr');
+        
+        let positionBadge = `${index + 1}.`;
+        if (index === 0) positionBadge = '🥇';
+        else if (index === 1) positionBadge = '🥈';
+        else if (index === 2) positionBadge = '🥉';
+        
+        const boldStyle = index < 3 ? 'font-weight: bold; color: var(--text-main);' : 'color: var(--text-muted);';
+        
+        row.innerHTML = `
+            <td style="font-size: 16px; width: 60px; vertical-align: middle;">${positionBadge}</td>
+            <td style="${boldStyle} vertical-align: middle;">${escapeHtml(user.nickname)} <small style="color: var(--text-muted); display: block; font-size: 10px;">@${escapeHtml(user.username)}</small></td>
+            <td class="text-right" style="font-weight: bold; font-family: monospace; font-size: 14px; vertical-align: middle;">${user.count.toLocaleString()}</td>
+        `;
+        body.appendChild(row);
+    });
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    return text.toString()
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
 
 // Listen to actual Spotify playback for live preview mockup inside the control panel
 socket.on('spotify_track', (track) => {
