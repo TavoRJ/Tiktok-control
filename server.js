@@ -7,7 +7,14 @@ const fs = require('fs');
 const { EdgeTTS } = require('node-edge-tts');
 const os = require('os');
 
-const SETTINGS_FILE = path.join(__dirname, 'chatbot_settings.json');
+const writableDir = process.env.USER_DATA_PATH || __dirname;
+const SETTINGS_FILE = path.join(writableDir, 'chatbot_settings.json');
+
+// Ensure writable directories exist
+if (process.env.USER_DATA_PATH && !fs.existsSync(writableDir)) {
+    fs.mkdirSync(writableDir, { recursive: true });
+}
+
 let chatbotSettings = {
     active: false,
     permission: "all",
@@ -71,20 +78,29 @@ function getLocalIPs() {
 try {
     if (fs.existsSync(SETTINGS_FILE)) {
         chatbotSettings = { ...chatbotSettings, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8')) };
-        if (chatbotSettings.tiktokUsername) {
-            const usernameLower = chatbotSettings.tiktokUsername.toLowerCase();
-            if (usernameLower.includes('majo')) {
-                chatbotSettings.themeName = 'majo';
-            } else if (usernameLower.includes('naya')) {
-                chatbotSettings.themeName = 'naya';
-            } else {
-                chatbotSettings.themeName = 'neutral';
-            }
+    } else {
+        // If it doesn't exist in writable folder, try to copy it from packaged app directory
+        const templateFile = path.join(__dirname, 'chatbot_settings.json');
+        if (fs.existsSync(templateFile) && templateFile !== SETTINGS_FILE) {
+            fs.copyFileSync(templateFile, SETTINGS_FILE);
+            chatbotSettings = { ...chatbotSettings, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8')) };
+        } else {
+            fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
+        }
+    }
+    
+    // Auto-detect theme based on loaded username
+    if (chatbotSettings.tiktokUsername) {
+        const usernameLower = chatbotSettings.tiktokUsername.toLowerCase();
+        if (usernameLower.includes('majo')) {
+            chatbotSettings.themeName = 'majo';
+        } else if (usernameLower.includes('naya')) {
+            chatbotSettings.themeName = 'naya';
         } else {
             chatbotSettings.themeName = 'neutral';
         }
     } else {
-        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
+        chatbotSettings.themeName = 'neutral';
     }
 } catch (err) {
     console.error('Error loading chatbot settings:', err);
@@ -176,7 +192,7 @@ async function handleCloudTTS(data) {
         rate = userVoiceRule.rate ?? 1;
     }
     
-    const tempFile = path.join(__dirname, `temp_tts_${Date.now()}_${Math.floor(Math.random() * 1000)}.mp3`);
+    const tempFile = path.join(writableDir, `temp_tts_${Date.now()}_${Math.floor(Math.random() * 1000)}.mp3`);
     
     // Rate formatting
     const ratePercentage = Math.round((rate - 1) * 100);
@@ -785,14 +801,20 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 const PORT = 3000;
 const TIKTOK_USERNAME = 'nayamorningstar';
 
-// Ensure upload directory exists
-const UPLOADS_DIR = path.join(__dirname, 'public', 'uploads');
+// Ensure upload directory exists in writable directory
+const UPLOADS_DIR = path.join(writableDir, 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) {
     fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
 // Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Serve temporary files from the writable directory
+app.use(express.static(writableDir));
+
+// Serve uploads from the writable directory
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 // Basic route for the control panel
 app.get('/', (req, res) => {
@@ -1286,7 +1308,7 @@ io.on('connection', (socket) => {
     // Handle test cloud tts request
     socket.on('test_cloud_tts', async (data) => {
         const { text, voiceName, pitch, rate } = data;
-        const tempFile = path.join(__dirname, `temp_test_${Date.now()}.mp3`);
+        const tempFile = path.join(writableDir, `temp_test_${Date.now()}.mp3`);
         
         const ratePercentage = Math.round((rate - 1) * 100);
         const rateStr = ratePercentage >= 0 ? `+${ratePercentage}%` : `${ratePercentage}%`;

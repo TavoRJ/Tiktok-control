@@ -1,6 +1,9 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 
+// Pass writable userData path to the backend server (to store settings, uploads, and temp files outside app.asar)
+process.env.USER_DATA_PATH = app.getPath('userData');
+
 // Requerimos nuestro servidor de Express/Socket.io
 const server = require('./server.js');
 
