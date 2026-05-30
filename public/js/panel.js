@@ -58,6 +58,30 @@ socket.on('app_version', (version) => {
     }
 });
 
+socket.on('remote_config_updated', (config) => {
+    if (!config) return;
+    
+    const youtubeBtn = document.getElementById('menu-youtube-btn');
+    const youtubeOverlay = document.getElementById('youtube-blocked-overlay');
+    const youtubeText = document.getElementById('youtube-blocked-text');
+    
+    if (config.youtubeBlocked) {
+        if (youtubeBtn) youtubeBtn.classList.add('menu-item-blocked');
+        if (youtubeOverlay) youtubeOverlay.style.display = 'flex';
+        if (youtubeText) youtubeText.textContent = config.youtubeBlockMessage || "Esta función ha sido deshabilitada temporalmente de forma remota por mantenimiento.";
+        
+        // If the user is currently on the youtube-view tab, force switch them to overlays-view
+        const activeItem = document.querySelector('.menu-item.active');
+        if (activeItem && activeItem.getAttribute('data-target') === 'youtube-view') {
+            const overlaysItem = document.querySelector('.menu-item[data-target="overlays-view"]');
+            if (overlaysItem) overlaysItem.click();
+        }
+    } else {
+        if (youtubeBtn) youtubeBtn.classList.remove('menu-item-blocked');
+        if (youtubeOverlay) youtubeOverlay.style.display = 'none';
+    }
+});
+
 socket.on('system', (data) => {
     if (data.type === 'connected') {
         statusText.textContent = data.message;
@@ -1260,6 +1284,23 @@ if (copyObsMvpBtn) {
                 setTimeout(() => copyObsMvpBtn.textContent = originalText, 1500);
             });
         }
+    });
+}
+
+// Manual Updates Check Trigger
+const checkUpdatesBtn = document.getElementById('btn-check-updates');
+if (checkUpdatesBtn) {
+    checkUpdatesBtn.addEventListener('click', () => {
+        const originalText = checkUpdatesBtn.innerHTML;
+        checkUpdatesBtn.disabled = true;
+        checkUpdatesBtn.innerHTML = '🔍 Buscando...';
+        
+        socket.emit('check_for_updates');
+        
+        setTimeout(() => {
+            checkUpdatesBtn.disabled = false;
+            checkUpdatesBtn.innerHTML = originalText;
+        }, 3000);
     });
 }
 

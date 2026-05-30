@@ -47,6 +47,14 @@ function createWindow() {
 }
 
 // Eventos de Auto-Updater
+let isManualCheck = false;
+
+global.manualCheckForUpdates = function() {
+    isManualCheck = true;
+    console.info("Búsqueda manual de actualización iniciada.");
+    autoUpdater.checkForUpdates();
+};
+
 autoUpdater.on('update-available', (info) => {
     console.info(`Nueva versión disponible: ${info.version}. Descargando...`);
     dialog.showMessageBox({
@@ -55,6 +63,19 @@ autoUpdater.on('update-available', (info) => {
         message: `Una nueva versión (${info.version}) de GRLive está disponible y se está descargando en segundo plano de forma automática.`,
         buttons: ['Entendido']
     });
+});
+
+autoUpdater.on('update-not-available', (info) => {
+    console.info('No hay actualizaciones disponibles.');
+    if (isManualCheck) {
+        dialog.showMessageBox({
+            type: 'info',
+            title: 'Sin actualizaciones',
+            message: 'Ya tienes la versión más reciente de GRLive instalada.',
+            buttons: ['Aceptar']
+        });
+        isManualCheck = false;
+    }
 });
 
 autoUpdater.on('update-downloaded', (info) => {
@@ -71,10 +92,20 @@ autoUpdater.on('update-downloaded', (info) => {
             autoUpdater.quitAndInstall();
         }
     });
+    isManualCheck = false;
 });
 
 autoUpdater.on('error', (err) => {
     console.error('Error en el actualizador automático:', err);
+    if (isManualCheck) {
+        dialog.showMessageBox({
+            type: 'error',
+            title: 'Error de actualización',
+            message: `Ocurrió un error al buscar actualizaciones: ${err.message || err}`,
+            buttons: ['Aceptar']
+        });
+        isManualCheck = false;
+    }
 });
 
 app.whenReady().then(() => {

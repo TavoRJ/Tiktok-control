@@ -1046,10 +1046,22 @@
             </section>
 
             <!-- View: Música (YouTube Integration) -->
-            <section id="youtube-view" class="view" style="display: none;">
+            <section id="youtube-view" class="view" style="display: none; position: relative;">
                 <div class="view-header">
                     <h2>MÚSICA (YOUTUBE OVERLAY - BETA)</h2>
                     <p>REPRODUCE VIDEOS DE YOUTUBE PEDIDOS POR EL CHAT CON UN VINILO NEÓN ROJO</p>
+                </div>
+
+                <!-- Bloqueo Remoto Overlay -->
+                <div id="youtube-blocked-overlay" class="blocked-overlay" style="display: none;">
+                    <div class="blocked-content">
+                        <svg class="blocked-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 48px; height: 48px; color: #ff0000; margin-bottom: 15px; display: inline-block;">
+                            <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg>
+                        <h3>Función Deshabilitada</h3>
+                        <p id="youtube-blocked-text">Esta función ha sido deshabilitada temporalmente de forma remota por mantenimiento.</p>
+                    </div>
                 </div>
 
                 <div class="chatbot-grid">
@@ -1376,6 +1388,21 @@
                                     <i data-lucide="upload" style="width: 14px; height: 14px;"></i> Importar
                                 </button>
                                 <input type="file" id="import-settings-file" accept=".json" style="display: none;">
+                            </div>
+                        </div>
+
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="refresh-cw" class="icon-accent" style="color: #00f0ff;"></i>
+                                <h3>Actualizaciones de GRLive</h3>
+                            </div>
+                            <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+                                Comprueba manualmente si existe una versión más reciente de la aplicación en el servidor.
+                            </p>
+                            <div style="margin-top: 15px;">
+                                <button class="btn primary small" id="btn-check-updates" style="width: 100%; justify-content: center; font-size: 13px; background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%); border: none; box-shadow: 0 4px 15px rgba(0, 198, 255, 0.3);">
+                                    <i data-lucide="search" style="width: 14px; height: 14px; margin-right: 5px;"></i> Buscar Actualizaciones
+                                </button>
                             </div>
                         </div>
                     </div>

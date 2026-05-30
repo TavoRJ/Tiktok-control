@@ -1199,6 +1199,29 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+// Remote config details (Client-Server Configuration Toggles)
+let remoteConfig = {
+    youtubeBlocked: false,
+    youtubeBlockMessage: "Esta función se encuentra deshabilitada temporalmente por mantenimiento remoto."
+};
+
+async function loadRemoteConfig() {
+    try {
+        console.log('Obteniendo configuración remota desde GitHub...');
+        const res = await fetch('https://raw.githubusercontent.com/TavoRJ/Tiktok-control/main/remote_config.json');
+        if (res.ok) {
+            const data = await res.json();
+            remoteConfig = { ...remoteConfig, ...data };
+            console.log('Configuración remota cargada con éxito:', remoteConfig);
+            io.emit('remote_config_updated', remoteConfig);
+        } else {
+            console.warn(`Respuesta no exitosa al cargar config remota (${res.status}). Usando valores por defecto.`);
+        }
+    } catch (err) {
+        console.error('Error al cargar la configuración remota:', err);
+    }
+}
+
 // Middleware to parse JSON payloads (for base64 uploads)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -1879,6 +1902,17 @@ io.on('connection', (socket) => {
     socket.emit('youtube_queue_updated', youtubeQueue);
     socket.emit('youtube_votes_updated', { votes: youtubeVoteSkips.size, limit: chatbotSettings.youtubeVoteSkipLimit });
     socket.emit('youtube_track', currentYoutubeTrack);
+    socket.emit('remote_config_updated', remoteConfig);
+
+    // Handle updates check request
+    socket.on('check_for_updates', () => {
+        console.log('Comprobación manual de actualizaciones solicitada por el panel...');
+        if (global.manualCheckForUpdates) {
+            global.manualCheckForUpdates();
+        } else {
+            console.warn('global.manualCheckForUpdates no está configurado.');
+        }
+    });
 
     // Relay manual control commands from the panel to the overlay
     socket.on('manual_control', (data) => {
@@ -2170,4 +2204,5 @@ io.on('connection', (socket) => {
 
 server.listen(PORT, () => {
     console.log(`🚀 Servidor ejecutándose en http://localhost:${PORT}`);
+    loadRemoteConfig();
 });
