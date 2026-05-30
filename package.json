@@ -1,6 +1,6 @@
 {
   "name": "tikttoklive",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "",
   "main": "main.js",
   "scripts": {
@@ -18,6 +18,14 @@
         "owner": "TavoRJ",
         "repo": "Tiktok-control"
       }
+    ],
+    "files": [
+      "**/*",
+      "!chatbot_settings.json",
+      "!remote_config.json",
+      "!dist/**/*",
+      "!.git/**/*",
+      "!.gitignore"
     ],
     "win": {
       "target": "nsis",
