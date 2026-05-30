@@ -35,6 +35,12 @@
     --accent-glow-light: rgba(255, 154, 158, 0.15);
 }
 
+.color-youtube {
+    --accent-color: #ff0000;
+    --accent-glow: rgba(255, 0, 0, 0.45);
+    --accent-glow-light: rgba(255, 0, 0, 0.15);
+}
+
 body, html {
     margin: 0;
     padding: 0;

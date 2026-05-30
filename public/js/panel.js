@@ -469,6 +469,25 @@ function updateUIWithConfig(config) {
     if (spotPrefixEl) spotPrefixEl.value = config.spotifyCommandPrefix || '!song';
     if (spotVoteLimitEl) spotVoteLimitEl.value = config.spotifyVoteSkipLimit || 3;
     
+    // YouTube settings sync
+    const ytActiveEl = document.getElementById('youtube-active');
+    const ytVolEl = document.getElementById('youtube-volume-slider');
+    const ytVolVal = document.getElementById('youtube-volume-val');
+    const ytQueueEnabledEl = document.getElementById('youtube-chat-queue-enabled');
+    const ytPermEl = document.getElementById('youtube-permission');
+    const ytPrefixEl = document.getElementById('youtube-command-prefix');
+    const ytVoteLimitEl = document.getElementById('youtube-voteskip-limit');
+    
+    if (ytActiveEl) ytActiveEl.checked = !!config.youtubeEnabled;
+    if (ytVolEl) {
+        ytVolEl.value = config.youtubeVolume !== undefined ? config.youtubeVolume : 80;
+        if (ytVolVal) ytVolVal.textContent = `${ytVolEl.value}%`;
+    }
+    if (ytQueueEnabledEl) ytQueueEnabledEl.checked = config.youtubeChatQueueEnabled !== false;
+    if (ytPermEl) ytPermEl.value = config.youtubePermission || 'all';
+    if (ytPrefixEl) ytPrefixEl.value = config.youtubeCommandPrefix || '!yt';
+    if (ytVoteLimitEl) ytVoteLimitEl.value = config.youtubeVoteSkipLimit || 3;
+    
     // Spotify OAuth connection profile UI
     const spotifyProfileContainer = document.getElementById('spotify-profile-container');
     const btnVincularSpotify = document.getElementById('btn-vincular-spotify');
@@ -632,7 +651,15 @@ function sendUpdatedSettings() {
         spotifyExplicitAllowed: document.getElementById('spotify-explicit-allowed').checked,
         spotifyPermission: document.getElementById('spotify-permission').value,
         spotifyCommandPrefix: document.getElementById('spotify-command-prefix').value.trim(),
-        spotifyVoteSkipLimit: parseInt(document.getElementById('spotify-voteskip-limit').value) || 3
+        spotifyVoteSkipLimit: parseInt(document.getElementById('spotify-voteskip-limit').value) || 3,
+        
+        // YouTube interactive settings
+        youtubeEnabled: document.getElementById('youtube-active').checked,
+        youtubeVolume: parseInt(document.getElementById('youtube-volume-slider').value) || 80,
+        youtubeChatQueueEnabled: document.getElementById('youtube-chat-queue-enabled').checked,
+        youtubePermission: document.getElementById('youtube-permission').value,
+        youtubeCommandPrefix: document.getElementById('youtube-command-prefix').value.trim(),
+        youtubeVoteSkipLimit: parseInt(document.getElementById('youtube-voteskip-limit').value) || 3
     };
     
     socket.emit('update_chatbot_settings', updated);
@@ -646,7 +673,9 @@ const inputsToWatch = [
     'bot-exclusive-enabled',
     'setup-auto-connect', 'setup-theme', 'spotify-active', 'spotify-theme', 'spotify-position',
     'spotify-chat-queue-enabled', 'spotify-explicit-allowed', 'spotify-permission',
-    'spotify-neon-color', 'spotify-vinyl-design', 'spotify-vinyl-speed'
+    'spotify-neon-color', 'spotify-vinyl-design', 'spotify-vinyl-speed',
+    'youtube-active', 'youtube-chat-queue-enabled', 'youtube-permission',
+    'youtube-command-prefix', 'youtube-voteskip-limit'
 ];
 
 inputsToWatch.forEach(id => {
@@ -1145,6 +1174,20 @@ if (copyObsMusicBtn) {
                 const originalText = copyObsMusicBtn.textContent;
                 copyObsMusicBtn.textContent = '¡Copiado!';
                 setTimeout(() => copyObsMusicBtn.textContent = originalText, 1500);
+            });
+        }
+    });
+}
+
+const copyObsYoutubeBtn = document.getElementById('btn-copy-obs-youtube');
+if (copyObsYoutubeBtn) {
+    copyObsYoutubeBtn.addEventListener('click', () => {
+        const input = document.getElementById('obs-youtube-url');
+        if (input) {
+            navigator.clipboard.writeText(input.value).then(() => {
+                const originalText = copyObsYoutubeBtn.textContent;
+                copyObsYoutubeBtn.textContent = '¡Copiado!';
+                setTimeout(() => copyObsYoutubeBtn.textContent = originalText, 1500);
             });
         }
     });
@@ -2210,6 +2253,195 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
+    // ==========================================
+    // YOUTUBE TRACK & COLA CONTROLS & LISTENERS
+    // ==========================================
+
+    socket.on('youtube_queue_updated', (queue) => {
+        renderYoutubeQueue(queue);
+    });
+
+    function renderYoutubeQueue(queue) {
+        const tbody = document.getElementById('youtube-queue-body');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '';
+        
+        if (!queue || queue.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 30px 15px;">
+                        La cola de reproducción de YouTube está vacía.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        queue.forEach((track, index) => {
+            const tr = document.createElement('tr');
+            const albumArtSrc = track.albumArt || 'data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2240%22%20height%3D%2240%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%2523222%22%2F%3E%3C%2Fsvg%3E';
+            
+            tr.innerHTML = `
+                <td>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <img src="${albumArtSrc}" class="queue-thumb" alt="Cover" style="width: 40px; height: 40px; border-radius: 4px; object-fit: cover;">
+                        <div class="track-details" style="display: flex; flex-direction: column;">
+                            <span class="track-title" style="font-weight: bold; font-size: 13px; color: var(--text-main);">${track.title}</span>
+                            <span class="track-artist" style="font-size: 11px; color: var(--text-muted);">${track.artist}</span>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <span class="requester-badge" style="background: rgba(255, 0, 0, 0.1); color: #ff0000; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold;">@${track.requester}</span>
+                </td>
+                <td class="text-right">
+                    <div class="queue-actions">
+                        <button class="btn-queue-play" onclick="playYoutubeQueueItem(${index})" title="Reproducir ahora" style="background: none; border: none; color: var(--text-main); cursor: pointer; padding: 4px;">
+                            <i data-lucide="play" class="icon-small"></i>
+                        </button>
+                        <button class="btn-queue-delete" onclick="deleteYoutubeQueueItem(${index})" title="Eliminar de la cola" style="background: none; border: none; color: var(--accent-red); cursor: pointer; padding: 4px;">
+                            <i data-lucide="trash-2" class="icon-small"></i>
+                        </button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+        
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+
+    window.playYoutubeQueueItem = function(index) {
+        socket.emit('play_youtube_queue_item', index);
+    };
+
+    window.deleteYoutubeQueueItem = function(index) {
+        socket.emit('delete_youtube_queue_item', index);
+    };
+
+    // Bind clear YouTube queue button
+    const btnClearYoutubeQueue = document.getElementById('btn-clear-youtube-queue');
+    if (btnClearYoutubeQueue) {
+        btnClearYoutubeQueue.addEventListener('click', () => {
+            if (confirm('¿Estás seguro de que deseas vaciar toda la cola de YouTube?')) {
+                socket.emit('clear_youtube_queue');
+            }
+        });
+    }
+
+    // Listen to actual YouTube playback for live preview mockup
+    socket.on('youtube_track', (track) => {
+        const titleEl = document.getElementById('youtube-mockup-title');
+        const artistEl = document.getElementById('youtube-mockup-artist');
+        const imgEl = document.getElementById('youtube-mockup-album-img');
+        const bgArtEl = document.getElementById('youtube-mockup-bg-art');
+        const playIconEl = document.getElementById('youtube-mockup-play-icon');
+        const fillEl = document.getElementById('youtube-mockup-progress-fill');
+        const currentEl = document.getElementById('youtube-mockup-time-current');
+        const totalEl = document.getElementById('youtube-mockup-time-total');
+        
+        if (track && track.title) {
+            if (titleEl) titleEl.textContent = track.title;
+            if (artistEl) artistEl.textContent = track.artist || 'YouTube';
+            if (imgEl && track.albumArt) {
+                imgEl.src = track.albumArt;
+                imgEl.style.animationPlayState = track.isPlaying ? 'running' : 'paused';
+            }
+            if (bgArtEl && track.albumArt) {
+                bgArtEl.style.backgroundImage = `url('${track.albumArt}')`;
+                bgArtEl.style.backgroundSize = 'cover';
+            }
+            
+            if (playIconEl) {
+                playIconEl.setAttribute('data-lucide', track.isPlaying ? 'pause' : 'play');
+            }
+            
+            // Progress display
+            if (fillEl && track.durationMs) {
+                const percent = (track.progressMs / track.durationMs) * 100;
+                fillEl.style.width = `${percent}%`;
+            } else if (fillEl && !track.isPlaying) {
+                fillEl.style.width = '0%';
+            }
+            if (currentEl) {
+                currentEl.textContent = track.progressMs ? formatTime(track.progressMs / 1000) : '0:00';
+            }
+            if (totalEl) {
+                totalEl.textContent = track.durationMs ? formatTime(track.durationMs / 1000) : '0:00';
+            }
+            
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        } else {
+            if (titleEl) titleEl.textContent = 'Sin reproducción';
+            if (artistEl) artistEl.textContent = 'Cola de YouTube vacía';
+            if (imgEl) {
+                imgEl.src = "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231a1a1a%22%2F%3E%3Ccircle%20cx%3D%22100%22%20cy%3D%22100%22%20r%3D%2230%22%20fill%3D%22%23ff0000%22%2F%3E%3Cpolygon%20points%3D%2295%2C90%2095%2C110%20112%2C100%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E";
+                imgEl.style.animationPlayState = 'paused';
+            }
+            if (playIconEl) playIconEl.setAttribute('data-lucide', 'play');
+            if (fillEl) fillEl.style.width = '0%';
+            if (currentEl) currentEl.textContent = '0:00';
+            if (totalEl) totalEl.textContent = '0:00';
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        }
+    });
+
+    // Sync progress update in real-time from YouTube widget player status
+    socket.on('youtube_track_progress', (status) => {
+        const fillEl = document.getElementById('youtube-mockup-progress-fill');
+        const currentEl = document.getElementById('youtube-mockup-time-current');
+        const totalEl = document.getElementById('youtube-mockup-time-total');
+        
+        if (fillEl && status.durationMs) {
+            const percent = (status.progressMs / status.durationMs) * 100;
+            fillEl.style.width = `${percent}%`;
+        }
+        if (currentEl) {
+            currentEl.textContent = formatTime(status.progressMs / 1000);
+        }
+        if (totalEl) {
+            totalEl.textContent = formatTime(status.durationMs / 1000);
+        }
+    });
+
+    // YouTube mockup play/pause control action
+    const ytMockupPlayBtn = document.getElementById('youtube-mockup-btn-play');
+    if (ytMockupPlayBtn) {
+        ytMockupPlayBtn.addEventListener('click', () => {
+            const imgEl = document.getElementById('youtube-mockup-album-img');
+            const isPlayingNow = imgEl && imgEl.style.animationPlayState === 'running';
+            socket.emit('youtube_toggle_play', !isPlayingNow);
+        });
+    }
+
+    const ytMockupNextBtn = document.getElementById('youtube-mockup-btn-next');
+    if (ytMockupNextBtn) {
+        ytMockupNextBtn.addEventListener('click', () => {
+            socket.emit('skip_youtube_track');
+        });
+    }
+
+    const ytVolSlider = document.getElementById('youtube-volume-slider');
+    if (ytVolSlider) {
+        ytVolSlider.addEventListener('input', () => {
+            const val = ytVolSlider.value;
+            const valLabel = document.getElementById('youtube-volume-val');
+            if (valLabel) valLabel.textContent = `${val}%`;
+        });
+        
+        ytVolSlider.addEventListener('change', () => {
+            const val = parseInt(ytVolSlider.value) || 80;
+            socket.emit('youtube_volume_change', val);
+        });
+    }
+
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();
     }

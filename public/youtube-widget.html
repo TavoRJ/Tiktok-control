@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok Live - YouTube Music Overlay</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/music-widget.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Specific overrides for YouTube theme */
+        .vinyl-record {
+            animation: spin 10s linear infinite;
+            animation-play-state: paused;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        #yt-player-container {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            opacity: 0.001;
+            pointer-events: none;
+            bottom: 0;
+            right: 0;
+        }
+    </style>
+</head>
+<body class="color-youtube">
+    <div id="yt-player-container">
+        <div id="yt-player"></div>
+    </div>
+
+    <div class="widget-wrapper color-youtube" id="youtube-widget-wrapper">
+        <!-- Letrero de Neón -->
+        <div class="neon-sign">
+            <span class="glowing-text">YouTube Radio</span>
+        </div>
+        
+        <!-- Cuerpo del Tocadiscos -->
+        <div class="tocadiscos" id="tocadiscos-player">
+            <div class="knob volume-knob"></div>
+            <div class="knob pitch-slider">
+                <div class="slider-handle"></div>
+            </div>
+            
+            <!-- El Plato y Vinilo -->
+            <div class="platter-area">
+                <div class="vinyl-record" id="vinyl-disc">
+                    <!-- Art del album/video en el centro -->
+                    <div class="vinyl-center">
+                        <img src="data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231a1a1a%22%2F%3E%3Ccircle%20cx%3D%22100%22%20cy%3D%22100%22%20r%3D%2230%22%20fill%3D%22%23ff0000%22%2F%3E%3Cpolygon%20points%3D%2295%2C90%2095%2C110%20112%2C100%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E" id="album-art" alt="Album Cover">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Brazo Fonocaptor -->
+            <div class="tonearm-container">
+                <div class="tonearm" id="tonearm-needle" style="transition: transform 0.8s cubic-bezier(0.25, 0.8, 0.25, 1); transform-origin: top center;">
+                    <div class="arm-shaft"></div>
+                    <div class="headshell"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Info de Canción -->
+        <div class="song-info">
+            <div class="text-container">
+                <h2 id="song-title">Sin música sonando</h2>
+                <h3 id="song-artist">Esperando peticiones (!yt)</h3>
+            </div>
+            
+            <!-- Barra de Progreso -->
+            <div class="progress-container">
+                <div class="progress-bar-fill" id="progress-fill" style="width: 0%; transition: width 0.5s linear;"></div>
+            </div>
+            
+            <!-- Quién pidió la canción -->
+            <div id="song-requester" class="song-requester" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let player = null;
+        let isPlayerReady = false;
+        let currentTrack = null;
+        let activeVolume = 80;
+
+        const tonearm = document.getElementById('tonearm-needle');
+        const vinyl = document.getElementById('vinyl-disc');
+        const songTitle = document.getElementById('song-title');
+        const songArtist = document.getElementById('song-artist');
+        const albumArt = document.getElementById('album-art');
+        const songRequester = document.getElementById('song-requester');
+        const progressFill = document.getElementById('progress-fill');
+
+        // Dynamically load YouTube IFrame Player API
+        const tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('yt-player', {
+                height: '10',
+                width: '10',
+                videoId: '',
+                playerVars: {
+                    'autoplay': 0,
+                    'controls': 0,
+                    'disablekb': 1,
+                    'fs': 0,
+                    'rel': 0,
+                    'modestbranding': 1,
+                    'origin': window.location.origin
+                },
+                events: {
+                    'onReady': onPlayerReady,
+                    'onStateChange': onPlayerStateChange,
+                    'onError': onPlayerError
+                }
+            });
+        }
+
+        function onPlayerReady(event) {
+            isPlayerReady = true;
+            player.setVolume(activeVolume);
+            console.log('YouTube Player IFrame API Listo');
+
+            // Setup sync progress check loop
+            setInterval(() => {
+                if (player && player.getCurrentTime && player.getDuration && currentTrack && currentTrack.isPlaying) {
+                    const isPlaying = player.getPlayerState() === YT.PlayerState.PLAYING;
+                    const progressMs = Math.round(player.getCurrentTime() * 1000);
+                    const durationMs = Math.round(player.getDuration() * 1000);
+                    
+                    socket.emit('youtube_player_status', {
+                        progressMs,
+                        durationMs,
+                        isPlaying
+                    });
+                    
+                    // Local sync
+                    if (progressFill && durationMs) {
+                        progressFill.style.width = `${(progressMs / durationMs) * 100}%`;
+                    }
+                }
+            }, 500);
+        }
+
+        function onPlayerStateChange(event) {
+            if (event.data === YT.PlayerState.ENDED) {
+                console.log('Video finalizado. Reportando al servidor...');
+                socket.emit('youtube_player_ended');
+            }
+        }
+
+        function onPlayerError(event) {
+            console.error('Error de reproducción en YouTube:', event.data);
+            socket.emit('youtube_player_ended'); // Skip to next to prevent getting stuck
+        }
+
+        function setVisualState(playing) {
+            if (playing) {
+                if (tonearm) tonearm.style.transform = 'rotate(28deg)';
+                if (vinyl) vinyl.style.animationPlayState = 'running';
+            } else {
+                if (tonearm) tonearm.style.transform = 'rotate(0deg)';
+                if (vinyl) vinyl.style.animationPlayState = 'paused';
+            }
+        }
+
+        // Sync settings / Theme colors
+        socket.on('chatbot_settings_updated', (config) => {
+            if (config) {
+                activeVolume = config.youtubeVolume !== undefined ? config.youtubeVolume : 80;
+                if (isPlayerReady && player) {
+                    player.setVolume(activeVolume);
+                }
+                
+                // Theme management: defaults to YouTube red, but can adapt dynamically
+                const wrapper = document.getElementById('youtube-widget-wrapper');
+                if (wrapper) {
+                    if (config.themeName === 'naya') {
+                        document.body.className = 'color-pink';
+                        wrapper.className = 'widget-wrapper color-pink';
+                    } else if (config.themeName === 'majo') {
+                        document.body.className = 'color-purple';
+                        wrapper.className = 'widget-wrapper color-purple';
+                    } else {
+                        document.body.className = 'color-youtube';
+                        wrapper.className = 'widget-wrapper color-youtube';
+                    }
+                }
+            }
+        });
+
+        // Listen for YouTube tracks from the queue
+        socket.on('youtube_track', (track) => {
+            if (!isPlayerReady || !player) return;
+
+            if (track && track.id) {
+                const isNewTrack = !currentTrack || currentTrack.id !== track.id;
+                currentTrack = track;
+
+                // Sync track details
+                if (songTitle) songTitle.textContent = track.title;
+                if (songArtist) songArtist.textContent = track.artist || 'YouTube';
+                if (albumArt && track.albumArt) albumArt.src = track.albumArt;
+
+                if (songRequester) {
+                    if (track.requester) {
+                        songRequester.textContent = `Pedida por: @${track.requester}`;
+                        songRequester.style.display = 'block';
+                    } else {
+                        songRequester.style.display = 'none';
+                    }
+                }
+
+                if (isNewTrack) {
+                    player.loadVideoById(track.id);
+                }
+
+                if (track.isPlaying) {
+                    player.playVideo();
+                    setVisualState(true);
+                } else {
+                    player.pauseVideo();
+                    setVisualState(false);
+                }
+            } else {
+                currentTrack = null;
+                player.stopVideo();
+                if (songTitle) songTitle.textContent = 'Sin música sonando';
+                if (songArtist) songArtist.textContent = 'Esperando peticiones (!yt)';
+                if (albumArt) albumArt.src = 'data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231a1a1a%22%2F%3E%3Ccircle%20cx%3D%22100%22%20cy%3D%22100%22%20r%3D%2230%22%20fill%3D%22%23ff0000%22%2F%3E%3Cpolygon%20points%3D%2295%2C90%2095%2C110%20112%2C100%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E';
+                if (songRequester) songRequester.style.display = 'none';
+                if (progressFill) progressFill.style.width = '0%';
+                setVisualState(false);
+            }
+        });
+
+        socket.on('youtube_volume_updated', (volume) => {
+            activeVolume = volume;
+            if (isPlayerReady && player) {
+                player.setVolume(activeVolume);
+            }
+        });
+
+        lucide.createIcons();
+    </script>
+</body>
+</html>

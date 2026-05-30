@@ -66,7 +66,16 @@ let chatbotSettings = {
     readSharesEnabled: false,
     readGiftsEnabled: false,
     readLikesMilestoneEnabled: false,
-    likesMilestoneValue: 100
+    likesMilestoneValue: 100,
+    // YouTube settings
+    youtubeEnabled: false,
+    youtubeVolume: 80,
+    youtubeChatQueueEnabled: true,
+    youtubePermission: "all",
+    youtubeCommandPrefix: "!yt",
+    youtubeVoteSkipLimit: 3,
+    youtubeTheme: "red-neon",
+    youtubePosition: "bottom-left"
 };
 
 // Global in-memory rankings database for active stream session
@@ -75,6 +84,12 @@ let rankings = {
     gifts: {},  // { username: { nickname, count } }
     mvp: {}     // { username: { nickname, count } }
 };
+
+// YouTube Queue & Variables for active stream session
+let youtubeQueue = [];
+let currentYoutubeTrack = { isPlaying: false };
+let youtubeVoteSkips = new Set();
+let currentActiveQueueYoutubeTrack = null;
 
 
 // Helper to get local IP addresses
@@ -90,6 +105,104 @@ function getLocalIPs() {
         }
     }
     return addresses;
+}
+
+// Parse YouTube video ID from URL
+function parseYoutubeId(url) {
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+}
+
+// Fetch info using YouTube oEmbed
+async function getYoutubeOEmbedInfo(videoId) {
+    try {
+        const url = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        const data = await res.json();
+        return {
+            id: videoId,
+            title: data.title || 'Video de YouTube',
+            artist: data.author_name || 'YouTube',
+            albumArt: data.thumbnail_url || `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+            uri: `https://www.youtube.com/watch?v=${videoId}`,
+            durationText: '0:00'
+        };
+    } catch (e) {
+        console.error('Error fetching oEmbed info:', e);
+        return null;
+    }
+}
+
+// Scrape YouTube search results to get first video
+async function searchYouTube(query) {
+    const videoId = parseYoutubeId(query);
+    if (videoId) {
+        const info = await getYoutubeOEmbedInfo(videoId);
+        if (info) return info;
+    }
+
+    try {
+        const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAQ%253D%253D`; // filter to videos only
+        const response = await fetch(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+                'Accept-Language': 'es-ES,es;q=0.9'
+            }
+        });
+        if (!response.ok) return null;
+        const html = await response.text();
+        
+        // Try parsing ytInitialData
+        const ytInitialDataMatch = html.match(/var ytInitialData\s*=\s*({.+?});/);
+        if (ytInitialDataMatch) {
+            const data = JSON.parse(ytInitialDataMatch[1]);
+            const contents = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents;
+            
+            if (contents && contents.length > 0) {
+                for (const item of contents) {
+                    if (item.videoRenderer) {
+                        const video = item.videoRenderer;
+                        const vId = video.videoId;
+                        const title = video.title?.runs?.[0]?.text || '';
+                        const artist = video.ownerText?.runs?.[0]?.text || 'YouTube';
+                        const durationText = video.lengthText?.simpleText || '0:00';
+                        const albumArt = video.thumbnail?.thumbnails?.[0]?.url || `https://img.youtube.com/vi/${vId}/hqdefault.jpg`;
+                        
+                        return {
+                            id: vId,
+                            title,
+                            artist,
+                            albumArt,
+                            uri: `https://www.youtube.com/watch?v=${vId}`,
+                            durationText
+                        };
+                    }
+                }
+            }
+        }
+        
+        // Fallback regex search
+        const videoIdMatch = html.match(/"videoId":"([^"]+)"/);
+        if (videoIdMatch) {
+            const vId = videoIdMatch[1];
+            const info = await getYoutubeOEmbedInfo(vId);
+            if (info) return info;
+            return {
+                id: vId,
+                title: 'Video de YouTube',
+                artist: 'YouTube',
+                albumArt: `https://img.youtube.com/vi/${vId}/hqdefault.jpg`,
+                uri: `https://www.youtube.com/watch?v=${vId}`,
+                durationText: '0:00'
+            };
+        }
+        return null;
+    } catch (err) {
+        console.error('Error scraping YouTube:', err);
+        return null;
+    }
 }
 
 try {
@@ -335,6 +448,194 @@ async function handleCloudTTS(data) {
 }
 
 
+
+// ==========================================
+// YOUTUBE PLAYLIST, CONTROLS & COMMANDS
+// ==========================================
+
+async function playNextYoutubeInQueue() {
+    if (youtubeQueue.length === 0) {
+        currentYoutubeTrack = { isPlaying: false };
+        io.emit('youtube_track', currentYoutubeTrack);
+        currentActiveQueueYoutubeTrack = null;
+        return false;
+    }
+    
+    const nextTrack = youtubeQueue.shift();
+    io.emit('youtube_queue_updated', youtubeQueue);
+    
+    youtubeVoteSkips.clear();
+    io.emit('youtube_votes_updated', { votes: 0, limit: chatbotSettings.youtubeVoteSkipLimit });
+    
+    console.info(`Reproduciendo siguiente en cola de YouTube: ${nextTrack.title} (Pedido por @${nextTrack.requester})`);
+    
+    currentActiveQueueYoutubeTrack = nextTrack;
+    currentYoutubeTrack = {
+        isPlaying: true,
+        title: nextTrack.title,
+        artist: nextTrack.artist,
+        albumArt: nextTrack.albumArt,
+        id: nextTrack.id,
+        uri: nextTrack.uri,
+        requester: nextTrack.requester,
+        progressMs: 0,
+        durationMs: 0
+    };
+    
+    io.emit('youtube_track', currentYoutubeTrack);
+    return true;
+}
+
+function addYoutubeTrackToQueue(track) {
+    youtubeQueue.push(track);
+    io.emit('youtube_queue_updated', youtubeQueue);
+    console.info(`Agregado a cola de YouTube: ${track.title} (Pedido por @${track.requester})`);
+    
+    if (youtubeQueue.length === 1 && (!currentYoutubeTrack || !currentYoutubeTrack.isPlaying)) {
+        playNextYoutubeInQueue();
+    }
+}
+
+function handleYoutubeVoteSkip(requester, isStaff) {
+    if (isStaff) {
+        console.log(`Skip YouTube forzado por staff: @${requester}`);
+        io.emit('system', { type: 'info', message: `@${requester} omitió el video de YouTube.` });
+        playNextYoutubeInQueue();
+        return;
+    }
+    
+    if (!currentYoutubeTrack || !currentYoutubeTrack.isPlaying) {
+        return;
+    }
+    
+    youtubeVoteSkips.add(requester);
+    const votesNeeded = chatbotSettings.youtubeVoteSkipLimit || 3;
+    const currentVotes = youtubeVoteSkips.size;
+    
+    io.emit('youtube_votes_updated', { votes: currentVotes, limit: votesNeeded });
+    io.emit('system', { type: 'info', message: `@${requester} votó para omitir el video. (${currentVotes}/${votesNeeded})` });
+    
+    if (currentVotes >= votesNeeded) {
+        console.log(`Límite de votos YouTube alcanzado (${currentVotes}/${votesNeeded}). Omitiendo video...`);
+        io.emit('system', { type: 'info', message: `Límite de votos alcanzado. Omitiendo video de YouTube...` });
+        playNextYoutubeInQueue();
+    }
+}
+
+async function handleYoutubeSongRequest(query, requester) {
+    console.log(`Procesando solicitud de YouTube: "${query}" por @${requester}`);
+    io.emit('system', { type: 'info', message: `Buscando en YouTube: "${query}"...` });
+
+    const track = await searchYouTube(query);
+    if (!track) {
+        io.emit('system', { type: 'warning', message: `No se encontraron videos en YouTube para "${query}".` });
+        return;
+    }
+    
+    const trackItem = {
+        id: track.id,
+        title: track.title,
+        artist: track.artist,
+        albumArt: track.albumArt,
+        uri: track.uri,
+        requester: requester,
+        durationText: track.durationText
+    };
+    
+    addYoutubeTrackToQueue(trackItem);
+    io.emit('system', { type: 'success', message: `@${requester} añadió a la cola de YouTube: "${trackItem.title}"` });
+}
+
+function sendCurrentYoutubeTrackToChatInfo() {
+    if (currentYoutubeTrack && currentYoutubeTrack.isPlaying) {
+        io.emit('system', { 
+            type: 'info', 
+            message: `YouTube actual: "${currentYoutubeTrack.title}" (Pedido por @${currentYoutubeTrack.requester || 'Anfitrión'})` 
+        });
+    } else {
+        io.emit('system', { 
+            type: 'info', 
+            message: `No hay ningún video de YouTube reproduciéndose.` 
+        });
+    }
+}
+
+function sendYoutubeQueueToChatInfo() {
+    if (youtubeQueue.length === 0) {
+        io.emit('system', { type: 'info', message: `La cola de YouTube está vacía.` });
+        return;
+    }
+    const nextVideos = youtubeQueue.slice(0, 3).map((v, idx) => `${idx + 1}. "${v.title}" (@${v.requester})`).join(', ');
+    io.emit('system', { 
+        type: 'info', 
+        message: `Cola YouTube (total ${youtubeQueue.length}): ${nextVideos}${youtubeQueue.length > 3 ? '...' : ''}` 
+    });
+}
+
+function sendYoutubeVoteStatusToChatInfo() {
+    const votesNeeded = chatbotSettings.youtubeVoteSkipLimit || 3;
+    const currentVotes = youtubeVoteSkips.size;
+    io.emit('system', { 
+        type: 'info', 
+        message: `Votos para omitir YouTube: ${currentVotes}/${votesNeeded}` 
+    });
+}
+
+async function handleYoutubeChatCommand(data) {
+    if (!chatbotSettings.youtubeEnabled || !chatbotSettings.youtubeChatQueueEnabled) {
+        return;
+    }
+
+    const comment = (data.comment || '').trim();
+    const uniqueId = data.uniqueId;
+    const nickname = data.nickname || uniqueId;
+    
+    const isSubscriber = data.isSubscriber || (data.userIdentity && data.userIdentity.isSubscriberOfAnchor);
+    const isModerator = data.isModerator || (data.userIdentity && data.userIdentity.isModeratorOfAnchor);
+    const isAnchor = data.isAnchor || (data.userIdentity && data.userIdentity.isAnchor);
+    
+    const prefix = (chatbotSettings.youtubeCommandPrefix || '!yt').trim();
+    const lowerComment = comment.toLowerCase();
+    
+    if (lowerComment.startsWith(prefix.toLowerCase())) {
+        const query = comment.substring(prefix.length).trim();
+        if (query.length > 0) {
+            const perm = chatbotSettings.youtubePermission || 'all';
+            if (perm === 'mods' && !isModerator && !isAnchor) {
+                io.emit('system', { type: 'warning', message: `@${uniqueId} intentó pedir video de YouTube sin permisos (Mods).` });
+                return;
+            }
+            if (perm === 'subs' && !isSubscriber && !isModerator && !isAnchor) {
+                io.emit('system', { type: 'warning', message: `@${uniqueId} intentó pedir video de YouTube sin permisos (Subs).` });
+                return;
+            }
+            await handleYoutubeSongRequest(query, uniqueId);
+        } else {
+            sendCurrentYoutubeTrackToChatInfo();
+        }
+    } else if (lowerComment === '!ytcurrent' || lowerComment === '!ytcancion') {
+        sendCurrentYoutubeTrackToChatInfo();
+    } else if (lowerComment === '!ytqueue' || lowerComment === '!ytcola') {
+        sendYoutubeQueueToChatInfo();
+    } else if (lowerComment === '!ytskip' || lowerComment === '!ytomitir') {
+        handleYoutubeVoteSkip(uniqueId, isModerator || isAnchor);
+    } else if (lowerComment === '!ytvotos') {
+        sendYoutubeVoteStatusToChatInfo();
+    } else if (lowerComment === '!ytskipforce' || lowerComment === '!ytskipsong') {
+        if (isModerator || isAnchor) {
+            console.log(`Force YouTube skip por @${uniqueId}`);
+            io.emit('system', { type: 'info', message: `@${uniqueId} omitió el video de YouTube.` });
+            playNextYoutubeInQueue();
+        }
+    } else if (lowerComment === '!ytclearqueue' || lowerComment === '!ytlimpiarcola') {
+        if (isModerator || isAnchor) {
+            console.log(`Cola de YouTube vaciada por @${uniqueId}`);
+            youtubeQueue = [];
+            io.emit('youtube_queue_updated', youtubeQueue);
+            io.emit('system', { type: 'info', message: `@${uniqueId} vació la cola de YouTube.` });
+        }
+    }
+}
 
 // ==========================================
 // SPOTIFY REAL-TIME PLAYER API & POLLING
@@ -1270,6 +1571,11 @@ app.get('/music-widget', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'music-widget.html'));
 });
 
+// Route for YouTube Overlay Widget
+app.get('/youtube-widget', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'youtube-widget.html'));
+});
+
 // Rankings update and retrieval helpers
 function updateMvp(username, nickname) {
     const likes = rankings.likes[username] ? rankings.likes[username].count : 0;
@@ -1379,6 +1685,7 @@ function connectToTikTok(username) {
             if (eventType === 'chat') {
                 handleCloudTTS(data);
                 handleSpotifyChatCommand(data);
+                handleYoutubeChatCommand(data);
             }
 
             if (eventType === 'member') {
@@ -1567,6 +1874,11 @@ io.on('connection', (socket) => {
     // Send Spotify queue and votes on connection
     socket.emit('spotify_queue_updated', spotifyQueue);
     socket.emit('spotify_votes_updated', { votes: spotifyVoteSkips.size, limit: chatbotSettings.spotifyVoteSkipLimit });
+
+    // Send YouTube queue and votes on connection
+    socket.emit('youtube_queue_updated', youtubeQueue);
+    socket.emit('youtube_votes_updated', { votes: youtubeVoteSkips.size, limit: chatbotSettings.youtubeVoteSkipLimit });
+    socket.emit('youtube_track', currentYoutubeTrack);
 
     // Relay manual control commands from the panel to the overlay
     socket.on('manual_control', (data) => {
@@ -1773,6 +2085,86 @@ io.on('connection', (socket) => {
                 io.emit('spotify_track', trackData);
             }
         }, 600);
+    });
+
+    // YouTube Queue socket events
+    socket.on('get_youtube_queue', () => {
+        socket.emit('youtube_queue_updated', youtubeQueue);
+    });
+    
+    socket.on('delete_youtube_queue_item', (index) => {
+        if (index >= 0 && index < youtubeQueue.length) {
+            const removed = youtubeQueue.splice(index, 1);
+            io.emit('youtube_queue_updated', youtubeQueue);
+            console.info(`Eliminado de la cola de YouTube por el anfitrión: ${removed[0].title}`);
+        }
+    });
+    
+    socket.on('play_youtube_queue_item', async (index) => {
+        if (index >= 0 && index < youtubeQueue.length) {
+            const track = youtubeQueue.splice(index, 1)[0];
+            io.emit('youtube_queue_updated', youtubeQueue);
+            
+            youtubeVoteSkips.clear();
+            io.emit('youtube_votes_updated', { votes: 0, limit: chatbotSettings.youtubeVoteSkipLimit });
+            
+            currentActiveQueueYoutubeTrack = track;
+            currentYoutubeTrack = {
+                isPlaying: true,
+                title: track.title,
+                artist: track.artist,
+                albumArt: track.albumArt,
+                id: track.id,
+                uri: track.uri,
+                requester: track.requester,
+                progressMs: 0,
+                durationMs: 0
+            };
+            io.emit('youtube_track', currentYoutubeTrack);
+        }
+    });
+    
+    socket.on('skip_youtube_track', () => {
+        console.info('Skip manual de YouTube solicitado desde el panel.');
+        playNextYoutubeInQueue();
+    });
+    
+    socket.on('clear_youtube_queue', () => {
+        console.info('Cola de YouTube vaciada desde el panel.');
+        youtubeQueue = [];
+        io.emit('youtube_queue_updated', youtubeQueue);
+    });
+
+    socket.on('youtube_toggle_play', (playingState) => {
+        console.info(`YouTube Play/Pause solicitado desde el panel: ${playingState}`);
+        if (currentYoutubeTrack) {
+            currentYoutubeTrack.isPlaying = playingState;
+            io.emit('youtube_track', currentYoutubeTrack);
+        }
+    });
+
+    socket.on('youtube_volume_change', (volume) => {
+        chatbotSettings.youtubeVolume = volume;
+        io.emit('youtube_volume_updated', volume);
+        try {
+            fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
+        } catch (err) {
+            console.error('Error saving settings after YouTube volume change:', err);
+        }
+    });
+
+    socket.on('youtube_player_ended', () => {
+        console.info('El widget de YouTube reportó finalización de video.');
+        playNextYoutubeInQueue();
+    });
+
+    socket.on('youtube_player_status', (status) => {
+        if (currentYoutubeTrack) {
+            currentYoutubeTrack.progressMs = status.progressMs;
+            currentYoutubeTrack.durationMs = status.durationMs;
+            currentYoutubeTrack.isPlaying = status.isPlaying;
+            io.emit('youtube_track_progress', status);
+        }
     });
 });
 

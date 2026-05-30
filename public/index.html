@@ -31,6 +31,10 @@
                     <i data-lucide="music" class="icon"></i>
                     <span>MÚSICA</span>
                 </a>
+                <a href="#" class="menu-item" data-target="youtube-view" id="menu-youtube-btn">
+                    <i data-lucide="youtube" class="icon" style="color: #ff0000;"></i>
+                    <span>YOUTUBE BETA</span>
+                </a>
                 <a href="#" class="menu-item" data-target="chatbot-view">
                     <i data-lucide="message-square" class="icon"></i>
                     <span>BOT DE CHAT</span>
@@ -1042,6 +1046,181 @@
                 </div>
             </section>
 
+            <!-- View: Música (YouTube Integration) -->
+            <section id="youtube-view" class="view" style="display: none;">
+                <div class="view-header">
+                    <h2>MÚSICA (YOUTUBE OVERLAY - BETA)</h2>
+                    <p>REPRODUCE VIDEOS DE YOUTUBE PEDIDOS POR EL CHAT CON UN VINILO NEÓN ROJO</p>
+                </div>
+
+                <div class="chatbot-grid">
+                    <!-- Column Left: YouTube Config -->
+                    <div class="chatbot-col">
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="youtube" class="icon-accent" style="color: #ff0000;"></i>
+                                <h3>Configuración de YouTube</h3>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 10px;">
+                                <label class="switch-container">
+                                    <span>Activar Reproductor YouTube</span>
+                                    <input type="checkbox" id="youtube-active">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <div class="slider-header">
+                                    <label for="youtube-volume-slider">Volumen del Reproductor (YouTube):</label>
+                                    <span id="youtube-volume-val">80%</span>
+                                </div>
+                                <input type="range" id="youtube-volume-slider" min="0" max="100" step="5" value="80">
+                            </div>
+                            <div class="form-group">
+                                <label class="switch-container">
+                                    <span>Habilitar Cola de Canciones del Chat</span>
+                                    <input type="checkbox" id="youtube-chat-queue-enabled" checked>
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Card: Comandos y Permisos del Chat -->
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="shield-check" class="icon-accent"></i>
+                                <h3>Comandos y Permisos de YouTube</h3>
+                            </div>
+                            <div class="form-group">
+                                <label for="youtube-permission">¿Quiénes pueden pedir canciones?</label>
+                                <select id="youtube-permission">
+                                    <option value="all">Todo el público (Cualquier usuario)</option>
+                                    <option value="subs">Solo Suscriptores / Fans Club y Moderadores</option>
+                                    <option value="mods">Solo Moderadores y Creador</option>
+                                </select>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group flex-1">
+                                    <label for="youtube-command-prefix">Prefijo de comando:</label>
+                                    <input type="text" id="youtube-command-prefix" placeholder="!yt" value="!yt">
+                                </div>
+                                <div class="form-group flex-1">
+                                    <label for="youtube-voteskip-limit">Límite Votos Omitir (Skip):</label>
+                                    <input type="number" id="youtube-voteskip-limit" min="1" max="50" value="3">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label style="font-size: 12px; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px;">Comandos Disponibles en Chat (YouTube)</label>
+                                <div class="commands-list">
+                                    <div class="command-item">
+                                        <span class="cmd-name">!yt [búsqueda o enlace]</span>
+                                        <span class="cmd-desc">Pide video por nombre o URL</span>
+                                    </div>
+                                    <div class="command-item">
+                                        <span class="cmd-name">!ytcurrent o !ytcancion</span>
+                                        <span class="cmd-desc">Ver video de YouTube actual sonando</span>
+                                    </div>
+                                    <div class="command-item">
+                                        <span class="cmd-name">!ytqueue o !ytcola</span>
+                                        <span class="cmd-desc">Ver lista de videos en cola</span>
+                                    </div>
+                                    <div class="command-item">
+                                        <span class="cmd-name">!ytskip o !ytomitir</span>
+                                        <span class="cmd-desc">Votar para omitir el video actual</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column Right: Live Interactive Mockup (YouTube style Red Neon) -->
+                    <div class="chatbot-col">
+                        <div class="card-config" style="padding: 0; overflow: hidden; background: none; border: none; box-shadow: none;">
+                            <div class="card-config-header" style="border: none; padding: 0 10px 10px; margin: 0;">
+                                <i data-lucide="eye" class="icon-accent" style="color: #ff0000;"></i>
+                                <h3>Vista Previa YouTube</h3>
+                            </div>
+                            
+                            <!-- YouTube Glass Player Mockup -->
+                            <div class="mockup-player-wrapper red-neon-theme">
+                                <div class="mockup-player-glass" id="youtube-mockup-player" style="box-shadow: 0 15px 35px rgba(0,0,0,0.4), 0 0 25px rgba(255, 0, 0, 0.25); border-color: rgba(255, 0, 0, 0.15); width: 100%; border-radius: 20px; padding: 20px; backdrop-filter: blur(15px); position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 15px;">
+                                    <!-- Background blur artwork -->
+                                    <div class="mockup-bg-art" id="youtube-mockup-bg-art" style="background-image: linear-gradient(135deg, rgba(255,0,0,0.1), rgba(0,0,0,0.8)); position: absolute; top:0; left:0; right:0; bottom:0; filter: blur(30px); opacity: 0.15; z-index: 1;"></div>
+                                    
+                                    <div class="mockup-player-content" style="position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 15px; width: 100%;">
+                                        <div class="mockup-album-container" style="box-shadow: 0 0 20px rgba(255, 0, 0, 0.4); width: 120px; height: 120px; border-radius: 50%; overflow: hidden; position: relative; border: 4px solid rgba(255,255,255,0.1); margin-top: 10px;">
+                                            <div class="mockup-cd-ring" style="border-color: rgba(255, 0, 0, 0.2); position: absolute; border: 2px dashed rgba(255,255,255,0.15); border-radius: 50%; top: 5px; left: 5px; right: 5px; bottom: 5px; pointer-events: none; z-index: 2;"></div>
+                                            <img src="data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231a1a1a%22%2F%3E%3Ccircle%20cx%3D%22100%22%20cy%3D%22100%22%20r%3D%2230%22%20fill%3D%22%23ff0000%22%2F%3E%3Cpolygon%20points%3D%2295%2C90%2095%2C110%20112%2C100%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E" id="youtube-mockup-album-img" class="mockup-album-art" alt="Album Cover" style="width: 100%; height: 100%; object-fit: cover; animation: spin 10s linear infinite; animation-play-state: paused;">
+                                        </div>
+                                        
+                                        <div class="mockup-track-info">
+                                            <h4 id="youtube-mockup-title" style="margin: 0; font-size: 15px; font-weight: 800;">Sin reproducción</h4>
+                                            <p id="youtube-mockup-artist" style="margin: 5px 0 0; font-size: 12px; color: var(--text-muted);">Cola de YouTube vacía</p>
+                                        </div>
+                                        
+                                        <!-- Interactive controls -->
+                                        <div class="mockup-controls" style="display: flex; gap: 15px; align-items: center; margin-top: 5px;">
+                                            <button class="mockup-btn" id="youtube-mockup-btn-prev" disabled style="opacity: 0.3; cursor: not-allowed; background: none; border: none; color: var(--text-main); font-size: 18px;">
+                                                <i data-lucide="skip-back"></i>
+                                            </button>
+                                            <button class="mockup-btn play" id="youtube-mockup-btn-play" style="background: #ff0000; color: #fff; border: none; border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 10px rgba(255,0,0,0.3);">
+                                                <i data-lucide="play" id="youtube-mockup-play-icon"></i>
+                                            </button>
+                                            <button class="mockup-btn" id="youtube-mockup-btn-next" style="background: none; border: none; color: var(--text-main); font-size: 18px; cursor: pointer;">
+                                                <i data-lucide="skip-forward"></i>
+                                            </button>
+                                        </div>
+                                        
+                                        <!-- Progress Bar -->
+                                        <div class="mockup-progress-container" style="display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 5px;">
+                                            <span class="mockup-time" id="youtube-mockup-time-current" style="font-size: 10px; font-family: monospace; color: var(--text-muted);">0:00</span>
+                                            <div class="mockup-progress-bar-bg" style="flex-grow: 1; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; position: relative;">
+                                                <div class="mockup-progress-bar-fill" id="youtube-mockup-progress-fill" style="width: 0%; height: 100%; background: #ff0000; border-radius: 2px; box-shadow: 0 0 8px #ff0000;"></div>
+                                            </div>
+                                            <span class="mockup-time" id="youtube-mockup-time-total" style="font-size: 10px; font-family: monospace; color: var(--text-muted);">0:00</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- YouTube Interactive Control Cards -->
+                <div class="chatbot-grid" style="margin-top: 30px;">
+                    <!-- Column Left: Lista en Cola -->
+                    <div class="chatbot-col" style="flex: 1 1 100%;">
+                        <div class="card-config">
+                            <div class="card-config-header" style="justify-content: space-between; align-items: center;">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <i data-lucide="list-music" class="icon-accent" style="color: #ff0000;"></i>
+                                    <h3>Cola de YouTube</h3>
+                                </div>
+                                <button class="btn primary danger small" id="btn-clear-youtube-queue" style="padding: 6px 12px; font-size: 11px;">Vaciar Cola</button>
+                            </div>
+                            
+                            <div class="queue-table-container">
+                                <table class="queue-table" id="youtube-queue-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Video de YouTube</th>
+                                            <th>Pedido Por</th>
+                                            <th class="text-right">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="youtube-queue-body">
+                                        <tr>
+                                            <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 30px 15px;">
+                                                La cola de reproducción de YouTube está vacía.
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- View: Setup / Ajustes -->
             <section id="setup-view" class="view" style="display: none;">
                 <div class="view-header">
@@ -1070,6 +1249,13 @@
                                     <div style="display: flex; gap: 10px;">
                                         <input type="text" id="obs-music-url" value="http://localhost:3000/music-widget" readonly style="flex-grow: 1; background: rgba(255,255,255,0.05); color: var(--text-main); font-family: monospace; border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 6px; font-size: 13px;">
                                         <button class="btn secondary small" id="btn-copy-obs-music">Copiar</button>
+                                    </div>
+                                </div>
+                                <div style="border-top: 1px solid var(--border-color); padding-top: 10px;">
+                                    <strong style="color: #ff0000; display: block; margin-bottom: 5px;">2b. Copia la URL del Widget de Música (YouTube Tocadiscos Beta):</strong>
+                                    <div style="display: flex; gap: 10px;">
+                                        <input type="text" id="obs-youtube-url" value="http://localhost:3000/youtube-widget" readonly style="flex-grow: 1; background: rgba(255,255,255,0.05); color: var(--text-main); font-family: monospace; border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 6px; font-size: 13px;">
+                                        <button class="btn secondary small" id="btn-copy-obs-youtube">Copiar</button>
                                     </div>
                                 </div>
                                 <div style="border-top: 1px solid var(--border-color); padding-top: 10px;">
