@@ -196,6 +196,12 @@
                         document.body.className = 'color-youtube';
                         wrapper.className = 'widget-wrapper color-youtube';
                     }
+                    
+                    // Add horizontal layout if requested via URL param
+                    const urlParams = new URLSearchParams(window.location.search);
+                    if (urlParams.get('layout') === 'horizontal' || urlParams.get('horizontal') === 'true') {
+                        wrapper.classList.add('layout-horizontal');
+                    }
                 }
             }
         });
@@ -251,6 +257,12 @@
                 player.setVolume(activeVolume);
             }
         });
+
+        // Check horizontal layout on load
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('layout') === 'horizontal' || urlParams.get('horizontal') === 'true') {
+            document.getElementById('youtube-widget-wrapper')?.classList.add('layout-horizontal');
+        }
 
         lucide.createIcons();
     </script>

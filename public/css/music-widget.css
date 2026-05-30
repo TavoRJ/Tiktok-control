@@ -937,3 +937,148 @@ body, html {
     from { opacity: 0; transform: translateY(5px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+/* ==========================================
+   HORIZONTAL LAYOUT STYLES
+   ========================================== */
+.layout-horizontal {
+    width: 440px !important;
+    height: 100px !important;
+    padding: 10px 15px !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    border-radius: 18px !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.8), 0 0 15px var(--accent-glow-light) !important;
+}
+
+.layout-horizontal .neon-sign {
+    display: none !important;
+}
+
+.layout-horizontal .tocadiscos {
+    width: 80px !important;
+    height: 80px !important;
+    margin-bottom: 0 !important;
+    margin-right: 15px !important;
+    border-radius: 12px !important;
+    flex-shrink: 0 !important;
+}
+
+.layout-horizontal .tocadiscos .knob,
+.layout-horizontal .tocadiscos .pitch-slider {
+    display: none !important;
+}
+
+.layout-horizontal .platter-area {
+    width: 66px !important;
+    height: 66px !important;
+    top: 7px !important;
+    left: 7px !important;
+}
+
+.layout-horizontal .vinyl-record {
+    width: 60px !important;
+    height: 60px !important;
+}
+
+.layout-horizontal .vinyl-center {
+    width: 30px !important;
+    height: 30px !important;
+    border-width: 2px !important;
+}
+
+.layout-horizontal .design-full-art .vinyl-center {
+    width: 14px !important;
+    height: 14px !important;
+}
+
+.layout-horizontal .tonearm-container {
+    top: -5px !important;
+    right: 5px !important;
+    width: 25px !important;
+    height: 25px !important;
+}
+
+.layout-horizontal .tonearm {
+    top: 10px !important;
+    left: 10px !important;
+    width: 12px !important;
+    height: 50px !important;
+    transform-origin: 6px 6px !important;
+}
+
+.layout-horizontal .tonearm::before {
+    width: 12px !important;
+    height: 12px !important;
+}
+
+.layout-horizontal .arm-shaft {
+    width: 2px !important;
+    height: 38px !important;
+    left: 5px !important;
+    top: 6px !important;
+}
+
+.layout-horizontal .arm-shaft::after {
+    width: 2px !important;
+    height: 10px !important;
+    bottom: -9px !important;
+    left: 1px !important;
+}
+
+.layout-horizontal .headshell {
+    width: 5px !important;
+    height: 8px !important;
+    left: 5px !important;
+    top: 45px !important;
+}
+
+.layout-horizontal .tonearm.active {
+    transform: rotate(24deg) !important;
+}
+
+.layout-horizontal .song-info {
+    text-align: left !important;
+    margin-top: 0 !important;
+    flex-grow: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    min-width: 0 !important;
+}
+
+.layout-horizontal .text-container {
+    height: auto !important;
+    display: block !important;
+}
+
+.layout-horizontal #song-title {
+    font-size: 15px !important;
+    text-align: left !important;
+    margin-bottom: 2px !important;
+}
+
+.layout-horizontal #song-artist {
+    font-size: 11px !important;
+    text-align: left !important;
+}
+
+.layout-horizontal .progress-container {
+    width: 100% !important;
+    margin: 8px 0 0 0 !important;
+    height: 3px !important;
+}
+
+.layout-horizontal .song-requester {
+    font-size: 9px !important;
+    text-align: left !important;
+    margin-top: 6px !important;
+}
+
+.layout-horizontal #widget-chibi-character {
+    width: 60px !important;
+    height: 60px !important;
+    bottom: -5px !important;
+    right: -5px !important;
+}

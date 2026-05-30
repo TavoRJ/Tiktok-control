@@ -1193,6 +1193,34 @@ if (copyObsYoutubeBtn) {
     });
 }
 
+const copyObsMusicHorizontalBtn = document.getElementById('btn-copy-obs-music-horizontal');
+if (copyObsMusicHorizontalBtn) {
+    copyObsMusicHorizontalBtn.addEventListener('click', () => {
+        const input = document.getElementById('obs-music-horizontal-url');
+        if (input) {
+            navigator.clipboard.writeText(input.value).then(() => {
+                const originalText = copyObsMusicHorizontalBtn.textContent;
+                copyObsMusicHorizontalBtn.textContent = '¡Copiado!';
+                setTimeout(() => copyObsMusicHorizontalBtn.textContent = originalText, 1500);
+            });
+        }
+    });
+}
+
+const copyObsYoutubeHorizontalBtn = document.getElementById('btn-copy-obs-youtube-horizontal');
+if (copyObsYoutubeHorizontalBtn) {
+    copyObsYoutubeHorizontalBtn.addEventListener('click', () => {
+        const input = document.getElementById('obs-youtube-horizontal-url');
+        if (input) {
+            navigator.clipboard.writeText(input.value).then(() => {
+                const originalText = copyObsYoutubeHorizontalBtn.textContent;
+                copyObsYoutubeHorizontalBtn.textContent = '¡Copiado!';
+                setTimeout(() => copyObsYoutubeHorizontalBtn.textContent = originalText, 1500);
+            });
+        }
+    });
+}
+
 const copyObsDonorsBtn = document.getElementById('btn-copy-obs-donors');
 if (copyObsDonorsBtn) {
     copyObsDonorsBtn.addEventListener('click', () => {

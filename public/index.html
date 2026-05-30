@@ -32,8 +32,9 @@
                     <span>MÚSICA</span>
                 </a>
                 <a href="#" class="menu-item" data-target="youtube-view" id="menu-youtube-btn">
-                    <svg class="icon" viewBox="0 0 24 24" fill="#ff0000" style="display: inline-block; vertical-align: middle; margin-right: 8px; width: 20px; height: 20px;">
-                        <path d="M23.498 6.163a3.003 3.003 0 0 0-2.11-2.108C19.524 3.545 12 3.545 12 3.545s-7.525 0-9.388.51a3.003 3.003 0 0 0-2.11 2.108C0 8.025 0 12 0 12s0 3.975.502 5.837a3.003 3.003 0 0 0 2.11 2.108c1.863.51 9.388.51 9.388.51s7.524 0 9.388-.51a3.003 3.003 0 0 0 2.11-2.108C24 15.975 24 12 24 12s0-3.975-.502-5.837zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px; width: 20px; height: 20px;">
+                        <path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17Z"></path>
+                        <path d="m10 15 5-3-5-3v6Z"></path>
                     </svg>
                     <span>YOUTUBE BETA</span>
                 </a>
@@ -52,10 +53,6 @@
                 <a href="#" class="menu-item" data-target="setup-view">
                     <i data-lucide="settings" class="icon"></i>
                     <span>SETUP / AJUSTES</span>
-                </a>
-                <a href="/overlay" target="_blank" class="menu-item" style="border-top: 1px solid var(--border-color);">
-                    <i data-lucide="external-link" class="icon"></i>
-                    <span>ABRIR OVERLAY</span>
                 </a>
             </nav>
             <div class="version" id="app-version-label" style="margin-top: auto; border-top: 1px solid var(--border-color); padding: 15px 20px 5px;">
@@ -1249,17 +1246,31 @@
                                     </div>
                                 </div>
                                 <div style="border-top: 1px solid var(--border-color); padding-top: 10px;">
-                                    <strong style="color: #ff0077; display: block; margin-bottom: 5px;">2. Copia la URL del Widget de Música (Tocadiscos):</strong>
+                                    <strong style="color: #ff0077; display: block; margin-bottom: 5px;">2. Copia la URL del Widget de Música (Spotify Cuadrado):</strong>
                                     <div style="display: flex; gap: 10px;">
                                         <input type="text" id="obs-music-url" value="http://localhost:3000/music-widget" readonly style="flex-grow: 1; background: rgba(255,255,255,0.05); color: var(--text-main); font-family: monospace; border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 6px; font-size: 13px;">
                                         <button class="btn secondary small" id="btn-copy-obs-music">Copiar</button>
                                     </div>
                                 </div>
+                                <div style="border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 10px;">
+                                    <strong style="color: #ff0077; display: block; margin-bottom: 5px;">2a. Copia la URL del Widget de Música (Spotify Horizontal):</strong>
+                                    <div style="display: flex; gap: 10px;">
+                                        <input type="text" id="obs-music-horizontal-url" value="http://localhost:3000/music-widget?layout=horizontal" readonly style="flex-grow: 1; background: rgba(255,255,255,0.05); color: var(--text-main); font-family: monospace; border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 6px; font-size: 13px;">
+                                        <button class="btn secondary small" id="btn-copy-obs-music-horizontal">Copiar</button>
+                                    </div>
+                                </div>
                                 <div style="border-top: 1px solid var(--border-color); padding-top: 10px;">
-                                    <strong style="color: #ff0000; display: block; margin-bottom: 5px;">2b. Copia la URL del Widget de Música (YouTube Tocadiscos Beta):</strong>
+                                    <strong style="color: #ff0000; display: block; margin-bottom: 5px;">2b. Copia la URL del Widget de Música (YouTube Cuadrado):</strong>
                                     <div style="display: flex; gap: 10px;">
                                         <input type="text" id="obs-youtube-url" value="http://localhost:3000/youtube-widget" readonly style="flex-grow: 1; background: rgba(255,255,255,0.05); color: var(--text-main); font-family: monospace; border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 6px; font-size: 13px;">
                                         <button class="btn secondary small" id="btn-copy-obs-youtube">Copiar</button>
+                                    </div>
+                                </div>
+                                <div style="border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 10px;">
+                                    <strong style="color: #ff0000; display: block; margin-bottom: 5px;">2c. Copia la URL del Widget de Música (YouTube Horizontal):</strong>
+                                    <div style="display: flex; gap: 10px;">
+                                        <input type="text" id="obs-youtube-horizontal-url" value="http://localhost:3000/youtube-widget?layout=horizontal" readonly style="flex-grow: 1; background: rgba(255,255,255,0.05); color: var(--text-main); font-family: monospace; border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 6px; font-size: 13px;">
+                                        <button class="btn secondary small" id="btn-copy-obs-youtube-horizontal">Copiar</button>
                                     </div>
                                 </div>
                                 <div style="border-top: 1px solid var(--border-color); padding-top: 10px;">

@@ -42,6 +42,12 @@ socket.on('chatbot_settings_updated', (config) => {
         wrapper.classList.add(`design-${design}`);
         wrapper.classList.add(`speed-${speed}`);
         
+        // Add horizontal layout if requested via URL param
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('layout') === 'horizontal' || urlParams.get('horizontal') === 'true') {
+            wrapper.classList.add('layout-horizontal');
+        }
+        
         // Update glowing neon text dynamically based on the streamer theme profile
         const glowingText = wrapper.querySelector('.glowing-text');
         if (glowingText) {
@@ -183,3 +189,9 @@ function updateProgressUI(durationMs) {
 
 // Set initial offline state
 setOfflineState();
+
+// Check horizontal layout on load
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('layout') === 'horizontal' || urlParams.get('horizontal') === 'true') {
+    document.querySelector('.widget-wrapper')?.classList.add('layout-horizontal');
+}
