@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, dialog } = require('electron');
 const path = require('path');
 
 // Limit V8 heap memory and enable Chrome's low end device mode to significantly reduce RAM usage
@@ -47,13 +47,30 @@ function createWindow() {
 }
 
 // Eventos de Auto-Updater
-autoUpdater.on('update-available', () => {
-    console.info('Nueva actualización disponible. Descargando...');
+autoUpdater.on('update-available', (info) => {
+    console.info(`Nueva versión disponible: ${info.version}. Descargando...`);
+    dialog.showMessageBox({
+        type: 'info',
+        title: 'Actualización disponible',
+        message: `Una nueva versión (${info.version}) de GRLive está disponible y se está descargando en segundo plano de forma automática.`,
+        buttons: ['Entendido']
+    });
 });
 
-autoUpdater.on('update-downloaded', () => {
-    console.info('Actualización descargada. Se instalará al cerrar la aplicación.');
-    autoUpdater.quitAndInstall();
+autoUpdater.on('update-downloaded', (info) => {
+    console.info('Actualización descargada.');
+    dialog.showMessageBox({
+        type: 'question',
+        title: 'Actualización lista',
+        message: `La versión ${info.version} ha sido descargada con éxito. ¿Deseas reiniciar la aplicación para instalar la nueva actualización ahora mismo?`,
+        buttons: ['Instalar ahora', 'Más tarde'],
+        defaultId: 0,
+        cancelId: 1
+    }).then((result) => {
+        if (result.response === 0) {
+            autoUpdater.quitAndInstall();
+        }
+    });
 });
 
 autoUpdater.on('error', (err) => {
