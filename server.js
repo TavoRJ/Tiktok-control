@@ -123,6 +123,78 @@ try {
     console.error('Error loading chatbot settings:', err);
 }
 
+// Helper to replace text-based emojis with friendly Spanish words
+function replaceTextEmojis(text) {
+    if (!text) return "";
+    let cleanText = text;
+
+    const emojiMap = {
+        "laught_cry": "risas",
+        "laugh_cry": "risas",
+        "laught cry": "risas",
+        "laugh cry": "risas",
+        "laugh": "risa",
+        "laught": "risa",
+        "funny": "gracioso",
+        "lol": "carcajadas",
+        "cry": "llanto",
+        "crying": "llorando",
+        "sad": "triste",
+        "heart": "corazón",
+        "love": "corazón",
+        "kiss": "beso",
+        "kisses": "besos",
+        "wink": "guiño",
+        "blink": "guiño",
+        "complacent": "satisfecho",
+        "cute": "tierno",
+        "shock": "sorpresa",
+        "stunned": "asombrado",
+        "slap": "bofetada",
+        "rage": "enojo",
+        "angry": "enojado",
+        "cool": "lentes de sol",
+        "thinking": "pensando",
+        "sweat": "sudor",
+        "yawn": "bostezo",
+        "rose": "rosa",
+        "gift": "regalo",
+        "crown": "corona",
+        "fire": "fuego",
+        "applause": "aplausos",
+        "clap": "aplausos",
+        "thumbsup": "me gusta",
+        "like": "me gusta"
+    };
+
+    // Replace bracketed ones like [laugh_cry] or [rose]
+    cleanText = cleanText.replace(/\[([^\]]+)\]/g, (match, p1) => {
+        const key = p1.toLowerCase().trim().replace(/_/g, " ");
+        if (emojiMap[key]) return emojiMap[key];
+        const keyWithUnderscores = p1.toLowerCase().trim();
+        if (emojiMap[keyWithUnderscores]) return emojiMap[keyWithUnderscores];
+        return ""; // Clear unmapped tech descriptions inside brackets
+    });
+
+    // Replace colon ones like :laugh_cry: or :rose:
+    cleanText = cleanText.replace(/:([^:]+):/g, (match, p1) => {
+        const key = p1.toLowerCase().trim().replace(/_/g, " ");
+        if (emojiMap[key]) return emojiMap[key];
+        const keyWithUnderscores = p1.toLowerCase().trim();
+        if (emojiMap[keyWithUnderscores]) return emojiMap[keyWithUnderscores];
+        return ""; // Clear unmapped
+    });
+
+    // Replace raw phrases like "laught cry" or "laugh_cry" if they appear as standalone words
+    for (const [key, value] of Object.entries(emojiMap)) {
+        const regex = new RegExp(`\\b${key}\\b`, 'gi');
+        cleanText = cleanText.replace(regex, value);
+    }
+
+    cleanText = cleanText.replace(/\s+/g, ' ').trim();
+    return cleanText;
+}
+
 // Helper to generate cloud TTS audio
 async function handleCloudTTS(data) {
     if (!chatbotSettings) return;
@@ -181,6 +253,7 @@ async function handleCloudTTS(data) {
     
     // 5. Clean emojis
     comment = comment.replace(/[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F1E6}-\u{1F1FF}]|[\u{1F900}-\u{1F9FF}]|[\u{1F300}-\u{1F5FF}]|[\u{1F700}-\u{1F77F}]|[\u{1F780}-\u{1F7FF}]|[\u{1F800}-\u{1F8FF}]|[\u{1F900}-\u{1F9FF}]|[\u{1FA00}-\u{1FA6F}]|[\u{1FA70}-\u{1FAFF}]/gu, '');
+    comment = replaceTextEmojis(comment);
     
     if (!comment.trim()) return;
     
