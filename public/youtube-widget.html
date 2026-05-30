@@ -19,13 +19,13 @@
         }
         #yt-player-container {
             position: absolute;
-            width: 1px;
-            height: 1px;
+            width: 200px;
+            height: 200px;
             overflow: hidden;
             opacity: 0.001;
             pointer-events: none;
-            bottom: 0;
-            right: 0;
+            top: -9999px;
+            left: -9999px;
         }
     </style>
 </head>
@@ -107,8 +107,8 @@
 
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('yt-player', {
-                height: '10',
-                width: '10',
+                height: '200',
+                width: '200',
                 videoId: '',
                 playerVars: {
                     'autoplay': 0,
