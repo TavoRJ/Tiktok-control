@@ -1,4 +1,4 @@
 {
-  "youtubeBlocked": false,
+  "youtubeBlocked": true,
   "youtubeBlockMessage": "Esta función se encuentra deshabilitada temporalmente de forma remota por mantenimiento."
 }
