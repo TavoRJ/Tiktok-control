@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
     <title>GRLive - Control Panel</title>
     <link rel="stylesheet" href="css/panel.css">
     <!-- Google Fonts: Inter -->
@@ -16,6 +17,9 @@
 </head>
 
 <body>
+    <!-- Container for custom toast notifications -->
+    <div id="toast-container"></div>
+
     <div class="app-container">
         <!-- Sidebar -->
         <aside class="sidebar">
@@ -37,6 +41,10 @@
                         <path d="m10 15 5-3-5-3v6Z"></path>
                     </svg>
                     <span>YOUTUBE BETA</span>
+                </a>
+                <a href="#" class="menu-item" data-target="multimedia-view">
+                    <i data-lucide="volume-2" class="icon"></i>
+                    <span>MULTIMEDIA</span>
                 </a>
                 <a href="#" class="menu-item" data-target="chatbot-view">
                     <i data-lucide="message-square" class="icon"></i>
@@ -356,6 +364,62 @@
                 </div>
             </section>
 
+            <!-- View: Multimedia Sound Alerts -->
+            <section id="multimedia-view" class="view" style="display: none;">
+                <div class="view-header">
+                    <h2>ALERTAS DE SONIDO MULTIMEDIA</h2>
+                    <p>ASIGNA SONIDOS CORTOS A REGALOS, FOLLOWS, SHARES Y TAP-TAPS</p>
+                </div>
+
+                <div class="card-config" style="margin-bottom: 25px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                        <div style="display: flex; gap: 15px; align-items: center;">
+                            <button id="btn-create-sound-alert" class="btn primary" style="background: linear-gradient(135deg, #d900ff 0%, #7300ff 100%); border: none; box-shadow: 0 0 15px rgba(217, 0, 255, 0.4); font-weight: 700;">+ Crear alerta sonora</button>
+                            <label class="switch-container" style="margin: 0;">
+                                <span style="font-weight: 700; color: #00ffcc;">Sonidos ACTIVOS</span>
+                                <input type="checkbox" id="sound-alerts-active" checked>
+                                <span class="switch-slider"></span>
+                            </label>
+                        </div>
+                        <div style="flex-grow: 1; max-width: 400px; position: relative;">
+                            <input type="text" id="search-alerts" placeholder="Buscar alerta..." style="width: 100%; padding: 10px 15px; padding-left: 40px; border-radius: 8px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); color: var(--text-main);">
+                            <i data-lucide="search" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-muted);"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-config">
+                    <div class="card-config-header">
+                        <i data-lucide="bell" class="icon-accent"></i>
+                        <h3>Estado de Alertas</h3>
+                        <div class="status-badge active" style="margin-left: auto;" id="alerts-status-badge">
+                            <span class="status-dot"></span>
+                            <span id="alerts-status-text">0 alertas configuradas</span>
+                        </div>
+                    </div>
+
+                    <div style="overflow-x: auto; margin-top: 15px;">
+                        <table class="config-table" id="sound-alerts-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 60px;">Play</th>
+                                    <th style="width: 60px;">Borrar</th>
+                                    <th style="width: 80px;">Activa</th>
+                                    <th style="width: 140px;">Tipo</th>
+                                    <th style="width: 200px;">Trigger (Regalo/Hito)</th>
+                                    <th style="width: 100px;">Cantidad</th>
+                                    <th>Sonido</th>
+                                    <th style="width: 140px;">Volumen</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sound-alerts-body">
+                                <!-- Dynamic Rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
             <!-- View: Chat Bot Config -->
             <section id="chatbot-view" class="view" style="display: none;">
                 <div class="view-header">
@@ -393,15 +457,14 @@
                                 <label class="switch-container">
                                     <strong style="color: var(--accent-orange); font-size: 13px;">Habilitar Voz Exclusiva (Urgencia)</strong>
                                     <input type="checkbox" id="bot-exclusive-enabled">
-                                    <span class="switch-slider" style="background-color: var(--accent-orange);"></span>
+                                    <span class="switch-slider"></span>
                                 </label>
                             </div>
                             <div class="form-group">
                                 <label for="bot-exclusive-user">Usuario Exclusivo (Sin @):</label>
                                 <input type="text" id="bot-exclusive-user" placeholder="Ej. moderador_principal">
                             </div>
-                            
-                            <button id="btn-save-chatbot-settings" class="btn primary small" style="margin-top: 15px; width: 100%; justify-content: center; gap: 8px; font-weight: 800; background-color: var(--accent-purple);">
+                            <button id="btn-save-chatbot-settings" class="btn primary small" style="margin-top: 15px; width: 100%; justify-content: center; gap: 8px; font-weight: 800; background: linear-gradient(135deg, #a100ff 0%, #7b00d6 100%); border: none; box-shadow: 0 4px 15px rgba(161, 0, 255, 0.3);">
                                 <i data-lucide="save"></i> Guardar Cambios
                             </button>
                         </div>
@@ -416,6 +479,13 @@
                                 <label class="switch-container">
                                     <span>Leer nombres de usuario (ej. "Nombre dice: mensaje")</span>
                                     <input type="checkbox" id="bot-read-username">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label class="switch-container">
+                                    <span>Filtrar emojis de los nombres (Solo lee texto)</span>
+                                    <input type="checkbox" id="bot-filter-emojis-names">
                                     <span class="switch-slider"></span>
                                 </label>
                             </div>
@@ -452,6 +522,10 @@
                                     <span class="switch-slider"></span>
                                 </label>
                             </div>
+                            <div class="form-group" style="padding-left: 20px; margin-top: -5px; margin-bottom: 12px;">
+                                <label for="bot-thank-share-phrase" style="font-size: 11px; color: var(--text-muted);">Frase de agradecimiento personalizada ({username}):</label>
+                                <input type="text" id="bot-thank-share-phrase" placeholder="¡Gracias {username} por compartir la transmisión!" style="font-size: 12px; padding: 6px 10px;">
+                            </div>
                             <div class="form-group">
                                 <label class="switch-container">
                                     <span>Leer nuevos seguidores / bienvenidas</span>
@@ -459,12 +533,20 @@
                                     <span class="switch-slider"></span>
                                 </label>
                             </div>
+                            <div class="form-group" style="padding-left: 20px; margin-top: -5px; margin-bottom: 12px;">
+                                <label for="bot-thank-follow-phrase" style="font-size: 11px; color: var(--text-muted);">Frase de bienvenida personalizada ({username}):</label>
+                                <input type="text" id="bot-thank-follow-phrase" placeholder="¡Bienvenido {username}, gracias por seguir la cuenta!" style="font-size: 12px; padding: 6px 10px;">
+                            </div>
                             <div class="form-group">
                                 <label class="switch-container">
                                     <span>Leer regalos enviados</span>
                                     <input type="checkbox" id="bot-read-gifts">
                                     <span class="switch-slider"></span>
                                 </label>
+                            </div>
+                            <div class="form-group" style="padding-left: 20px; margin-top: -5px; margin-bottom: 12px;">
+                                <label for="bot-thank-gift-phrase" style="font-size: 11px; color: var(--text-muted);">Frase de agradecimiento personalizada ({username}, {count}, {gift}):</label>
+                                <input type="text" id="bot-thank-gift-phrase" placeholder="¡Gracias {username} por regalar {count} {gift}!" style="font-size: 12px; padding: 6px 10px;">
                             </div>
                             <div class="form-group" style="border-top: 1px dashed var(--border-color); padding-top: 15px; margin-top: 15px;">
                                 <label class="switch-container">
@@ -511,6 +593,64 @@
                                 <label for="bot-ignored-users">Lista negra de usuarios (separados por coma):</label>
                                 <input type="text" id="bot-ignored-users" placeholder="usuario1, usuario2">
                             </div>
+                        </div>
+
+                        <!-- Card: Metas Dinámicas en Pantalla -->
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="target" class="icon-accent" style="color: #00ffcc;"></i>
+                                <h3>Metas Dinámicas en Pantalla</h3>
+                            </div>
+                            <div class="form-group">
+                                <div class="goal-creator-form">
+                                    <div class="form-row" style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                        <div class="form-group flex-1" style="margin-bottom: 0;">
+                                            <label for="goal-type" style="font-size: 11px;">Tipo de Meta:</label>
+                                            <select id="goal-type" style="padding: 6px; font-size: 12px; width: 100%;">
+                                                <option value="likes">Me Gusta (Likes)</option>
+                                                <option value="follows">Seguidores</option>
+                                                <option value="shares">Compartidas</option>
+                                                <option value="gift">Regalo Específico</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group flex-1" style="margin-bottom: 0;" id="group-goal-gift-select">
+                                            <label for="goal-gift-name" style="font-size: 11px;">Regalo:</label>
+                                            <input type="text" id="goal-gift-name" placeholder="ej. Rose" style="padding: 6px; font-size: 12px; width: 100%;">
+                                        </div>
+                                    </div>
+                                    <div class="form-row" style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                        <div class="form-group flex-1" style="margin-bottom: 0;">
+                                            <label for="goal-title" style="font-size: 11px;">Título / Etiqueta:</label>
+                                            <input type="text" id="goal-title" placeholder="ej. Meta de Likes" style="padding: 6px; font-size: 12px; width: 100%;">
+                                        </div>
+                                        <div class="form-group flex-1" style="margin-bottom: 0;">
+                                            <label for="goal-target" style="font-size: 11px;">Objetivo:</label>
+                                            <input type="number" id="goal-target" min="1" value="100" style="padding: 6px; font-size: 12px; width: 100%;">
+                                        </div>
+                                    </div>
+                                    <button id="btn-add-goal" class="btn primary small width-100" style="margin-bottom: 15px;">
+                                        <i data-lucide="plus" class="icon-small"></i> Crear Nueva Meta
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="rules-table-container">
+                                <table class="rules-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Meta</th>
+                                            <th>Progreso / Objetivo</th>
+                                            <th class="text-right">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="goals-table-body">
+                                        <!-- Dynamic goals -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            <button id="btn-reset-all-goals" class="btn danger small width-100" style="margin-top: 15px; border: 1px solid rgba(255,0,0,0.25); background: transparent; color: var(--accent-red);">
+                                <i data-lucide="refresh-cw"></i> Reiniciar Progreso de Metas
+                            </button>
                         </div>
                     </div>
 
@@ -639,6 +779,77 @@
                                         <!-- Dynamic rules will go here -->
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+
+                        <!-- Card: Ruleta de Desafíos -->
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="circle-dot" class="icon-accent" style="color: #ffd700;"></i>
+                                <h3>Ruleta de Desafíos Interactiva</h3>
+                            </div>
+                            <div class="form-group">
+                                <label class="switch-container">
+                                    <span>Habilitar Ruleta en Pantalla</span>
+                                    <input type="checkbox" id="wheel-enabled">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                            <div class="form-row" style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                <div class="form-group flex-1">
+                                    <label for="wheel-trigger-gift" style="font-size: 11px;">Giro con Regalo:</label>
+                                    <input type="text" id="wheel-trigger-gift" placeholder="Rose (o 'any')" value="any" style="padding: 6px; font-size: 12px; width: 100%;">
+                                </div>
+                                <div class="form-group flex-1">
+                                    <label for="wheel-trigger-coins" style="font-size: 11px;">Mínimo Monedas:</label>
+                                    <input type="number" id="wheel-trigger-coins" min="1" value="10" style="padding: 6px; font-size: 12px; width: 100%;">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label style="font-size: 12px; margin-bottom: 5px; display: block;">Opciones de la Ruleta (Mínimo 3):</label>
+                                <div class="wheel-option-adder" style="display: flex; gap: 5px; margin-bottom: 10px;">
+                                    <input type="text" id="wheel-new-option" placeholder="ej. 10 Sentadillas" style="padding: 6px; font-size: 12px; flex: 1;">
+                                    <button id="btn-add-wheel-option" class="btn secondary small" style="padding: 6px 12px;">Agregar</button>
+                                </div>
+                                <div id="wheel-options-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);">
+                                    <!-- Dynamic list of slices -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card: Configuración de Overlays Adicionales -->
+                        <div class="card-config">
+                            <div class="card-config-header">
+                                <i data-lucide="layout" class="icon-accent" style="color: #ff007f;"></i>
+                                <h3>Configuración de Overlays</h3>
+                            </div>
+                            <div class="form-group">
+                                <label class="switch-container">
+                                    <span>Mostrar Widget de Música (Siguiente Canción)</span>
+                                    <input type="checkbox" id="overlay-music-enabled">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label class="switch-container">
+                                    <span>Habilitar Burbujas de Chat Premium en Pantalla</span>
+                                    <input type="checkbox" id="overlay-chat-enabled">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                            <div class="form-group" style="padding-left: 20px;">
+                                <label class="switch-container">
+                                    <span>Solo destacar Premium (Mods/Subs/Donantes)</span>
+                                    <input type="checkbox" id="overlay-chat-premium">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label class="switch-container">
+                                    <span>Activar Efectos de Audio TTS (Web Audio API)</span>
+                                    <input type="checkbox" id="tts-effects-enabled">
+                                    <span class="switch-slider"></span>
+                                </label>
                             </div>
                         </div>
                     </div>
@@ -979,6 +1190,19 @@
                                     <input type="number" id="spotify-voteskip-limit" min="1" max="50" value="3">
                                 </div>
                             </div>
+                            <div class="form-row" style="margin-top: 15px;">
+                                <div class="form-group flex-1">
+                                    <label class="switch-container">
+                                        <span>Monetizar con Regalos</span>
+                                        <input type="checkbox" id="spotify-monetization-active">
+                                        <span class="switch-slider"></span>
+                                    </label>
+                                </div>
+                                <div class="form-group flex-1" id="spotify-monetization-coins-group">
+                                    <label for="spotify-monetization-coins">Mínimo de Monedas:</label>
+                                    <input type="number" id="spotify-monetization-coins" min="1" max="1000" value="5">
+                                </div>
+                            </div>
                             <div class="form-group">
                                 <label style="font-size: 12px; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px;">Comandos Disponibles en Chat</label>
                                 <div class="commands-list">
@@ -1119,6 +1343,19 @@
                                 <div class="form-group flex-1">
                                     <label for="youtube-voteskip-limit">Límite Votos Omitir (Skip):</label>
                                     <input type="number" id="youtube-voteskip-limit" min="1" max="50" value="3">
+                                </div>
+                            </div>
+                            <div class="form-row" style="margin-top: 15px;">
+                                <div class="form-group flex-1">
+                                    <label class="switch-container">
+                                        <span>Monetizar con Regalos</span>
+                                        <input type="checkbox" id="youtube-monetization-active">
+                                        <span class="switch-slider"></span>
+                                    </label>
+                                </div>
+                                <div class="form-group flex-1" id="youtube-monetization-coins-group">
+                                    <label for="youtube-monetization-coins">Mínimo de Monedas:</label>
+                                    <input type="number" id="youtube-monetization-coins" min="1" max="1000" value="5">
                                 </div>
                             </div>
                             <div class="form-group">
@@ -1353,11 +1590,12 @@
                                 <label for="setup-tiktok-username">Usuario de TikTok Predeterminado:</label>
                                 <input type="text" id="setup-tiktok-username" placeholder="@usuario_tiktok">
                             </div>
-                            <div class="form-group" style="display: none;">
+                            <div class="form-group">
                                 <label for="setup-theme">Perfil de Tema Visual:</label>
                                 <select id="setup-theme">
                                     <option value="naya">Naya (Rosa / Luffy / Corazones)</option>
                                     <option value="majo">Majo (Morado / Gojo / Araña)</option>
+                                    <option value="neutral">Neutral (Azul / Futurista)</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -1421,8 +1659,76 @@
         </main>
     </div>
 
+    <!-- Modal: Gift Selector -->
+    <div id="gift-selector-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3>Buscar regalo...</h3>
+                <button class="modal-close-btn" id="btn-close-gift-modal">&times;</button>
+            </div>
+            <div class="modal-search-bar">
+                <input type="text" id="search-gifts-input" placeholder="Buscar regalo por nombre...">
+            </div>
+            <div class="gifts-grid" id="gifts-grid-container">
+                <!-- Pre-populated and dynamic gifts will load here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Sound Selector -->
+    <div id="sound-selector-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3>Buscar sonido...</h3>
+                <button class="modal-close-btn" id="btn-close-sound-modal">&times;</button>
+            </div>
+            <div class="modal-search-bar" style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                <input type="text" id="search-sounds-input" placeholder="Buscar sonido..." style="flex-grow: 1; padding: 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); color: var(--text-main);">
+                <button class="btn secondary" id="btn-trigger-upload-sound" style="white-space: nowrap; padding: 10px 15px; display: flex; align-items: center; gap: 5px; font-size: 13px;">
+                    <i data-lucide="upload" style="width: 14px; height: 14px;"></i>
+                    Subir Audio
+                </button>
+                <input type="file" id="sound-file-input" accept=".mp3,.wav" style="display: none;">
+            </div>
+            
+            <div class="sound-dropzone" id="sound-upload-dropzone">
+                <i data-lucide="music" style="width: 32px; height: 32px; color: var(--accent-pink); margin-bottom: 8px;"></i>
+                <p style="margin: 0; font-size: 13px; color: var(--text-muted);">Arrastra tu archivo .mp3 o .wav aquí o haz clic en Subir Audio</p>
+            </div>
+
+            <div class="sounds-section-title" style="margin-top: 15px; font-size: 12px; font-weight: 800; text-transform: uppercase; color: #00ffcc; letter-spacing: 0.5px;">Sonidos del sistema</div>
+            <div class="sounds-list" id="system-sounds-list" style="max-height: 180px; overflow-y: auto; margin-top: 5px;">
+                <!-- System sounds -->
+            </div>
+
+            <div class="sounds-section-title" style="margin-top: 15px; font-size: 12px; font-weight: 800; text-transform: uppercase; color: #ff00ff; letter-spacing: 0.5px;">Mis sonidos subidos</div>
+            <div class="sounds-list" id="custom-sounds-list" style="max-height: 180px; overflow-y: auto; margin-top: 5px;">
+                <!-- Uploaded sounds -->
+            </div>
+        </div>
+    <!-- Modal: Developer Password -->
+    <div id="dev-password-modal" class="modal-overlay" style="display: none; z-index: 1100;">
+        <div class="modal-container" style="max-width: 400px; padding: 25px;">
+            <div class="modal-header" style="margin-bottom: 15px;">
+                <h3>Acceso Restringido</h3>
+                <button class="modal-close-btn" id="btn-close-dev-modal">&times;</button>
+            </div>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 15px;">Ingresa la contraseña de Desarrollador para acceder:</p>
+            <div style="display: flex; flex-direction: column; gap: 15px;">
+                <input type="password" id="dev-password-input" placeholder="Contraseña de Desarrollador" style="padding: 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); color: var(--text-main); font-size: 14px;">
+                <div id="dev-password-error" style="color: var(--accent-red); font-size: 12px; display: none;">Contraseña incorrecta. Acceso denegado.</div>
+                <button class="btn primary" id="btn-submit-dev-password" style="padding: 12px; font-weight: bold; width: 100%; display: flex; justify-content: center; align-items: center;">Ingresar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating save button for all settings views -->
+    <button id="floating-save-btn" class="floating-save-btn">
+        <i data-lucide="save"></i> Guardar Cambios
+    </button>
+
     <script src="/socket.io/socket.io.js"></script>
-    <script src="js/panel.js"></script>
+    <script src="js/panel.js?v=1.2.1"></script>
 </body>
 
 </html>

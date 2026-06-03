@@ -32,6 +32,41 @@
     <!-- Capa Delantera (Foreground Animations) -->
     <div id="layer-front" class="layer"></div>
 
+    <!-- Nuevos Overlays Premium 1.2.2 -->
+    <div id="overlay-goals-container"></div>
+    
+    <div id="overlay-music-queue" class="hidden">
+        <div class="vinyl-wrapper">
+            <div class="vinyl-disc">
+                <div class="vinyl-art" id="music-art"></div>
+            </div>
+            <div class="music-info">
+                <div class="music-title" id="music-title">Cargando canción...</div>
+                <div class="music-artist" id="music-artist">Artista</div>
+                <div class="music-requester" id="music-requester"></div>
+            </div>
+        </div>
+        <div class="music-queue-list" id="music-queue-list">
+            <!-- Render next songs -->
+        </div>
+    </div>
+
+    <div id="overlay-premium-chat"></div>
+
+    <div id="overlay-wheel-container" class="hidden">
+        <div class="wheel-box">
+            <h2 id="wheel-title">Desafío para Majo 🕸</h2>
+            <div class="wheel-spinner-container">
+                <div class="wheel-pointer"></div>
+                <canvas id="wheel-canvas" width="400" height="400"></canvas>
+            </div>
+            <div id="wheel-winner-banner" class="hidden">
+                <div class="winner-title">¡Desafío seleccionado!</div>
+                <div class="winner-text" id="wheel-winner-text">Cantar</div>
+            </div>
+        </div>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
     <script src="js/overlay.js"></script>
 </body>

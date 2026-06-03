@@ -36,6 +36,14 @@ function createWindow() {
         mainWindow.loadURL('http://localhost:3000');
     }, 1000);
 
+    // Permite abrir las herramientas de desarrollo usando Ctrl + Shift + I
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+        if (input.control && input.shift && input.key.toLowerCase() === 'i') {
+            mainWindow.webContents.toggleDevTools();
+            event.preventDefault();
+        }
+    });
+
     mainWindow.on('closed', function () {
         mainWindow = null;
     });

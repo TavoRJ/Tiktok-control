@@ -7,7 +7,92 @@ if (window.opener && window.location.search.includes('spotify=')) {
     window.close();
 }
 
+// Premium Toast Notification System
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) {
+        console.warn('Toast container not found, logging message:', message);
+        return;
+    }
+    
+    const toast = document.createElement('div');
+    toast.className = `toast-notification ${type}`;
+    
+    // Choose icon based on type
+    let icon = '🔔';
+    if (type === 'success') icon = '✅';
+    else if (type === 'error') icon = '❌';
+    else if (type === 'warning') icon = '⚠️';
+    else if (type === 'info') icon = 'ℹ️';
+    
+    toast.innerHTML = `
+        <div class="toast-icon">${icon}</div>
+        <div class="toast-message">${message}</div>
+        <button class="toast-close">&times;</button>
+    `;
+    
+    // Bind close button click
+    const closeBtn = toast.querySelector('.toast-close');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            toast.remove();
+        });
+    }
+    
+    // Auto-remove toast from DOM after animations complete (3.7 seconds total)
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.remove();
+        }
+    }, 3700);
+    
+    container.appendChild(toast);
+}
+
+// Override global window.alert to automatically use showToast and prevent Electron focus lock
+window.alert = function(msg) {
+    console.log('Intercepted alert:', msg);
+    
+    // Detect errors/warnings or success in message to colorize toast
+    let type = 'info';
+    const lower = msg.toLowerCase();
+    if (lower.includes('error') || lower.includes('falló') || lower.includes('denegado') || lower.includes('incorrecta') || lower.includes('selecciona') || lower.includes('escribe')) {
+        type = 'error';
+    } else if (lower.includes('éxito') || lower.includes('exitosamente') || lower.includes('guardado') || lower.includes('actualizado') || lower.includes('registrado') || lower.includes('copiado')) {
+        type = 'success';
+    } else if (lower.includes('cuidado') || lower.includes('advertencia') || lower.includes('seguro')) {
+        type = 'warning';
+    }
+    
+    showToast(msg, type);
+    
+    // Focus recovery helper
+    if (document.activeElement && typeof document.activeElement.focus === 'function') {
+        setTimeout(() => {
+            document.activeElement.focus();
+        }, 50);
+    }
+};
+
+// Override window.confirm to restore keyboard focus to inputs immediately in Electron
+const originalConfirm = window.confirm;
+window.confirm = function(msg) {
+    console.log('Intercepted confirm:', msg);
+    const result = originalConfirm(msg);
+    
+    // Force Electron window and inputs refocus in the next frame
+    setTimeout(() => {
+        window.focus();
+        if (document.activeElement && typeof document.activeElement.focus === 'function') {
+            document.activeElement.focus();
+        }
+    }, 50);
+    
+    return result;
+};
+
 const socket = io();
+let latestRemoteConfig = {};
 
 // DOM Elements
 const statusText = document.getElementById('connection-status');
@@ -17,6 +102,17 @@ const clearLogBtn = document.getElementById('clear-log');
 const filterGiftsCheckbox = document.getElementById('filter-gifts');
 
 // Navigation
+function updateFloatingSaveButtonVisibility(targetId) {
+    const floatingSaveBtn = document.getElementById('floating-save-btn');
+    if (!floatingSaveBtn) return;
+    const configViews = ['music-view', 'youtube-view', 'multimedia-view', 'chatbot-view', 'setup-view'];
+    if (configViews.includes(targetId)) {
+        floatingSaveBtn.classList.add('visible');
+    } else {
+        floatingSaveBtn.classList.remove('visible');
+    }
+}
+
 document.querySelectorAll('.menu-item').forEach(item => {
     item.addEventListener('click', (e) => {
         e.preventDefault();
@@ -32,6 +128,9 @@ document.querySelectorAll('.menu-item').forEach(item => {
             document.getElementById(targetId).style.display = 'block';
         }
 
+        // Update floating save button
+        updateFloatingSaveButtonVisibility(targetId);
+
         // Show/Hide controls footer (only in Overlays view)
         const footer = document.querySelector('.controls-footer');
         if (footer) {
@@ -44,10 +143,11 @@ document.querySelectorAll('.menu-item').forEach(item => {
 document.addEventListener('DOMContentLoaded', () => {
     const activeItem = document.querySelector('.menu-item.active');
     const footer = document.querySelector('.controls-footer');
-    if (activeItem && footer) {
-        const targetId = activeItem.getAttribute('data-target');
+    const targetId = activeItem ? activeItem.getAttribute('data-target') : '';
+    if (footer) {
         footer.style.display = (targetId === 'overlays-view') ? 'flex' : 'none';
     }
+    updateFloatingSaveButtonVisibility(targetId);
 });
 
 // Socket.io Events
@@ -60,6 +160,7 @@ socket.on('app_version', (version) => {
 
 socket.on('remote_config_updated', (config) => {
     if (!config) return;
+    latestRemoteConfig = config;
     
     const youtubeBtn = document.getElementById('menu-youtube-btn');
     const youtubeOverlay = document.getElementById('youtube-blocked-overlay');
@@ -373,6 +474,38 @@ function updateUIWithConfig(config) {
     if (readLikesEl) readLikesEl.checked = !!config.readLikesMilestoneEnabled;
     if (likesMilestoneEl) likesMilestoneEl.value = config.likesMilestoneValue || 100;
     
+    // Sync custom phrases and formatting settings
+    const filterEmojisEl = document.getElementById('bot-filter-emojis-names');
+    const thankShareEl = document.getElementById('bot-thank-share-phrase');
+    const thankFollowEl = document.getElementById('bot-thank-follow-phrase');
+    const thankGiftEl = document.getElementById('bot-thank-gift-phrase');
+    
+    if (filterEmojisEl) filterEmojisEl.checked = !!config.filterEmojisFromNames;
+    if (thankShareEl) thankShareEl.value = config.thankYouSharePhrase || '';
+    if (thankFollowEl) thankFollowEl.value = config.thankYouFollowPhrase || '';
+    if (thankGiftEl) thankGiftEl.value = config.thankYouGiftPhrase || '';
+
+    // Metas, Ruleta y Overlays
+    const wheelEnabledEl = document.getElementById('wheel-enabled');
+    const wheelGiftEl = document.getElementById('wheel-trigger-gift');
+    const wheelCoinsEl = document.getElementById('wheel-trigger-coins');
+    const overlayMusicEl = document.getElementById('overlay-music-enabled');
+    const overlayChatEl = document.getElementById('overlay-chat-enabled');
+    const overlayChatPremiumEl = document.getElementById('overlay-chat-premium');
+    const ttsEffectsEl = document.getElementById('tts-effects-enabled');
+
+    if (wheelEnabledEl) wheelEnabledEl.checked = !!config.wheelEnabled;
+    if (wheelGiftEl) wheelGiftEl.value = config.wheelTriggerGift || 'any';
+    if (wheelCoinsEl) wheelCoinsEl.value = config.wheelTriggerCoins || 10;
+    if (overlayMusicEl) overlayMusicEl.checked = config.overlayMusicQueueEnabled !== false;
+    if (overlayChatEl) overlayChatEl.checked = config.overlayChatEnabled !== false;
+    if (overlayChatPremiumEl) overlayChatPremiumEl.checked = config.overlayChatFilterPremium !== false;
+    if (ttsEffectsEl) ttsEffectsEl.checked = config.ttsEffectsEnabled !== false;
+
+    // Render dynamic lists (Metas, Ruleta)
+    renderGoalsList(config.goals || []);
+    renderWheelOptionsList(config.wheelOptions || []);
+    
     // Setup and Spotify values
     const setupUserEl = document.getElementById('setup-tiktok-username');
     const setupAutoEl = document.getElementById('setup-auto-connect');
@@ -574,8 +707,36 @@ function updateUIWithConfig(config) {
         valRateEl.textContent = parseFloat(rateEl.value).toFixed(1);
     }
     
+    // Spotify and YouTube monetization sync
+    const spotMonetizationEl = document.getElementById('spotify-monetization-active');
+    const spotMonetizationCoinsEl = document.getElementById('spotify-monetization-coins');
+    const ytMonetizationEl = document.getElementById('youtube-monetization-active');
+    const ytMonetizationCoinsEl = document.getElementById('youtube-monetization-coins');
+    
+    if (spotMonetizationEl) spotMonetizationEl.checked = !!config.spotifyMonetizationEnabled;
+    if (spotMonetizationCoinsEl) spotMonetizationCoinsEl.value = config.spotifyMinCoins || 5;
+    if (ytMonetizationEl) ytMonetizationEl.checked = !!config.youtubeMonetizationEnabled;
+    if (ytMonetizationCoinsEl) ytMonetizationCoinsEl.value = config.youtubeMinCoins || 5;
+    
+    // Toggle coins group visibility based on checkbox status
+    const spotCoinsGroup = document.getElementById('spotify-monetization-coins-group');
+    if (spotCoinsGroup && spotMonetizationEl) {
+        spotCoinsGroup.style.display = spotMonetizationEl.checked ? 'block' : 'none';
+    }
+    const ytCoinsGroup = document.getElementById('youtube-monetization-coins-group');
+    if (ytCoinsGroup && ytMonetizationEl) {
+        ytCoinsGroup.style.display = ytMonetizationEl.checked ? 'block' : 'none';
+    }
+
+    // Sound alerts general active switch sync
+    const soundAlertsActiveEl = document.getElementById('sound-alerts-active');
+    if (soundAlertsActiveEl) soundAlertsActiveEl.checked = config.soundAlertsEnabled !== false;
+
     // Rules Table
     renderRulesTable(config.userVoices || []);
+    
+    // Render Sound Alerts Table
+    renderSoundAlertsTable(config.soundAlerts || []);
 }
 
 // Render specific user voice rules table
@@ -683,7 +844,31 @@ function sendUpdatedSettings() {
         youtubeChatQueueEnabled: document.getElementById('youtube-chat-queue-enabled').checked,
         youtubePermission: document.getElementById('youtube-permission').value,
         youtubeCommandPrefix: document.getElementById('youtube-command-prefix').value.trim(),
-        youtubeVoteSkipLimit: parseInt(document.getElementById('youtube-voteskip-limit').value) || 3
+        youtubeVoteSkipLimit: parseInt(document.getElementById('youtube-voteskip-limit').value) || 3,
+        
+        // Music Request Monetization settings
+        spotifyMonetizationEnabled: document.getElementById('spotify-monetization-active').checked,
+        spotifyMinCoins: parseInt(document.getElementById('spotify-monetization-coins').value) || 5,
+        youtubeMonetizationEnabled: document.getElementById('youtube-monetization-active').checked,
+        youtubeMinCoins: parseInt(document.getElementById('youtube-monetization-coins').value) || 5,
+        
+        // Sound alerts setting
+        soundAlertsEnabled: document.getElementById('sound-alerts-active').checked,
+        
+        // Custom events / formatting
+        filterEmojisFromNames: document.getElementById('bot-filter-emojis-names').checked,
+        thankYouSharePhrase: document.getElementById('bot-thank-share-phrase').value,
+        thankYouFollowPhrase: document.getElementById('bot-thank-follow-phrase').value,
+        thankYouGiftPhrase: document.getElementById('bot-thank-gift-phrase').value,
+
+        // Metas, Ruleta, Overlays
+        wheelEnabled: document.getElementById('wheel-enabled').checked,
+        wheelTriggerGift: document.getElementById('wheel-trigger-gift').value,
+        wheelTriggerCoins: parseInt(document.getElementById('wheel-trigger-coins').value) || 10,
+        overlayMusicQueueEnabled: document.getElementById('overlay-music-enabled').checked,
+        overlayChatEnabled: document.getElementById('overlay-chat-enabled').checked,
+        overlayChatFilterPremium: document.getElementById('overlay-chat-premium').checked,
+        ttsEffectsEnabled: document.getElementById('tts-effects-enabled').checked
     };
     
     socket.emit('update_chatbot_settings', updated);
@@ -691,15 +876,19 @@ function sendUpdatedSettings() {
 
 // Event Listeners for inputs changing
 const inputsToWatch = [
-    'bot-active', 'bot-play-location', 'bot-read-username', 
+    'bot-active', 'bot-play-location', 'bot-read-username', 'bot-filter-emojis-names',
     'bot-prefix-required', 'bot-permission', 'bot-block-rare-languages', 
     'bot-banned-action', 'bot-default-voice', 'bot-tts-engine', 'bot-cloud-voice',
     'bot-exclusive-enabled',
+    'bot-read-follows', 'bot-read-shares', 'bot-read-gifts', 'bot-read-likes',
     'setup-auto-connect', 'setup-theme', 'spotify-active', 'spotify-theme', 'spotify-position',
     'spotify-chat-queue-enabled', 'spotify-explicit-allowed', 'spotify-permission',
     'spotify-neon-color', 'spotify-vinyl-design', 'spotify-vinyl-speed',
+    'spotify-monetization-active',
     'youtube-active', 'youtube-chat-queue-enabled', 'youtube-permission',
-    'youtube-command-prefix', 'youtube-voteskip-limit'
+    'youtube-command-prefix', 'youtube-voteskip-limit', 'youtube-monetization-active',
+    'sound-alerts-active',
+    'wheel-enabled', 'overlay-music-enabled', 'overlay-chat-enabled', 'overlay-chat-premium', 'tts-effects-enabled'
 ];
 
 inputsToWatch.forEach(id => {
@@ -719,6 +908,14 @@ inputsToWatch.forEach(id => {
             if (id === 'spotify-theme') {
                 updateMockupThemeClass(el.value);
             }
+            if (id === 'spotify-monetization-active') {
+                const group = document.getElementById('spotify-monetization-coins-group');
+                if (group) group.style.display = el.checked ? 'block' : 'none';
+            }
+            if (id === 'youtube-monetization-active') {
+                const group = document.getElementById('youtube-monetization-coins-group');
+                if (group) group.style.display = el.checked ? 'block' : 'none';
+            }
             sendUpdatedSettings();
         });
     }
@@ -727,29 +924,42 @@ inputsToWatch.forEach(id => {
 // For text inputs and textareas, update on 'blur' to avoid socket spam on typing
 const textInputsToWatch = [
     'bot-prefixes', 'bot-max-characters', 'bot-banned-words', 'bot-ignored-users',
-    'bot-exclusive-user',
+    'bot-exclusive-user', 'bot-likes-milestone',
+    'bot-thank-share-phrase', 'bot-thank-follow-phrase', 'bot-thank-gift-phrase',
     'setup-tiktok-username', 'spotify-client-id', 'spotify-client-secret',
-    'spotify-command-prefix', 'spotify-voteskip-limit'
+    'spotify-command-prefix', 'spotify-voteskip-limit',
+    'spotify-monetization-coins', 'youtube-monetization-coins',
+    'wheel-trigger-gift', 'wheel-trigger-coins'
 ];
 textInputsToWatch.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('blur', sendUpdatedSettings);
 });
 
-// Save button click event handler
+// Chatbot local Save button click event handler
 const btnSaveChatbot = document.getElementById('btn-save-chatbot-settings');
 if (btnSaveChatbot) {
     btnSaveChatbot.addEventListener('click', () => {
         sendUpdatedSettings();
+        showToast('¡Configuración guardada y actualizada con éxito!', 'success');
         const originalText = btnSaveChatbot.innerHTML;
         btnSaveChatbot.innerHTML = '<i data-lucide="check"></i> ¡Guardado!';
-        btnSaveChatbot.style.backgroundColor = 'var(--accent-green)';
+        btnSaveChatbot.style.background = 'var(--accent-green, #10b981)';
         if (window.lucide) window.lucide.createIcons();
         setTimeout(() => {
             btnSaveChatbot.innerHTML = originalText;
-            btnSaveChatbot.style.backgroundColor = 'var(--accent-purple)';
+            btnSaveChatbot.style.background = 'linear-gradient(135deg, #a100ff 0%, #7b00d6 100%)';
             if (window.lucide) window.lucide.createIcons();
         }, 1500);
+    });
+}
+
+// Floating Save button click event handler
+const floatingSaveBtn = document.getElementById('floating-save-btn');
+if (floatingSaveBtn) {
+    floatingSaveBtn.addEventListener('click', () => {
+        sendUpdatedSettings();
+        showToast('¡Configuración guardada y actualizada con éxito!', 'success');
     });
 }
 
@@ -1013,6 +1223,20 @@ socket.on('play_tts_audio', (data) => {
     if (playLocation === 'panel' && !isPanel) return;
     
     queueCloudTTS(base64Audio, playLocation);
+});
+
+// Handle playing sound alerts
+socket.on('play_sound_alert', (data) => {
+    const { soundUrl, volume } = data;
+    
+    // Check play location
+    if (chatbotConfig.playLocation !== 'panel' && chatbotConfig.playLocation !== 'both') return;
+    
+    const audio = new Audio(soundUrl);
+    audio.volume = (volume !== undefined ? volume : 100) / 100;
+    audio.play().catch(err => {
+        console.error('Failed to play sound alert in panel:', err);
+    });
 });
 
 // Handle speaking in Panel if destination matches
@@ -1737,24 +1961,77 @@ if (btnClearQueue) {
 // Developer Settings Panel Authentication Lock
 let isDeveloperAuthenticated = false;
 const devDetails = document.getElementById('dev-settings-details');
+const devPasswordModal = document.getElementById('dev-password-modal');
+const devPasswordInput = document.getElementById('dev-password-input');
+const devPasswordError = document.getElementById('dev-password-error');
+const btnCloseDevModal = document.getElementById('btn-close-dev-modal');
+const btnSubmitDevPassword = document.getElementById('btn-submit-dev-password');
+
 if (devDetails) {
     const devSummary = devDetails.querySelector('summary');
     if (devSummary) {
         devSummary.addEventListener('click', (e) => {
+            console.log('Clicked advanced API settings summary. Open state:', devDetails.open, 'Authenticated:', isDeveloperAuthenticated);
             if (!devDetails.open && !isDeveloperAuthenticated) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                const password = prompt('Acceso Restringido - Ingresa la contraseña de Desarrollador:');
-                if (password === 'tavo_dev' || password === 'naya_dev') {
+                // If remote config unlocks developer settings, open directly without password
+                if (latestRemoteConfig && (latestRemoteConfig.devSettingsUnlocked || latestRemoteConfig.disableDevPassword)) {
+                    console.log('Access granted remotely via raw.githubusercontent config');
                     isDeveloperAuthenticated = true;
                     devDetails.open = true;
+                    return;
+                }
+                
+                // Show custom password modal instead of window.prompt (which fails in Electron)
+                if (devPasswordModal) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Opening custom developer password modal...');
+                    if (devPasswordInput) devPasswordInput.value = '';
+                    if (devPasswordError) devPasswordError.style.display = 'none';
+                    devPasswordModal.style.display = 'flex';
+                    if (devPasswordInput) devPasswordInput.focus();
                 } else {
-                    alert('Acceso denegado.');
+                    console.warn('dev-password-modal element was not found in the DOM. Falling back to default browser behavior.');
                 }
             }
         });
     }
+}
+
+// Handle Developer Password Modal interactions
+if (btnCloseDevModal && devPasswordModal) {
+    btnCloseDevModal.addEventListener('click', () => {
+        devPasswordModal.style.display = 'none';
+    });
+    
+    devPasswordModal.addEventListener('click', (e) => {
+        if (e.target === devPasswordModal) {
+            devPasswordModal.style.display = 'none';
+        }
+    });
+}
+
+function handleDevPasswordSubmit() {
+    if (!devPasswordInput || !devDetails || !devPasswordModal) return;
+    const password = devPasswordInput.value.trim();
+    if (password === 'tavo_dev' || password === 'naya_dev') {
+        isDeveloperAuthenticated = true;
+        devDetails.open = true;
+        devPasswordModal.style.display = 'none';
+    } else {
+        if (devPasswordError) devPasswordError.style.display = 'block';
+    }
+}
+
+if (btnSubmitDevPassword) {
+    btnSubmitDevPassword.addEventListener('click', handleDevPasswordSubmit);
+}
+if (devPasswordInput) {
+    devPasswordInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            handleDevPasswordSubmit();
+        }
+    });
 }
 
 // ==========================================
@@ -2514,6 +2791,2112 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();
     }
+});
+
+// ============================================================================
+// MULTIMEDIA SOUND ALERTS & MODALS SYSTEM
+// ============================================================================
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Library Definitions
+    const SYSTEM_SOUNDS = [
+        { name: 'GRLive Bruh', url: '/sounds/bruh.mp3' },
+        { name: 'GRLive Fart', url: '/sounds/fart.mp3' },
+        { name: 'GRLive Vine Boom', url: '/sounds/vine-boom.mp3' },
+        { name: 'GRLive Anime Wow', url: '/sounds/anime-wow.mp3' },
+        { name: 'GRLive Roblox Oof', url: '/sounds/oof.mp3' },
+        { name: 'GRLive Bonk', url: '/sounds/bonk.mp3' },
+        { name: 'GRLive Taco Bell', url: '/sounds/taco-bell.mp3' },
+        { name: 'GRLive Yeet', url: '/sounds/yeet.mp3' },
+        { name: 'GRLive Nice Click', url: '/sounds/nice.mp3' },
+        { name: 'GRLive Discord Notif', url: '/sounds/discord-notification.mp3' }
+    ];
+
+                const DEFAULT_GIFTS = [
+        {
+                "name": "Adicto a las pantallas",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Adicto a las pantallas.png"
+        },
+        {
+                "name": "ASMR Starter Kit",
+                "coins": 1,
+                "iconUrl": "/assets/gift/ASMR Starter Kit.png"
+        },
+        {
+                "name": "Beach Date",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Beach Date.png"
+        },
+        {
+                "name": "Breakthrough superstar",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Breakthrough superstar.png"
+        },
+        {
+                "name": "Cheems Dog",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Cheems Dog.png"
+        },
+        {
+                "name": "Heart on Hands",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Corazon en Manos.png"
+        },
+        {
+                "name": "Finger Heart",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Corazón Coreano.png"
+        },
+        {
+                "name": "Beating Heart",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Corazón que late.png"
+        },
+        {
+                "name": "Heart Me",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Corazón.png"
+        },
+        {
+                "name": "Corona de la comunidad",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Corona de la comunidad.png"
+        },
+        {
+                "name": "Correo",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Correo.png"
+        },
+        {
+                "name": "Día de muertos",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Día de muertos.png"
+        },
+        {
+                "name": "Pop",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Equipo Poder.png"
+        },
+        {
+                "name": "Eres increíble",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Eres Asombroso.png"
+        },
+        {
+                "name": "Buen Juego (GG)",
+                "coins": 1,
+                "iconUrl": "/assets/gift/GG.png"
+        },
+        {
+                "name": "Gift Box 2",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Gift Box 2.png"
+        },
+        {
+                "name": "Barra luminosa",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Glow Stick.png"
+        },
+        {
+                "name": "Heart",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Heart.png"
+        },
+        {
+                "name": "Cono de helado",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Helado.png"
+        },
+        {
+                "name": "Te amo",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Love you.png"
+        },
+        {
+                "name": "Corn",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Maiz.png"
+        },
+        {
+                "name": "Maracas",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Maracas.png"
+        },
+        {
+                "name": "Álbum de música",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Música.png"
+        },
+        {
+                "name": "Nachos",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Nachos.png"
+        },
+        {
+                "name": "Rebanada de pastel",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Pastel.png"
+        },
+        {
+                "name": "Pato",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Pato.png"
+        },
+        {
+                "name": "Quiereme",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Quiereme.png"
+        },
+        {
+                "name": "Rey de leyendas",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Rey de leyendas.png"
+        },
+        {
+                "name": "White Rose",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Rosa Blanca.png"
+        },
+        {
+                "name": "Cosmic Rose",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Rosa Cosmica.png"
+        },
+        {
+                "name": "Eternity Rose",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Rosa de la Eternidad.png"
+        },
+        {
+                "name": "Big Rose",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Rosa Grande.png"
+        },
+        {
+                "name": "Rose",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Rosa.png"
+        },
+        {
+                "name": "Te quiero mucho",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Te Quiero.png"
+        },
+        {
+                "name": "Pulgar arriba",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Thumbs Up.png"
+        },
+        {
+                "name": "TikTok All Stars",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Tik Tok All Stars.png"
+        },
+        {
+                "name": "TikTok Live",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Tik Tok Live.png"
+        },
+        {
+                "name": "TikTok Universe",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Tik tok Universo.png"
+        },
+        {
+                "name": "TikTok",
+                "coins": 1,
+                "iconUrl": "/assets/gift/Tik Tok.png"
+        },
+        {
+                "name": "Alegrarte el día",
+                "coins": 9,
+                "iconUrl": "/assets/gift/Cheer You Up.png"
+        },
+        {
+                "name": "Perfume",
+                "coins": 20,
+                "iconUrl": "/assets/gift/Perfume.png"
+        },
+        {
+                "name": "Capybara",
+                "coins": 30,
+                "iconUrl": "/assets/gift/Capibara.png"
+        },
+        {
+                "name": "Dancing Capybaras",
+                "coins": 30,
+                "iconUrl": "/assets/gift/Capibaras Bailando.png"
+        },
+        {
+                "name": "Bathing Capybaras",
+                "coins": 30,
+                "iconUrl": "/assets/gift/Capibaras Bañandose.png"
+        },
+        {
+                "name": "Dona",
+                "coins": 30,
+                "iconUrl": "/assets/gift/Dona.png"
+        },
+        {
+                "name": "Autumn Leaves",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Autumn Leaves.png"
+        },
+        {
+                "name": "Cabeza de calabaza",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Cabeza de calabaza.png"
+        },
+        {
+                "name": "Calabaza",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Calabaza.png"
+        },
+        {
+                "name": "Candado de amor",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Candado de amor.png"
+        },
+        {
+                "name": "Candado y llave",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Candado y llave.png"
+        },
+        {
+                "name": "Casco de leyendas",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Casco de leyendas.png"
+        },
+        {
+                "name": "Celebración de la comunidad",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Celebración de la comunidad.png"
+        },
+        {
+                "name": "Celebridad",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Celebridad.png"
+        },
+        {
+                "name": "Community Fest",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Community Fest.png"
+        },
+        {
+                "name": "Corona pequeña",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Corona.png"
+        },
+        {
+                "name": "el gato de la furgoneta",
+                "coins": 99,
+                "iconUrl": "/assets/gift/el gato de la furgoneta.png"
+        },
+        {
+                "name": "encanto del café",
+                "coins": 99,
+                "iconUrl": "/assets/gift/encanto del café.png"
+        },
+        {
+                "name": "Equipo Animador",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Equipo Animador.png"
+        },
+        {
+                "name": "Equipo de ensueño",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Equipo de ensueño.png"
+        },
+        {
+                "name": "Equipo victoria",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Equipo victoria.png"
+        },
+        {
+                "name": "Falling For You",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Falling For You.png"
+        },
+        {
+                "name": "Fantasmita",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Fantasmita.png"
+        },
+        {
+                "name": "Fiesta de caramelos",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Fiesta de caramelos.png"
+        },
+        {
+                "name": "Flor Bailarina",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Flor Bailarina.png"
+        },
+        {
+                "name": "Fruits Hat",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Fruits Hat.png"
+        },
+        {
+                "name": "Gimme the mic",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Gimme the mic.png"
+        },
+        {
+                "name": "Gorra",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Gorra.png"
+        },
+        {
+                "name": "Guirnalda",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Guirnalda.png"
+        },
+        {
+                "name": "Health Potion",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Health Potion.png"
+        },
+        {
+                "name": "Holiday Stocking",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Holiday Stocking.png"
+        },
+        {
+                "name": "Husky",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Husky.png"
+        },
+        {
+                "name": "iris de verano",
+                "coins": 99,
+                "iconUrl": "/assets/gift/iris de verano.png"
+        },
+        {
+                "name": "Like-Pop",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Like-Pop.png"
+        },
+        {
+                "name": "Magic Hat",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Magic Hat.png"
+        },
+        {
+                "name": "Make-up Box",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Make-up Box.png"
+        },
+        {
+                "name": "Manos danzantes",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Manos danzantes.png"
+        },
+        {
+                "name": "Maquina de suerte",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Maquina de suerte.png"
+        },
+        {
+                "name": "Me alegro por ti",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Me alegro por ti.png"
+        },
+        {
+                "name": "Mejores Amigos",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Mejores Amigos.png"
+        },
+        {
+                "name": "Mirror Bloom",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Mirror Bloom.png"
+        },
+        {
+                "name": "Música agradable",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Música agradable.png"
+        },
+        {
+                "name": "Osito",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Osito.png"
+        },
+        {
+                "name": "Panther Paws",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Panther Paws.png"
+        },
+        {
+                "name": "Patas de gato",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Patas de gato.png"
+        },
+        {
+                "name": "Pintura de amor",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Pintura de amor.png"
+        },
+        {
+                "name": "Piñata",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Piñata.png"
+        },
+        {
+                "name": "Pool Party",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Pool Party.png"
+        },
+        {
+                "name": "Pug",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Pug.png"
+        },
+        {
+                "name": "Pulsera de Equipo",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Pulsera de Equipo.png"
+        },
+        {
+                "name": "Rabbit",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Rabbit.png"
+        },
+        {
+                "name": "Sandía enamorada",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Sandía enamorada.png"
+        },
+        {
+                "name": "Sombrero de Mariachi",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Sombrero de Mariachi.png"
+        },
+        {
+                "name": "Sombrero y bigote",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Sombrero y bigote.png"
+        },
+        {
+                "name": "Spooktacular",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Spooktacular.png"
+        },
+        {
+                "name": "Tango",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Tango.png"
+        },
+        {
+                "name": "Gorra",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Toca para ti.png"
+        },
+        {
+                "name": "trompo",
+                "coins": 99,
+                "iconUrl": "/assets/gift/trompo.png"
+        },
+        {
+                "name": "Trono de Estrellas",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Trono de Estrellas.png"
+        },
+        {
+                "name": "Visitando el espacio",
+                "coins": 99,
+                "iconUrl": "/assets/gift/Visitando el espacio.png"
+        },
+        {
+                "name": "Confeti",
+                "coins": 100,
+                "iconUrl": "/assets/gift/confeti premiun.png"
+        },
+        {
+                "name": "Confeti",
+                "coins": 100,
+                "iconUrl": "/assets/gift/Confeti.png"
+        },
+        {
+                "name": "Control de videojuegos",
+                "coins": 100,
+                "iconUrl": "/assets/gift/Control.png"
+        },
+        {
+                "name": "Explosión de amor",
+                "coins": 100,
+                "iconUrl": "/assets/gift/Explosión de amor.png"
+        },
+        {
+                "name": "Cocoa de Santa",
+                "coins": 149,
+                "iconUrl": "/assets/gift/Taco.png"
+        },
+        {
+                "name": "Corazones",
+                "coins": 199,
+                "iconUrl": "/assets/gift/Corazones.png"
+        },
+        {
+                "name": "Corona de flores para la cabeza",
+                "coins": 199,
+                "iconUrl": "/assets/gift/Corona de flores.png"
+        },
+        {
+                "name": "Masaje para ti",
+                "coins": 199,
+                "iconUrl": "/assets/gift/masaje para ti.png"
+        },
+        {
+                "name": "Masaje para ti",
+                "coins": 199,
+                "iconUrl": "/assets/gift/Sage.png"
+        },
+        {
+                "name": "Estrella nocturna",
+                "coins": 199,
+                "iconUrl": "/assets/gift/star.png"
+        },
+        {
+                "name": "Abeja picadora",
+                "coins": 199,
+                "iconUrl": "/assets/gift/Stinging Bee.png"
+        },
+        {
+                "name": "Gafas de sol",
+                "coins": 199,
+                "iconUrl": "/assets/gift/Sunglasses.png"
+        },
+        {
+                "name": "Te estoy viendo",
+                "coins": 199,
+                "iconUrl": "/assets/gift/Te veo.png"
+        },
+        {
+                "name": "Medalla de oro",
+                "coins": 200,
+                "iconUrl": "/assets/gift/Medalla de oro.png"
+        },
+        {
+                "name": "Medalla de oro",
+                "coins": 200,
+                "iconUrl": "/assets/gift/Medalla.png"
+        },
+        {
+                "name": "Caja de tulipanes",
+                "coins": 200,
+                "iconUrl": "/assets/gift/Tulipanes.png"
+        },
+        {
+                "name": "Aves melódicas",
+                "coins": 249,
+                "iconUrl": "/assets/gift/Aves.png"
+        },
+        {
+                "name": "Micrófono de helado",
+                "coins": 249,
+                "iconUrl": "/assets/gift/Micrófono.png"
+        },
+        {
+                "name": "Brisa de palmeras",
+                "coins": 249,
+                "iconUrl": "/assets/gift/Palmeras.png"
+        },
+        {
+                "name": "Apretar mejillas",
+                "coins": 249,
+                "iconUrl": "/assets/gift/Pinch Face.png"
+        },
+        {
+                "name": "Amigos de frutas",
+                "coins": 299,
+                "iconUrl": "/assets/gift/Amigos Frutas.png"
+        },
+        {
+                "name": "Guantes de boxeo",
+                "coins": 299,
+                "iconUrl": "/assets/gift/Boxing Gloves.png"
+        },
+        {
+                "name": "Corgi",
+                "coins": 299,
+                "iconUrl": "/assets/gift/Corgi.png"
+        },
+        {
+                "name": "Trompa de elefante",
+                "coins": 299,
+                "iconUrl": "/assets/gift/Elefante.png"
+        },
+        {
+                "name": "Estrella de rock",
+                "coins": 299,
+                "iconUrl": "/assets/gift/Estrella de Rock.png"
+        },
+        {
+                "name": "Caja de regalo de Eid",
+                "coins": 299,
+                "iconUrl": "/assets/gift/Gift Box.png"
+        },
+        {
+                "name": "Llamada de amor",
+                "coins": 299,
+                "iconUrl": "/assets/gift/Llama.png"
+        },
+        {
+                "name": "Pollo travieso",
+                "coins": 299,
+                "iconUrl": "/assets/gift/Pollo Travieso.png"
+        },
+        {
+                "name": "¡Hola, Rosie!",
+                "coins": 299,
+                "iconUrl": "/assets/gift/Rosie.png"
+        },
+        {
+                "name": "Trompa de elefante",
+                "coins": 299,
+                "iconUrl": "/assets/gift/Trompa y orejas de elefante.png"
+        },
+        {
+                "name": "El abrazo de Tom",
+                "coins": 399,
+                "iconUrl": "/assets/gift/Abrazo de Tom.png"
+        },
+        {
+                "name": "Jollie el frijol de la alegría",
+                "coins": 399,
+                "iconUrl": "/assets/gift/Jollie.png"
+        },
+        {
+                "name": "Ganso relajado",
+                "coins": 399,
+                "iconUrl": "/assets/gift/Oca relajada.png"
+        },
+        {
+                "name": "Ritmo mágico",
+                "coins": 399,
+                "iconUrl": "/assets/gift/Ritmo mágico.png"
+        },
+        {
+                "name": "Campeón del micrófono",
+                "coins": 400,
+                "iconUrl": "/assets/gift/Campeon.png"
+        },
+        {
+                "name": "Coral",
+                "coins": 499,
+                "iconUrl": "/assets/gift/Coral.png"
+        },
+        {
+                "name": "Manos arriba",
+                "coins": 499,
+                "iconUrl": "/assets/gift/Hands UP.png"
+        },
+        {
+                "name": "Manos arriba",
+                "coins": 499,
+                "iconUrl": "/assets/gift/Manos arriba.png"
+        },
+        {
+                "name": "Gafas de DJ",
+                "coins": 500,
+                "iconUrl": "/assets/gift/Anteojos de DJ.png"
+        },
+        {
+                "name": "Gafas de realidad virtual",
+                "coins": 500,
+                "iconUrl": "/assets/gift/Gafas de RV.png"
+        },
+        {
+                "name": "Pistola de gemas",
+                "coins": 500,
+                "iconUrl": "/assets/gift/Gem Gun.png"
+        },
+        {
+                "name": "Guitarra de corazón",
+                "coins": 500,
+                "iconUrl": "/assets/gift/Guitarra.png"
+        },
+        {
+                "name": "Manifestando",
+                "coins": 500,
+                "iconUrl": "/assets/gift/Manifesting.png"
+        },
+        {
+                "name": "Pistola de dinero",
+                "coins": 500,
+                "iconUrl": "/assets/gift/Pistola.png"
+        },
+        {
+                "name": "Cisne",
+                "coins": 699,
+                "iconUrl": "/assets/gift/cisne de papel.png"
+        },
+        {
+                "name": "Cisne",
+                "coins": 699,
+                "iconUrl": "/assets/gift/Cisne.png"
+        },
+        {
+                "name": "TE AMO",
+                "coins": 899,
+                "iconUrl": "/assets/gift/LOVE U.png"
+        },
+        {
+                "name": "Tren",
+                "coins": 899,
+                "iconUrl": "/assets/gift/Spring train.png"
+        },
+        {
+                "name": "Tren",
+                "coins": 899,
+                "iconUrl": "/assets/gift/Tren.png"
+        },
+        {
+                "name": "Caja de suministros de la suerte",
+                "coins": 999,
+                "iconUrl": "/assets/gift/Caja de lanzamiento aéreo de la suerte.png"
+        },
+        {
+                "name": "Flower Overflow",
+                "coins": 999,
+                "iconUrl": "/assets/gift/Flower Overflow.png"
+        },
+        {
+                "name": "Mina de Oro",
+                "coins": 999,
+                "iconUrl": "/assets/gift/Mina de Oro.png"
+        },
+        {
+                "name": "Pistola de Dulces",
+                "coins": 999,
+                "iconUrl": "/assets/gift/Pistola de Dulces.png"
+        },
+        {
+                "name": "Que siga la fiesta",
+                "coins": 999,
+                "iconUrl": "/assets/gift/Que siga la fiesta.png"
+        },
+        {
+                "name": "Todo por un sueño",
+                "coins": 999,
+                "iconUrl": "/assets/gift/Todo por un sueño.png"
+        },
+        {
+                "name": "Viajar contigo",
+                "coins": 999,
+                "iconUrl": "/assets/gift/Travel with You.png"
+        },
+        {
+                "name": "Cintas florecientes",
+                "coins": 1000,
+                "iconUrl": "/assets/gift/Blooming Ribbons.png"
+        },
+        {
+                "name": "Disco ball",
+                "coins": 1000,
+                "iconUrl": "/assets/gift/Disco ball.png"
+        },
+        {
+                "name": "El pueblo de bu",
+                "coins": 1000,
+                "iconUrl": "/assets/gift/El pueblo de bu.png"
+        },
+        {
+                "name": "Foca y ballena",
+                "coins": 1000,
+                "iconUrl": "/assets/gift/Foca y ballena.png"
+        },
+        {
+                "name": "Futuro Encuentro",
+                "coins": 1000,
+                "iconUrl": "/assets/gift/Futuro Encuentro.png"
+        },
+        {
+                "name": "Futuro viaje",
+                "coins": 1000,
+                "iconUrl": "/assets/gift/Futuro viaje.png"
+        },
+        {
+                "name": "Galaxia",
+                "coins": 1000,
+                "iconUrl": "/assets/gift/Galaxia.png"
+        },
+        {
+                "name": "Gamer Cat",
+                "coins": 1000,
+                "iconUrl": "/assets/gift/Gamer Cat.png"
+        },
+        {
+                "name": "Gatita Bruja",
+                "coins": 1000,
+                "iconUrl": "/assets/gift/Gatita Bruja.png"
+        },
+        {
+                "name": "Gato terrorífico",
+                "coins": 1000,
+                "iconUrl": "/assets/gift/Gato terrorífico.png"
+        },
+        {
+                "name": "jets volando",
+                "coins": 1000,
+                "iconUrl": "/assets/gift/jets volando.png"
+        },
+        {
+                "name": "La pandilla de bu",
+                "coins": 1000,
+                "iconUrl": "/assets/gift/La pandilla de bu.png"
+        },
+        {
+                "name": "Globo de aire brillante",
+                "coins": 1000,
+                "iconUrl": "/assets/gift/Shiny air balloon.png"
+        },
+        {
+                "name": "Wanda la bruja",
+                "coins": 1000,
+                "iconUrl": "/assets/gift/Wanda la bruja.png"
+        },
+        {
+                "name": "Fuegos artificiales",
+                "coins": 1088,
+                "iconUrl": "/assets/gift/Fuegos Artificiales.png"
+        },
+        {
+                "name": "Bajo control",
+                "coins": 1500,
+                "iconUrl": "/assets/gift/Bajo Control.png"
+        },
+        {
+                "name": "Tarjeta de felicitación",
+                "coins": 1500,
+                "iconUrl": "/assets/gift/Greeting Card.png"
+        },
+        {
+                "name": "Aquí vamos",
+                "coins": 1799,
+                "iconUrl": "/assets/gift/Here We Go.png"
+        },
+        {
+                "name": "Gota de amor",
+                "coins": 1800,
+                "iconUrl": "/assets/gift/Love Drop.png"
+        },
+        {
+                "name": "Cooper vuela a casa",
+                "coins": 1999,
+                "iconUrl": "/assets/gift/Cooper Flies Home.png"
+        },
+        {
+                "name": "Fuegos artificiales misteriosos",
+                "coins": 1999,
+                "iconUrl": "/assets/gift/Fuegos Artificiales Misteriosos.png"
+        },
+        {
+                "name": "Estrella de la alfombra roja",
+                "coins": 1999,
+                "iconUrl": "/assets/gift/Red Carpet.png"
+        },
+        {
+                "name": "Ballena Sumergida",
+                "coins": 2150,
+                "iconUrl": "/assets/gift/Ballena Sumergida.png"
+        },
+        {
+                "name": "Ballena sumergiéndose",
+                "coins": 2150,
+                "iconUrl": "/assets/gift/Ballena.png"
+        },
+        {
+                "name": "Banda de animales",
+                "coins": 2500,
+                "iconUrl": "/assets/gift/Banda animal.png"
+        },
+        {
+                "name": "Motocicleta",
+                "coins": 2988,
+                "iconUrl": "/assets/gift/moto.png"
+        },
+        {
+                "name": "Oso rítmico",
+                "coins": 2999,
+                "iconUrl": "/assets/gift/Rhythemic Bear.png"
+        },
+        {
+                "name": "Lluvia de meteoros",
+                "coins": 3000,
+                "iconUrl": "/assets/gift/Lluvia de meteoritos.png"
+        },
+        {
+                "name": "Tu concierto",
+                "coins": 4500,
+                "iconUrl": "/assets/gift/Tu concierto.png"
+        },
+        {
+                "name": "Jet privado",
+                "coins": 4888,
+                "iconUrl": "/assets/gift/Jet Privado premiun.png"
+        },
+        {
+                "name": "Jet privado",
+                "coins": 4888,
+                "iconUrl": "/assets/gift/Jet Privado.png"
+        },
+        {
+                "name": "Leon el gatito",
+                "coins": 4888,
+                "iconUrl": "/assets/gift/Leon Gatito.png"
+        },
+        {
+                "name": "Jungla",
+                "coins": 5000,
+                "iconUrl": "/assets/gift/Jungla.png"
+        },
+        {
+                "name": "Magic Forest",
+                "coins": 5000,
+                "iconUrl": "/assets/gift/Magic Forest.png"
+        },
+        {
+                "name": "Pistola de diamantes",
+                "coins": 5000,
+                "iconUrl": "/assets/gift/Pistola de Diamantes.png"
+        },
+        {
+                "name": "Portal antiguo",
+                "coins": 5000,
+                "iconUrl": "/assets/gift/Portal antiguo.png"
+        },
+        {
+                "name": "Pueblo Embrujado",
+                "coins": 5000,
+                "iconUrl": "/assets/gift/Pueblo Embrujado.png"
+        },
+        {
+                "name": "Fantasía de unicornio",
+                "coins": 5000,
+                "iconUrl": "/assets/gift/Unicornio.png"
+        },
+        {
+                "name": "Corazón devoto",
+                "coins": 5999,
+                "iconUrl": "/assets/gift/Voto.png"
+        },
+        {
+                "name": "Ciudad del futuro",
+                "coins": 6000,
+                "iconUrl": "/assets/gift/cuidad del futuro.png"
+        },
+        {
+                "name": "Trabaja duro, juega más duro",
+                "coins": 6000,
+                "iconUrl": "/assets/gift/Trabaja Duro.png"
+        },
+        {
+                "name": "Lili la leoparda",
+                "coins": 6599,
+                "iconUrl": "/assets/gift/Lili.png"
+        },
+        {
+                "name": "Tiempo de celebración",
+                "coins": 6999,
+                "iconUrl": "/assets/gift/Celebration Time.png"
+        },
+        {
+                "name": "Fiesta feliz",
+                "coins": 6999,
+                "iconUrl": "/assets/gift/Happy Party.png"
+        },
+        {
+                "name": "Carro Deportivo",
+                "coins": 7000,
+                "iconUrl": "/assets/gift/Carro Deportivo.png"
+        },
+        {
+                "name": "Interestelar",
+                "coins": 10000,
+                "iconUrl": "/assets/gift/interstellar.png"
+        },
+        {
+                "name": "Halcón",
+                "coins": 10999,
+                "iconUrl": "/assets/gift/Halcón.png"
+        },
+        {
+                "name": "Relámpago rojo",
+                "coins": 12000,
+                "iconUrl": "/assets/gift/Red Lightning.png"
+        },
+        {
+                "name": "Galope dorado",
+                "coins": 15000,
+                "iconUrl": "/assets/gift/Golden.png"
+        },
+        {
+                "name": "Leopardo",
+                "coins": 15000,
+                "iconUrl": "/assets/gift/Leopardo.png"
+        },
+        {
+                "name": "Parque de atracciones",
+                "coins": 17000,
+                "iconUrl": "/assets/gift/Amusement Park.png"
+        },
+        {
+                "name": "Vuelo de amor",
+                "coins": 19999,
+                "iconUrl": "/assets/gift/Fly Love.png"
+        },
+        {
+                "name": "Fantasía de castillo",
+                "coins": 20000,
+                "iconUrl": "/assets/gift/Castillo.png"
+        },
+        {
+                "name": "Transbordador premium",
+                "coins": 20000,
+                "iconUrl": "/assets/gift/Premium Shuttle.png"
+        },
+        {
+                "name": "Transbordador de TikTok",
+                "coins": 20000,
+                "iconUrl": "/assets/gift/TikTok Shuttle.png"
+        },
+        {
+                "name": "El sueño de Adam",
+                "coins": 25999,
+                "iconUrl": "/assets/gift/Adams Dream.png"
+        },
+        {
+                "name": "Phoenix",
+                "coins": 25999,
+                "iconUrl": "/assets/gift/Fenix.png"
+        },
+        {
+                "name": "Fire Phoenix",
+                "coins": 25999,
+                "iconUrl": "/assets/gift/Phoenix de Fuego.png"
+        },
+        {
+                "name": "Llama de dragón",
+                "coins": 26999,
+                "iconUrl": "/assets/gift/Dragon Flame.png"
+        },
+        {
+                "name": "Bulevar",
+                "coins": 29999,
+                "iconUrl": "/assets/gift/Bulevar.png"
+        },
+        {
+                "name": "Lion and Cub",
+                "coins": 29999,
+                "iconUrl": "/assets/gift/Leon y Leoncito.png"
+        },
+        {
+                "name": "Lion",
+                "coins": 29999,
+                "iconUrl": "/assets/gift/Leon.png"
+        },
+        {
+                "name": "Lion and Lili",
+                "coins": 29999,
+                "iconUrl": "/assets/gift/Leoncito y lili.png"
+        },
+        {
+                "name": "Noria",
+                "coins": 29999,
+                "iconUrl": "/assets/gift/Noria.png"
+        },
+        {
+                "name": "Rio de janeiro",
+                "coins": 29999,
+                "iconUrl": "/assets/gift/Rio de janeiro.png"
+        },
+        {
+                "name": "Gorila",
+                "coins": 30000,
+                "iconUrl": "/assets/gift/Gorilla.png"
+        },
+        {
+                "name": "Zeus",
+                "coins": 34000,
+                "iconUrl": "/assets/gift/Zeus.png"
+        },
+        {
+                "name": "Halcón de trueno",
+                "coins": 39999,
+                "iconUrl": "/assets/gift/Halcón de Trueno.png"
+        },
+        {
+                "name": "Pegaso",
+                "coins": 42999,
+                "iconUrl": "/assets/gift/Pegaso.png"
+        }
+];
+
+    const giftNameMappings = {
+        "rose": "rosa",
+        "white rose": "rosa blanca",
+        "corn": "es maíz",
+        "it's corn": "es maíz",
+        "it’s corn": "es maíz",
+        "tiktok": "tik tok",
+        "tiktok universe": "tik tok universo",
+        "heart": "corazón",
+        "donut": "dona",
+        "paper duck": "pato",
+        "duck": "pato",
+        "finger heart": "corazón coreano",
+        "crown": "corona",
+        "gg": "buen juego (gg)",
+        "cap": "gorra",
+        "tom's hug": "abrazo de tom",
+        "capybara": "capibara",
+        "love you": "te amo",
+        "rose cosmic": "rose cosmic",
+        "rose eternity": "rose eternity",
+        "rose big": "rose big",
+        "coffee charm": "encanto del café",
+        "coffee cup": "encanto del café",
+        "motorcycle": "moto",
+        "star": "estrella",
+        
+        "rosa": "rose",
+        "rosa blanca": "white rose",
+        "es maíz": "corn",
+        "maiz": "corn",
+        "tik tok": "tiktok",
+        "tik tok universo": "tiktok universe",
+        "corazón": "heart",
+        "corazon": "heart",
+        "dona": "donut",
+        "pato": "duck",
+        "corazón coreano": "finger heart",
+        "corona": "crown",
+        "buen juego (gg)": "gg",
+        "gorra": "cap",
+        "abrazo de tom": "tom's hug",
+        "capibara": "capybara",
+        "te amo": "love you",
+        "rosa cosmica": "rose cosmic",
+        "rosa de la eternidad": "rose eternity",
+        "rosa grande": "rose big",
+        "encanto del café": "coffee charm",
+        "moto": "motorcycle",
+        "estrella": "star"
+    };
+
+    function normalizeGiftName(name) {
+        if (!name) return "";
+        return name.toLowerCase()
+            .replace(/\s+/g, '') // remove spaces
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // remove accents
+    }
+
+    function findDefaultGift(triggerName) {
+        if (!triggerName) return null;
+        const normTrigger = normalizeGiftName(triggerName);
+        
+        // 1. Direct match (space & accent insensitive)
+        let found = DEFAULT_GIFTS.find(g => normalizeGiftName(g.name) === normTrigger);
+        if (found) return found;
+        
+        // 2. Mapped translation match
+        const cleanTrigger = triggerName.toLowerCase().trim();
+        const mapped = giftNameMappings[cleanTrigger];
+        if (mapped) {
+            const normMapped = normalizeGiftName(mapped);
+            found = DEFAULT_GIFTS.find(g => normalizeGiftName(g.name) === normMapped);
+            if (found) return found;
+        }
+        
+        // 3. Accent-only insensitive translation match
+        const normCleanTrigger = cleanTrigger.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const mappedNorm = giftNameMappings[normCleanTrigger];
+        if (mappedNorm) {
+            const normMappedNorm = normalizeGiftName(mappedNorm);
+            found = DEFAULT_GIFTS.find(g => normalizeGiftName(g.name) === normMappedNorm);
+            if (found) return found;
+        }
+        
+        return null;
+    }
+
+    let activeEditRowIndex = null;
+    let localPreviewAudio = null;
+    let currentlyPlayingIdx = null;
+
+    // 2. DOM Elements
+    const btnCreateAlert = document.getElementById('btn-create-sound-alert');
+    const tableBody = document.getElementById('sound-alerts-body');
+    const searchAlertsInput = document.getElementById('search-alerts');
+    const alertsStatusText = document.getElementById('alerts-status-text');
+    
+    // Modals
+    const giftModal = document.getElementById('gift-selector-modal');
+    const btnCloseGiftModal = document.getElementById('btn-close-gift-modal');
+    const giftsGrid = document.getElementById('gifts-grid-container');
+    const searchGiftsInput = document.getElementById('search-gifts-input');
+
+    const soundModal = document.getElementById('sound-selector-modal');
+    const btnCloseSoundModal = document.getElementById('btn-close-sound-modal');
+    const systemSoundsList = document.getElementById('system-sounds-list');
+    const customSoundsList = document.getElementById('custom-sounds-list');
+    const searchSoundsInput = document.getElementById('search-sounds-input');
+    
+    const btnTriggerUpload = document.getElementById('btn-trigger-upload-sound');
+    const soundFileInput = document.getElementById('sound-file-input');
+    const dropzone = document.getElementById('sound-upload-dropzone');
+
+    // 3. Render Table
+    window.renderSoundAlertsTable = function(alerts) {
+        if (!tableBody) return;
+        tableBody.innerHTML = '';
+
+        const searchQuery = (searchAlertsInput ? searchAlertsInput.value.toLowerCase().trim() : '');
+        const filtered = alerts.filter((alert, idx) => {
+            if (!searchQuery) return true;
+            const typeText = alert.type === 'gift' ? 'regalo' : (alert.type === 'follow' ? 'seguir' : (alert.type === 'share' ? 'compartir' : 'like tap tap'));
+            const triggerText = (alert.trigger || '').toLowerCase();
+            const soundText = (alert.soundName || '').toLowerCase();
+            return typeText.includes(searchQuery) || triggerText.includes(searchQuery) || soundText.includes(searchQuery);
+        });
+
+        // Update status text
+        if (alertsStatusText) {
+            const activeCount = alerts.filter(a => a.enabled).length;
+            alertsStatusText.textContent = `${alerts.length} alertas creadas (${activeCount} activas)`;
+        }
+
+        if (filtered.length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">
+                        No se encontraron alertas configuradas. Haz clic en "+ Crear alerta sonora" para empezar.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        filtered.forEach((alert, actualIdx) => {
+            const idx = alerts.indexOf(alert);
+            const tr = document.createElement('tr');
+            
+            // Play icon
+            const isPlaying = (currentlyPlayingIdx === idx);
+            const playIcon = isPlaying ? 'square' : 'play';
+            
+            // Gift icon url
+            let giftIconHtml = '';
+            if (alert.type === 'gift') {
+                const metadata = chatbotConfig.giftMetadata || {};
+                const defaultGift = findDefaultGift(alert.trigger);
+                
+                let iconSrc = 'assets/neutral-logo.jpg';
+                if (defaultGift && defaultGift.iconUrl && (defaultGift.iconUrl.startsWith('assets/') || defaultGift.iconUrl.startsWith('/assets/'))) {
+                    iconSrc = defaultGift.iconUrl;
+                } else {
+                    const cleanTrigger = (alert.trigger || '').toLowerCase().trim();
+                    const mappedTrigger = giftNameMappings[cleanTrigger] || alert.trigger;
+                    const giftMeta = metadata[alert.trigger] || metadata[mappedTrigger] || defaultGift;
+                    if (giftMeta) iconSrc = giftMeta.iconUrl;
+                }
+                giftIconHtml = `<img src="${iconSrc}" style="width: 20px; height: 20px; object-fit: contain; border-radius: 4px;">`;
+            }
+
+            // Generate row HTML
+            tr.innerHTML = `
+                <td>
+                    <button class="btn-icon btn-test-sound" data-idx="${idx}" style="color: ${isPlaying ? 'var(--accent-pink)' : 'var(--text-main)'}; background: transparent; border: none; cursor: pointer;">
+                        <i data-lucide="${playIcon}" style="width: 18px; height: 18px;"></i>
+                    </button>
+                </td>
+                <td>
+                    <button class="btn-icon btn-delete-alert" data-idx="${idx}" style="color: var(--accent-red); background: transparent; border: none; cursor: pointer;">
+                        <i data-lucide="trash-2" style="width: 18px; height: 18px;"></i>
+                    </button>
+                </td>
+                <td>
+                    <input type="checkbox" class="alert-row-enabled" data-idx="${idx}" ${alert.enabled ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px; accent-color: var(--accent-pink);">
+                </td>
+                <td>
+                    <select class="alert-row-type" data-idx="${idx}" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); color: var(--text-main); font-weight: 700; width: 100%;">
+                        <option value="gift" ${alert.type === 'gift' ? 'selected' : ''}>Regalo</option>
+                        <option value="follow" ${alert.type === 'follow' ? 'selected' : ''}>Seguir</option>
+                        <option value="share" ${alert.type === 'share' ? 'selected' : ''}>Compartir</option>
+                        <option value="like" ${alert.type === 'like' ? 'selected' : ''}>Like / Tap Tap</option>
+                    </select>
+                </td>
+                <td>
+                    ${alert.type === 'gift' 
+                        ? `<button class="gift-trigger-btn" data-idx="${idx}">${giftIconHtml} <span>${alert.trigger || 'Rose'}</span></button>` 
+                        : `<span style="color: var(--text-muted); font-size: 12px; font-weight: 600; padding-left: 8px;">Cualquiera</span>`
+                    }
+                </td>
+                <td>
+                    <input type="number" class="alert-row-qty" data-idx="${idx}" min="1" value="${alert.cantidad || 1}" 
+                        style="padding: 6px 10px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-main); text-align: center; width: 70px;"
+                        ${(alert.type === 'follow' || alert.type === 'share') ? 'disabled style="opacity: 0.3;"' : ''}
+                    >
+                </td>
+                <td>
+                    <button class="btn-sound-select" data-idx="${idx}">
+                        <span>${alert.soundName || 'Seleccionar sonido...'}</span>
+                        <i data-lucide="chevron-down" style="width: 14px; height: 14px; color: var(--text-muted);"></i>
+                    </button>
+                </td>
+                <td>
+                    <div class="volume-slider-container">
+                        <input type="range" class="alert-row-volume" data-idx="${idx}" min="0" max="100" value="${alert.volume !== undefined ? alert.volume : 100}">
+                        <span class="volume-val">${alert.volume !== undefined ? alert.volume : 100}%</span>
+                    </div>
+                </td>
+            `;
+
+            tableBody.appendChild(tr);
+        });
+
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+
+        // Attach listeners
+        attachRowListeners();
+    };
+
+    function attachRowListeners() {
+        // Play/Preview
+        document.querySelectorAll('.btn-test-sound').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.getAttribute('data-idx'));
+                const alert = chatbotConfig.soundAlerts[idx];
+                if (!alert || !alert.sound) return;
+
+                if (currentlyPlayingIdx === idx) {
+                    stopSoundPreview();
+                } else {
+                    playSoundPreview(alert.sound, alert.volume !== undefined ? alert.volume : 100, idx);
+                }
+            });
+        });
+
+        // Delete
+        document.querySelectorAll('.btn-delete-alert').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.getAttribute('data-idx'));
+                chatbotConfig.soundAlerts.splice(idx, 1);
+                saveSoundAlertsSettings();
+            });
+        });
+
+        // Enabled checkbox
+        document.querySelectorAll('.alert-row-enabled').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const idx = parseInt(cb.getAttribute('data-idx'));
+                chatbotConfig.soundAlerts[idx].enabled = cb.checked;
+                saveSoundAlertsSettings();
+            });
+        });
+
+        // Type select change
+        document.querySelectorAll('.alert-row-type').forEach(sel => {
+            sel.addEventListener('change', () => {
+                const idx = parseInt(sel.getAttribute('data-idx'));
+                const type = sel.value;
+                chatbotConfig.soundAlerts[idx].type = type;
+                if (type === 'gift') {
+                    chatbotConfig.soundAlerts[idx].trigger = 'Rose';
+                    chatbotConfig.soundAlerts[idx].cantidad = 1;
+                } else if (type === 'like') {
+                    chatbotConfig.soundAlerts[idx].trigger = 'likes';
+                    chatbotConfig.soundAlerts[idx].cantidad = 100;
+                } else {
+                    chatbotConfig.soundAlerts[idx].trigger = '';
+                    chatbotConfig.soundAlerts[idx].cantidad = 1;
+                }
+                saveSoundAlertsSettings();
+            });
+        });
+
+        // Quantity change
+        document.querySelectorAll('.alert-row-qty').forEach(inp => {
+            inp.addEventListener('change', () => {
+                const idx = parseInt(inp.getAttribute('data-idx'));
+                chatbotConfig.soundAlerts[idx].cantidad = parseInt(inp.value) || 1;
+                saveSoundAlertsSettings();
+            });
+        });
+
+        // Volume range input
+        document.querySelectorAll('.alert-row-volume').forEach(range => {
+            range.addEventListener('input', (e) => {
+                const idx = parseInt(range.getAttribute('data-idx'));
+                const val = range.value;
+                const parent = range.closest('.volume-slider-container');
+                if (parent) {
+                    const label = parent.querySelector('.volume-val');
+                    if (label) label.textContent = `${val}%`;
+                }
+            });
+
+            range.addEventListener('change', () => {
+                const idx = parseInt(range.getAttribute('data-idx'));
+                chatbotConfig.soundAlerts[idx].volume = parseInt(range.value);
+                saveSoundAlertsSettings();
+            });
+        });
+
+        // Gift Trigger Select Button Click
+        document.querySelectorAll('.gift-trigger-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                activeEditRowIndex = parseInt(btn.getAttribute('data-idx'));
+                openGiftModal();
+            });
+        });
+
+        // Sound Select Button Click
+        document.querySelectorAll('.btn-sound-select').forEach(btn => {
+            btn.addEventListener('click', () => {
+                activeEditRowIndex = parseInt(btn.getAttribute('data-idx'));
+                openSoundModal();
+            });
+        });
+    }
+
+    function saveSoundAlertsSettings() {
+        socket.emit('update_chatbot_settings', { soundAlerts: chatbotConfig.soundAlerts });
+    }
+
+    // 4. Preview Sound Logic
+    function playSoundPreview(soundUrl, volume, idx) {
+        stopSoundPreview();
+        
+        localPreviewAudio = new Audio(soundUrl);
+        localPreviewAudio.volume = volume / 100;
+        currentlyPlayingIdx = idx;
+        
+        renderSoundAlertsTable(chatbotConfig.soundAlerts || []);
+
+        localPreviewAudio.play().catch(e => {
+            console.error('Failed to preview sound:', e);
+            stopSoundPreview();
+        });
+
+        localPreviewAudio.addEventListener('ended', () => {
+            stopSoundPreview();
+        });
+    }
+
+    function stopSoundPreview() {
+        if (localPreviewAudio) {
+            localPreviewAudio.pause();
+            localPreviewAudio = null;
+        }
+        currentlyPlayingIdx = null;
+        renderSoundAlertsTable(chatbotConfig.soundAlerts || []);
+    }
+
+    // 5. Create Button Event
+    if (btnCreateAlert) {
+        btnCreateAlert.addEventListener('click', () => {
+            if (!chatbotConfig.soundAlerts) {
+                chatbotConfig.soundAlerts = [];
+            }
+            // Add a default gift sound alert (Rose - bruh.mp3)
+            chatbotConfig.soundAlerts.push({
+                id: `alert_${Date.now()}`,
+                enabled: true,
+                type: 'gift',
+                trigger: 'Rose',
+                cantidad: 1,
+                sound: '/sounds/bruh.mp3',
+                soundName: 'GRLive Bruh',
+                volume: 100
+            });
+            saveSoundAlertsSettings();
+        });
+    }
+
+    if (searchAlertsInput) {
+        searchAlertsInput.addEventListener('input', () => {
+            renderSoundAlertsTable(chatbotConfig.soundAlerts || []);
+        });
+    }
+
+    // 6. Gift Selector Modal Operations
+    function openGiftModal() {
+        if (!giftModal) return;
+        giftModal.style.display = 'flex';
+        renderGiftsGrid('');
+    }
+
+    function closeGiftModal() {
+        if (giftModal) giftModal.style.display = 'none';
+        activeEditRowIndex = null;
+    }
+
+    if (btnCloseGiftModal) btnCloseGiftModal.addEventListener('click', closeGiftModal);
+    if (giftModal) {
+        giftModal.addEventListener('click', (e) => {
+            if (e.target === giftModal) closeGiftModal();
+        });
+    }
+
+    if (searchGiftsInput) {
+        searchGiftsInput.addEventListener('input', (e) => {
+            renderGiftsGrid(e.target.value);
+        });
+    }
+
+    function renderGiftsGrid(searchQuery) {
+        if (!giftsGrid) return;
+        giftsGrid.innerHTML = '';
+
+        const query = searchQuery.toLowerCase().trim();
+        
+        // Merge default gifts and dynamic cached ones from server metadata
+        const metadata = chatbotConfig.giftMetadata || {};
+        const allGiftsMap = {};
+        
+        // Load default gifts first (clone to avoid modifying original array objects)
+        DEFAULT_GIFTS.forEach(g => {
+            allGiftsMap[g.name.toLowerCase()] = { ...g };
+        });
+
+        // Load cached gifts next (preserving custom local icons starting with 'assets/')
+        Object.keys(metadata).forEach(key => {
+            const lowerKey = key.toLowerCase();
+            if (allGiftsMap[lowerKey]) {
+                // Only override if the default gift does NOT have a local icon
+                if (!allGiftsMap[lowerKey].iconUrl || (!allGiftsMap[lowerKey].iconUrl.startsWith('assets/') && !allGiftsMap[lowerKey].iconUrl.startsWith('/assets/'))) {
+                    allGiftsMap[lowerKey].iconUrl = metadata[key].iconUrl;
+                }
+            } else {
+                allGiftsMap[lowerKey] = {
+                    name: metadata[key].name,
+                    coins: metadata[key].coins,
+                    iconUrl: metadata[key].iconUrl
+                };
+            }
+        });
+
+        const list = Object.values(allGiftsMap).sort((a,b) => a.coins - b.coins);
+        const filtered = list.filter(g => g.name.toLowerCase().includes(query));
+
+        if (filtered.length === 0) {
+            giftsGrid.innerHTML = `<div style="grid-column: span 4; text-align: center; color: var(--text-muted); padding: 20px;">No se encontraron regalos.</div>`;
+            return;
+        }
+
+        filtered.forEach(gift => {
+            const item = document.createElement('div');
+            item.className = 'gift-item';
+            item.innerHTML = `
+                <img src="${gift.iconUrl || 'assets/neutral-logo.jpg'}" alt="${gift.name}">
+                <span class="gift-name">${gift.name}</span>
+                <span class="gift-coins">${gift.coins} <span style="color: #ffd700;">●</span></span>
+            `;
+            item.addEventListener('click', () => {
+                if (activeEditRowIndex !== null && chatbotConfig.soundAlerts[activeEditRowIndex]) {
+                    chatbotConfig.soundAlerts[activeEditRowIndex].trigger = gift.name;
+                    saveSoundAlertsSettings();
+                }
+                closeGiftModal();
+            });
+            giftsGrid.appendChild(item);
+        });
+    }
+
+    // 7. Sound Selector Modal Operations
+    function openSoundModal() {
+        if (!soundModal) return;
+        soundModal.style.display = 'flex';
+        renderSoundsList('');
+    }
+
+    function closeSoundModal() {
+        if (soundModal) soundModal.style.display = 'none';
+        activeEditRowIndex = null;
+    }
+
+    if (btnCloseSoundModal) btnCloseSoundModal.addEventListener('click', closeSoundModal);
+    if (soundModal) {
+        soundModal.addEventListener('click', (e) => {
+            if (e.target === soundModal) closeSoundModal();
+        });
+    }
+
+    if (searchSoundsInput) {
+        searchSoundsInput.addEventListener('input', (e) => {
+            renderSoundsList(e.target.value);
+        });
+    }
+
+    let modalPreviewAudio = null;
+    let modalPlayingUrl = null;
+
+    function playModalSoundPreview(url, btn) {
+        if (modalPreviewAudio && modalPlayingUrl === url) {
+            modalPreviewAudio.pause();
+            modalPreviewAudio = null;
+            modalPlayingUrl = null;
+            if (btn) btn.innerHTML = '<i data-lucide="play" style="width: 14px; height: 14px;"></i>';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            return;
+        }
+
+        // Reset all play buttons in modal
+        document.querySelectorAll('.btn-modal-preview-sound').forEach(b => {
+            b.innerHTML = '<i data-lucide="play" style="width: 14px; height: 14px;"></i>';
+        });
+
+        if (modalPreviewAudio) {
+            modalPreviewAudio.pause();
+        }
+
+        modalPreviewAudio = new Audio(url);
+        modalPlayingUrl = url;
+        if (btn) btn.innerHTML = '<i data-lucide="square" style="width: 14px; height: 14px;"></i>';
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        modalPreviewAudio.play().catch(e => {
+            console.error(e);
+            if (btn) btn.innerHTML = '<i data-lucide="play" style="width: 14px; height: 14px;"></i>';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            modalPreviewAudio = null;
+            modalPlayingUrl = null;
+        });
+
+        modalPreviewAudio.addEventListener('ended', () => {
+            if (btn) btn.innerHTML = '<i data-lucide="play" style="width: 14px; height: 14px;"></i>';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            modalPreviewAudio = null;
+            modalPlayingUrl = null;
+        });
+    }
+
+    function renderSoundsList(searchQuery) {
+        if (!systemSoundsList || !customSoundsList) return;
+        systemSoundsList.innerHTML = '';
+        customSoundsList.innerHTML = '';
+
+        const query = searchQuery.toLowerCase().trim();
+
+        // 1. System Sounds
+        const filteredSystem = SYSTEM_SOUNDS.filter(s => s.name.toLowerCase().includes(query));
+        if (filteredSystem.length === 0) {
+            systemSoundsList.innerHTML = `<div style="color: var(--text-muted); font-size: 12px; padding: 10px;">No se encontraron sonidos de sistema.</div>`;
+        } else {
+            filteredSystem.forEach(sound => {
+                const item = document.createElement('div');
+                item.className = 'sound-list-item';
+                item.innerHTML = `
+                    <div class="sound-info">
+                        <i data-lucide="music" style="width: 14px; height: 14px;"></i>
+                        <span>${sound.name}</span>
+                    </div>
+                    <div class="sound-actions">
+                        <button class="btn-modal-preview-sound btn secondary small" data-url="${sound.url}" style="padding: 6px 10px;">
+                            <i data-lucide="play" style="width: 14px; height: 14px;"></i>
+                        </button>
+                        <button class="btn-modal-select-sound btn primary small" data-url="${sound.url}" data-name="${sound.name}" style="padding: 6px 12px; font-size: 11px;">
+                            Seleccionar
+                        </button>
+                    </div>
+                `;
+                
+                // Add preview listener
+                const previewBtn = item.querySelector('.btn-modal-preview-sound');
+                previewBtn.addEventListener('click', () => {
+                    playModalSoundPreview(sound.url, previewBtn);
+                });
+
+                // Add select listener
+                const selectBtn = item.querySelector('.btn-modal-select-sound');
+                selectBtn.addEventListener('click', () => {
+                    if (activeEditRowIndex !== null && chatbotConfig.soundAlerts[activeEditRowIndex]) {
+                        chatbotConfig.soundAlerts[activeEditRowIndex].sound = sound.url;
+                        chatbotConfig.soundAlerts[activeEditRowIndex].soundName = sound.name;
+                        saveSoundAlertsSettings();
+                    }
+                    if (modalPreviewAudio) modalPreviewAudio.pause();
+                    closeSoundModal();
+                });
+
+                systemSoundsList.appendChild(item);
+            });
+        }
+
+        // 2. Custom Uploaded Sounds
+        const customSounds = chatbotConfig.customSounds || [];
+        const filteredCustom = customSounds.filter(s => s.name.toLowerCase().includes(query));
+        if (filteredCustom.length === 0) {
+            customSoundsList.innerHTML = `<div style="color: var(--text-muted); font-size: 12px; padding: 10px;">Aún no has subido sonidos. Sube un archivo .mp3 o .wav para verlo aquí.</div>`;
+        } else {
+            filteredCustom.forEach(sound => {
+                const item = document.createElement('div');
+                item.className = 'sound-list-item';
+                item.innerHTML = `
+                    <div class="sound-info">
+                        <i data-lucide="volume-2" style="width: 14px; height: 14px;"></i>
+                        <span>${sound.name}</span>
+                    </div>
+                    <div class="sound-actions">
+                        <button class="btn-modal-preview-sound btn secondary small" data-url="${sound.filepath}" style="padding: 6px 10px;">
+                            <i data-lucide="play" style="width: 14px; height: 14px;"></i>
+                        </button>
+                        <button class="btn-modal-select-sound btn primary small" data-url="${sound.filepath}" data-name="${sound.name}" style="padding: 6px 12px; font-size: 11px;">
+                            Seleccionar
+                        </button>
+                        <button class="btn-modal-delete-sound btn danger small" data-id="${sound.id}" style="padding: 6px 8px; color: var(--accent-red); background: transparent; border: 1px solid rgba(255,0,0,0.15);">
+                            <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+                        </button>
+                    </div>
+                `;
+
+                // Add preview listener
+                const previewBtn = item.querySelector('.btn-modal-preview-sound');
+                previewBtn.addEventListener('click', () => {
+                    playModalSoundPreview(sound.filepath, previewBtn);
+                });
+
+                // Add select listener
+                const selectBtn = item.querySelector('.btn-modal-select-sound');
+                selectBtn.addEventListener('click', () => {
+                    if (activeEditRowIndex !== null && chatbotConfig.soundAlerts[activeEditRowIndex]) {
+                        chatbotConfig.soundAlerts[activeEditRowIndex].sound = sound.filepath;
+                        chatbotConfig.soundAlerts[activeEditRowIndex].soundName = sound.name;
+                        saveSoundAlertsSettings();
+                    }
+                    if (modalPreviewAudio) modalPreviewAudio.pause();
+                    closeSoundModal();
+                });
+
+                // Add delete listener
+                const deleteBtn = item.querySelector('.btn-modal-delete-sound');
+                deleteBtn.addEventListener('click', () => {
+                    if (confirm(`¿Estás seguro de eliminar el sonido "${sound.name}"?`)) {
+                        deleteCustomSound(sound.id);
+                    }
+                });
+
+                customSoundsList.appendChild(item);
+            });
+        }
+
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+
+    // 8. Custom Sound Upload Actions
+    if (btnTriggerUpload && soundFileInput) {
+        btnTriggerUpload.addEventListener('click', () => {
+            soundFileInput.click();
+        });
+    }
+
+    if (soundFileInput) {
+        soundFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                uploadSoundFile(file);
+            }
+        });
+    }
+
+    // Drag and drop dropzone
+    if (dropzone) {
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.add('dragover');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.remove('dragover');
+            }, false);
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const file = dt.files[0];
+            if (file && (file.type === 'audio/mpeg' || file.type === 'audio/wav' || file.name.endsWith('.mp3') || file.name.endsWith('.wav'))) {
+                uploadSoundFile(file);
+            } else {
+                alert('Por favor, arrastra solo archivos de audio (.mp3 o .wav).');
+            }
+        });
+    }
+
+    function uploadSoundFile(file) {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onloadend = function() {
+            const base64Data = reader.result;
+            
+            // Show uploading status
+            if (btnTriggerUpload) btnTriggerUpload.innerHTML = '<i data-lucide="loader" class="spin" style="width: 14px; height: 14px;"></i> Subiendo...';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+            fetch('/api/upload-sound', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    filename: file.name,
+                    fileData: base64Data
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                // Reset upload button
+                if (btnTriggerUpload) btnTriggerUpload.innerHTML = '<i data-lucide="upload" style="width: 14px; height: 14px;"></i> Subir Audio';
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+
+                if (data.success) {
+                    console.log('Sound uploaded successfully:', data.sound);
+                    // Refresh selectors
+                    renderSoundsList(searchSoundsInput ? searchSoundsInput.value : '');
+                } else {
+                    alert('Error subiendo sonido: ' + (data.error || 'Desconocido'));
+                }
+            })
+            .catch(err => {
+                if (btnTriggerUpload) btnTriggerUpload.innerHTML = '<i data-lucide="upload" style="width: 14px; height: 14px;"></i> Subir Audio';
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+                console.error('Error uploading file:', err);
+                alert('Fallo la conexión con el servidor para subir el sonido.');
+            });
+        };
+    }
+
+    function deleteCustomSound(id) {
+        fetch(`/api/upload-sound/${id}`, {
+            method: 'DELETE'
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                console.log('Sound deleted successfully.');
+                renderSoundsList(searchSoundsInput ? searchSoundsInput.value : '');
+            } else {
+                alert('Error al borrar: ' + (data.error || 'Desconocido'));
+            }
+        })
+        .catch(err => {
+            console.error('Error deleting sound:', err);
+            alert('Error en conexión al intentar borrar el sonido.');
+        });
+    }
+
+    // =========================================================================
+    // DYNAMIC METAS (GOALS) & WHEEL OPTIONS (RULETA) LOGIC
+    // =========================================================================
+
+    // Render goals table in chatbot settings view
+    function renderGoalsList(goals) {
+        const tbody = document.getElementById('goals-table-body');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        if (!goals || goals.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="3" style="text-align: center; color: #888; font-size: 12px; padding: 15px;">
+                        No hay metas configuradas. Crea una arriba.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        goals.forEach((goal, index) => {
+            const tr = document.createElement('tr');
+            
+            let typeLabel = '';
+            if (goal.type === 'likes') typeLabel = 'Me Gusta (Likes)';
+            else if (goal.type === 'follows') typeLabel = 'Seguidores';
+            else if (goal.type === 'shares') typeLabel = 'Compartidos';
+            else if (goal.type === 'gift') {
+                typeLabel = `Regalo: ${goal.giftName || 'Cualquiera'}`;
+            }
+
+            const pct = Math.min(100, Math.round(((goal.current || 0) / (goal.target || 1)) * 100));
+
+            tr.innerHTML = `
+                <td>
+                    <div style="font-weight: bold; color: white;">${goal.title || 'Sin título'}</div>
+                    <div style="font-size: 11px; color: #888;">${typeLabel}</div>
+                </td>
+                <td>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="flex: 1; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; min-width: 60px;">
+                            <div style="width: ${pct}%; height: 100%; background: var(--accent-color, #d900ff); box-shadow: 0 0 8px var(--accent-color);"></div>
+                        </div>
+                        <span style="font-size: 12px; font-weight: bold; min-width: 60px; text-align: right;">${goal.current || 0} / ${goal.target}</span>
+                    </div>
+                </td>
+                <td class="text-right">
+                    <button class="btn-delete" onclick="window.deleteGoal(${index})" style="background: transparent; border: none; color: #ff3366; cursor: pointer; padding: 5px;">
+                        <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        if (window.lucide) window.lucide.createIcons();
+    }
+
+    // Render wheel options list
+    function renderWheelOptionsList(options) {
+        const container = document.getElementById('wheel-options-list');
+        if (!container) return;
+        container.innerHTML = '';
+
+        if (!options || options.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; color: #888; font-size: 11px; padding: 10px;">
+                    No hay opciones en la ruleta.
+                </div>
+            `;
+            return;
+        }
+
+        options.forEach((opt, index) => {
+            const item = document.createElement('div');
+            item.style = 'display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 6px 10px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1);';
+            item.innerHTML = `
+                <span style="font-size: 12px; color: white; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 80%;">${opt}</span>
+                <button onclick="window.deleteWheelOption(${index})" style="background: transparent; border: none; color: #ff3366; cursor: pointer; padding: 2px; display: flex; align-items: center;">
+                    <i data-lucide="x" style="width: 14px; height: 14px;"></i>
+                </button>
+            `;
+            container.appendChild(item);
+        });
+
+        if (window.lucide) window.lucide.createIcons();
+    }
+
+    // Define global action hooks
+    window.deleteGoal = function(index) {
+        if (!chatbotConfig || !chatbotConfig.goals) return;
+        chatbotConfig.goals.splice(index, 1);
+        renderGoalsList(chatbotConfig.goals);
+        sendUpdatedSettings();
+    };
+
+    window.deleteWheelOption = function(index) {
+        if (!chatbotConfig || !chatbotConfig.wheelOptions) return;
+        if (chatbotConfig.wheelOptions.length <= 3) {
+            alert('La ruleta debe tener al menos 3 opciones.');
+            return;
+        }
+        chatbotConfig.wheelOptions.splice(index, 1);
+        renderWheelOptionsList(chatbotConfig.wheelOptions);
+        sendUpdatedSettings();
+    };
+
+    // Wire goal creator
+    const btnAddGoal = document.getElementById('btn-add-goal');
+    if (btnAddGoal) {
+        btnAddGoal.addEventListener('click', () => {
+            const type = document.getElementById('goal-type').value;
+            const giftName = document.getElementById('goal-gift-name').value.trim();
+            const title = document.getElementById('goal-title').value.trim();
+            const target = parseInt(document.getElementById('goal-target').value) || 100;
+
+            if (!title) {
+                alert('Por favor ingresa un título para la meta.');
+                return;
+            }
+
+            if (type === 'gift' && !giftName) {
+                alert('Por favor especifica el nombre del regalo.');
+                return;
+            }
+
+            if (!chatbotConfig.goals) {
+                chatbotConfig.goals = [];
+            }
+
+            const newGoal = {
+                id: 'goal_' + Date.now(),
+                type: type,
+                giftName: type === 'gift' ? giftName : '',
+                title: title,
+                target: target,
+                current: 0,
+                enabled: true
+            };
+
+            chatbotConfig.goals.push(newGoal);
+            renderGoalsList(chatbotConfig.goals);
+            sendUpdatedSettings();
+
+            // Clear inputs
+            document.getElementById('goal-title').value = '';
+            document.getElementById('goal-gift-name').value = '';
+        });
+    }
+
+    const btnResetAllGoals = document.getElementById('btn-reset-all-goals');
+    if (btnResetAllGoals) {
+        btnResetAllGoals.addEventListener('click', () => {
+            if (!confirm('¿Estás seguro de reiniciar el progreso de todas las metas a 0?')) return;
+            if (chatbotConfig && chatbotConfig.goals) {
+                chatbotConfig.goals.forEach(goal => goal.current = 0);
+                renderGoalsList(chatbotConfig.goals);
+                sendUpdatedSettings();
+            }
+        });
+    }
+
+    const goalTypeSelect = document.getElementById('goal-type');
+    const groupGoalGiftSelect = document.getElementById('group-goal-gift-select');
+    if (goalTypeSelect && groupGoalGiftSelect) {
+        const toggleGiftSelect = () => {
+            groupGoalGiftSelect.style.display = goalTypeSelect.value === 'gift' ? 'block' : 'none';
+        };
+        goalTypeSelect.addEventListener('change', toggleGiftSelect);
+        toggleGiftSelect(); // initial trigger
+    }
+
+    // Wire wheel option adder
+    const btnAddWheelOption = document.getElementById('btn-add-wheel-option');
+    if (btnAddWheelOption) {
+        btnAddWheelOption.addEventListener('click', () => {
+            const input = document.getElementById('wheel-new-option');
+            const val = input.value.trim();
+            if (!val) return;
+
+            if (!chatbotConfig.wheelOptions) {
+                chatbotConfig.wheelOptions = [];
+            }
+
+            chatbotConfig.wheelOptions.push(val);
+            renderWheelOptionsList(chatbotConfig.wheelOptions);
+            sendUpdatedSettings();
+
+            input.value = '';
+        });
+    }
+
+    // Dynamic goals update push
+    socket.on('goals_updated', (goals) => {
+        if (chatbotConfig) {
+            chatbotConfig.goals = goals;
+        }
+        renderGoalsList(goals);
+    });
 });
 
 

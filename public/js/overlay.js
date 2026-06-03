@@ -279,11 +279,14 @@ function stopAllTTS() {
     }
 }
 
-function queueCloudTTS(base64Audio, playLocation) {
+function queueCloudTTS(base64Audio, playLocation, isModerator = false, isSubscriber = false, isGift = false) {
     ttsQueue.push({
         type: 'cloud',
         base64Audio,
-        playLocation
+        playLocation,
+        isModerator,
+        isSubscriber,
+        isGift
     });
     // Cap queue to max 3 waiting items to prevent massive backlog (user request #1)
     while (ttsQueue.length > 3) {
@@ -308,6 +311,142 @@ function queueLocalTTS(text, voiceName, volume, pitch, rate) {
     processTtsQueue();
 }
 
+// Web Audio API Global Context for effects
+let audioCtx = null;
+
+function makeDistortionCurve(amount) {
+    const k = typeof amount === 'number' ? amount : 50;
+    const n_samples = 44100;
+    const curve = new Float32Array(n_samples);
+    const deg = Math.PI / 180;
+    for (let i = 0; i < n_samples; ++i) {
+        const x = (i * 2) / n_samples - 1;
+        curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+    }
+    return curve;
+}
+
+function playAudioWithWebAudioEffects(audioElement, item, rateMultiplier, onEnded, onError) {
+    try {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+
+        if (rateMultiplier > 1.0) {
+            audioElement.playbackRate = rateMultiplier;
+        }
+
+        const sourceNode = audioCtx.createMediaElementSource(audioElement);
+        const ttsEffectsEnabled = chatbotConfig && chatbotConfig.ttsEffectsEnabled !== false;
+
+        if (!ttsEffectsEnabled) {
+            sourceNode.connect(audioCtx.destination);
+            audioElement.play().then(() => {
+                audioElement.onended = onEnded;
+            }).catch(onError);
+            return;
+        }
+
+        let effectType = null;
+        if (item.isModerator) {
+            effectType = 'megaphone';
+        } else if (item.isSubscriber) {
+            effectType = 'reverb';
+        } else if (item.isGift) {
+            effectType = 'robot';
+        }
+
+        if (effectType === 'megaphone') {
+            // Radio/Megaphone: Bandpass filter + Waveshaper distortion
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.value = 1000;
+            filter.Q.value = 1.5;
+
+            const dist = audioCtx.createWaveShaper();
+            dist.curve = makeDistortionCurve(40);
+            dist.oversample = '4x';
+
+            sourceNode.connect(dist);
+            dist.connect(filter);
+            filter.connect(audioCtx.destination);
+
+        } else if (effectType === 'reverb') {
+            // Echo feedback loop
+            const delay = audioCtx.createDelay(1.0);
+            delay.delayTime.value = 0.25;
+
+            const feedback = audioCtx.createGain();
+            feedback.gain.value = 0.4;
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 2500;
+
+            const mix = audioCtx.createGain();
+            mix.gain.value = 0.7;
+
+            delay.connect(filter);
+            filter.connect(feedback);
+            feedback.connect(delay);
+
+            sourceNode.connect(audioCtx.destination);
+            sourceNode.connect(delay);
+            delay.connect(mix);
+            mix.connect(audioCtx.destination);
+
+        } else if (effectType === 'robot') {
+            // Ring Modulation: Gain node modulated by LFO Oscillator
+            const ringMod = audioCtx.createGain();
+            ringMod.gain.value = 0;
+
+            const osc = audioCtx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.value = 65;
+
+            const oscGain = audioCtx.createGain();
+            oscGain.gain.value = 1.0;
+
+            osc.connect(oscGain);
+            oscGain.connect(ringMod.gain);
+
+            sourceNode.connect(ringMod);
+            ringMod.connect(audioCtx.destination);
+
+            const dryGain = audioCtx.createGain();
+            dryGain.gain.value = 0.35;
+            sourceNode.connect(dryGain);
+            dryGain.connect(audioCtx.destination);
+
+            osc.start();
+
+            const originalOnEnded = onEnded;
+            onEnded = () => {
+                try { osc.stop(); } catch(e) {}
+                originalOnEnded();
+            };
+
+        } else {
+            sourceNode.connect(audioCtx.destination);
+        }
+
+        audioElement.play().then(() => {
+            audioElement.onended = onEnded;
+        }).catch(onError);
+
+    } catch (e) {
+        console.error('[WebAudio] Setup failed, playing audio normally:', e);
+        // Normal fallback playing if Web Audio fails (e.g. MediaElementSource restrictions)
+        audioElement.connectFallback = true;
+        audioElement.play().then(() => {
+            audioElement.onended = onEnded;
+        }).catch(onError);
+    }
+}
+
 function processTtsQueue() {
     if (isPlayingTts || ttsQueue.length === 0) return;
     
@@ -323,30 +462,23 @@ function processTtsQueue() {
     if (item.type === 'cloud') {
         try {
             currentAudioTts = new Audio("data:audio/mp3;base64," + item.base64Audio);
+            currentAudioTts.crossOrigin = "anonymous";
             
-            if (rateMultiplier > 1.0) {
-                currentAudioTts.playbackRate = rateMultiplier;
-            }
-            
-            currentAudioTts.onended = () => {
+            const onEnded = () => {
                 isPlayingTts = false;
                 currentAudioTts = null;
                 setTimeout(processTtsQueue, 400); // 400ms cooldown gap
             };
             
-            currentAudioTts.onerror = (err) => {
+            const onError = (err) => {
                 console.error('Audio playback error:', err);
                 isPlayingTts = false;
                 currentAudioTts = null;
                 setTimeout(processTtsQueue, 100);
             };
-            
-            currentAudioTts.play().catch(err => {
-                console.error('Audio play failed:', err);
-                isPlayingTts = false;
-                currentAudioTts = null;
-                setTimeout(processTtsQueue, 100);
-            });
+
+            playAudioWithWebAudioEffects(currentAudioTts, item, rateMultiplier, onEnded, onError);
+
         } catch (err) {
             console.error('Audio setup error:', err);
             isPlayingTts = false;
@@ -387,6 +519,8 @@ function processTtsQueue() {
 }
 
 let chatbotConfig = null;
+let completedGoals = new Set();
+let rankings = { gifts: {} };
 
 // Keep settings in sync
 socket.on('chatbot_settings_updated', (config) => {
@@ -398,17 +532,48 @@ socket.on('chatbot_settings_updated', (config) => {
         if (config.themeName) {
             document.body.className = 'theme-' + config.themeName;
         }
+        // Render goals in overlay
+        renderOverlayGoals(config.goals || []);
+        // Trigger music panel check
+        updateMusicOverlayUI();
     }
+});
+
+// Sync goals updates directly
+socket.on('goals_updated', (goals) => {
+    if (chatbotConfig) {
+        chatbotConfig.goals = goals;
+    }
+    renderOverlayGoals(goals || []);
+});
+
+// Keep track of top donors for premium chat filtering
+socket.on('rankings_updated', (data) => {
+    rankings = data;
 });
 
 // Handle playing Cloud TTS audio sent from the server
 socket.on('play_tts_audio', (data) => {
-    const { base64Audio, playLocation } = data;
+    const { base64Audio, playLocation, isModerator, isSubscriber, isGift } = data;
     
     // Check play location (Overlay is not panel)
     if (playLocation !== 'overlay' && playLocation !== 'both') return;
     
-    queueCloudTTS(base64Audio, playLocation);
+    queueCloudTTS(base64Audio, playLocation, isModerator, isSubscriber, isGift);
+});
+
+// Handle playing sound alerts
+socket.on('play_sound_alert', (data) => {
+    const { soundUrl, volume } = data;
+    
+    // Check play location
+    if (chatbotConfig.playLocation !== 'overlay' && chatbotConfig.playLocation !== 'both') return;
+    
+    const audio = new Audio(soundUrl);
+    audio.volume = (volume !== undefined ? volume : 100) / 100;
+    audio.play().catch(err => {
+        console.error('Failed to play sound alert in overlay:', err);
+    });
 });
 
 // Process and speak comments in the Overlay
@@ -416,8 +581,491 @@ socket.on('tiktok_event_raw', (payload) => {
     const { eventType, data } = payload;
     if (eventType === 'chat') {
         processAndSpeak(data);
+        addChatBubble(data);
     }
 });
+
+// =========================================================================
+// PREMIUM OVERLAYS LOGIC (Metas, Ruleta, Up Next Music, Premium Chat Feed)
+// =========================================================================
+
+// Emitter for Confetti particle shower
+function triggerConfetti() {
+    const duration = 5 * 1000;
+    const end = Date.now() + duration;
+    const colors = ['#d900ff', '#ff0055', '#00d2ff', '#ffd700', '#9900ff'];
+
+    (function frame() {
+        if (Date.now() > end) return;
+
+        for (let i = 0; i < 5; i++) {
+            const p = document.createElement('div');
+            p.style.position = 'absolute';
+            p.style.width = Math.random() * 8 + 6 + 'px';
+            p.style.height = Math.random() * 12 + 6 + 'px';
+            p.style.background = colors[Math.floor(Math.random() * colors.length)];
+            p.style.left = Math.random() * 100 + 'vw';
+            p.style.top = '-20px';
+            p.style.zIndex = '9999';
+            p.style.borderRadius = '2px';
+            p.style.pointerEvents = 'none';
+            p.style.transform = `rotate(${Math.random() * 360}deg)`;
+            
+            document.body.appendChild(p);
+
+            const speedY = Math.random() * 5 + 4;
+            const speedX = Math.random() * 4 - 2;
+            let currentTop = -20;
+            let currentLeft = parseFloat(p.style.left);
+
+            const anim = setInterval(() => {
+                currentTop += speedY;
+                currentLeft += speedX;
+                p.style.top = currentTop + 'px';
+                p.style.left = currentLeft + 'px';
+
+                if (currentTop > window.innerHeight) {
+                    clearInterval(anim);
+                    p.remove();
+                }
+            }, 16);
+
+            setTimeout(() => {
+                clearInterval(anim);
+                p.remove();
+            }, 6000);
+        }
+
+        requestAnimationFrame(frame);
+    }());
+}
+
+// Goals completed synth beep audio fallback
+function playVictorySound() {
+    const audio = new Audio('/sounds/metacompletada.mp3');
+    audio.volume = 0.5;
+    audio.play().catch(err => {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+            osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.15); // E5
+            osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.3); // G5
+            osc.frequency.setValueAtTime(1046.50, ctx.currentTime + 0.45); // C6
+            gain.gain.setValueAtTime(0.2, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.8);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.8);
+        } catch(e) {}
+    });
+}
+
+// Render dynamic goal widgets
+function renderOverlayGoals(goals) {
+    const container = document.getElementById('overlay-goals-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!goals || goals.length === 0) return;
+
+    goals.forEach(goal => {
+        if (!goal.enabled) return;
+
+        const card = document.createElement('div');
+        card.className = 'goal-card';
+        card.id = `overlay-goal-${goal.id}`;
+
+        const pct = Math.min(100, Math.round(((goal.current || 0) / (goal.target || 1)) * 100));
+
+        if (pct >= 100 && !completedGoals.has(goal.id)) {
+            completedGoals.add(goal.id);
+            triggerConfetti();
+            playVictorySound();
+        }
+
+        let titlePrefix = '';
+        if (chatbotConfig && chatbotConfig.themeName === 'majo') {
+            titlePrefix = '🕸 ';
+        } else if (chatbotConfig && chatbotConfig.themeName === 'naya') {
+            titlePrefix = '✨ ';
+        }
+
+        card.innerHTML = `
+            <div class="goal-card-header">
+                <span class="goal-card-title">${titlePrefix}${goal.title}</span>
+                <span class="goal-card-progress-text">${goal.current || 0}/${goal.target}</span>
+            </div>
+            <div class="goal-card-bar-container">
+                <div class="goal-card-bar-fill" style="width: ${pct}%;"></div>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+}
+
+// Ruleta reward wheel canvas rendering
+let isWheelSpinning = false;
+
+function varColor(varName, fallback) {
+    return getComputedStyle(document.body).getPropertyValue(varName).trim() || fallback;
+}
+
+function drawWheel(canvas, options, currentAngle) {
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+    const center = width / 2;
+    const radius = center - 10;
+    
+    ctx.clearRect(0, 0, width, height);
+
+    if (!options || options.length === 0) return;
+
+    const numSlices = options.length;
+    const sliceAngle = (2 * Math.PI) / numSlices;
+    const colors = ['#d900ff', '#8800cc', '#ff0055', '#c30040', '#00d2ff', '#0088cc', '#ffd700', '#ccaa00'];
+
+    for (let i = 0; i < numSlices; i++) {
+        const startAngle = currentAngle + i * sliceAngle;
+        const endAngle = startAngle + sliceAngle;
+
+        ctx.beginPath();
+        ctx.moveTo(center, center);
+        ctx.arc(center, center, radius, startAngle, endAngle);
+        ctx.closePath();
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.save();
+        ctx.translate(center, center);
+        ctx.rotate(startAngle + sliceAngle / 2);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 12px Inter, sans-serif';
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur = 4;
+        
+        const text = options[i];
+        const maxTextLen = 18;
+        const truncatedText = text.length > maxTextLen ? text.substring(0, maxTextLen) + '...' : text;
+        ctx.fillText(truncatedText, radius - 20, 5);
+        ctx.restore();
+    }
+
+    ctx.beginPath();
+    ctx.arc(center, center, 20, 0, 2 * Math.PI);
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = varColor('--accent-color', '#d900ff');
+    ctx.stroke();
+}
+
+function playTickSound() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.setValueAtTime(800, ctx.currentTime);
+        gain.gain.setValueAtTime(0.05, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.05);
+    } catch(e) {}
+}
+
+function playBellSound() {
+    const audio = new Audio('/sounds/ruletacompletada.mp3');
+    audio.volume = 0.5;
+    audio.play().catch(err => {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc1 = ctx.createOscillator();
+            const osc2 = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc1.type = 'sine';
+            osc2.type = 'triangle';
+            osc1.frequency.setValueAtTime(880, ctx.currentTime);
+            osc2.frequency.setValueAtTime(1320, ctx.currentTime);
+            osc1.connect(gain);
+            osc2.connect(gain);
+            gain.connect(ctx.destination);
+            gain.gain.setValueAtTime(0.25, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.5);
+            osc1.start();
+            osc2.start();
+            osc1.stop(ctx.currentTime + 1.5);
+            osc2.stop(ctx.currentTime + 1.5);
+        } catch(e) {}
+    });
+}
+
+function spinWheel(canvas, options, winningIndex, onComplete) {
+    if (isWheelSpinning) return;
+    isWheelSpinning = true;
+
+    const numSlices = options.length;
+    const sliceAngle = (2 * Math.PI) / numSlices;
+    const duration = 6000;
+    const start = Date.now();
+    const baseAngle = 0; 
+    const targetSliceAngle = (winningIndex * sliceAngle) + (sliceAngle / 2);
+    const extraRotations = 6 * 2 * Math.PI;
+    const finalAngle = extraRotations + (2.5 * Math.PI - targetSliceAngle);
+
+    let lastTickAngle = 0;
+
+    function animate() {
+        const elapsed = Date.now() - start;
+        const t = Math.min(1, elapsed / duration);
+        const ease = 1 - Math.pow(1 - t, 4);
+        const currentAngle = baseAngle + ease * (finalAngle - baseAngle);
+        
+        const totalAngleDeg = (currentAngle * 180) / Math.PI;
+        const sliceDeg = 360 / numSlices;
+        if (Math.floor(totalAngleDeg / sliceDeg) > Math.floor(lastTickAngle / sliceDeg)) {
+            playTickSound();
+            lastTickAngle = totalAngleDeg;
+        }
+
+        drawWheel(canvas, options, currentAngle);
+
+        if (t < 1) {
+            requestAnimationFrame(animate);
+        } else {
+            isWheelSpinning = false;
+            if (onComplete) onComplete();
+        }
+    }
+
+    animate();
+}
+
+// Listen to Interactive Wheel triggers
+socket.on('trigger_wheel', (data) => {
+    const { sender, giftName, winningIndex, optionText } = data;
+    const options = (chatbotConfig && chatbotConfig.wheelOptions) || [];
+    if (options.length === 0) return;
+
+    const wheelTitleEl = document.getElementById('wheel-title');
+    if (wheelTitleEl && chatbotConfig) {
+        if (chatbotConfig.themeName === 'majo') {
+            wheelTitleEl.innerText = 'Desafío para Majo 🕸';
+        } else if (chatbotConfig.themeName === 'naya') {
+            wheelTitleEl.innerText = 'Reto para Naya ✨';
+        } else {
+            wheelTitleEl.innerText = 'Ruleta de Desafíos';
+        }
+    }
+
+    const modal = document.getElementById('overlay-wheel-container');
+    const winnerBanner = document.getElementById('wheel-winner-banner');
+    if (modal) {
+        modal.classList.remove('hidden');
+        modal.offsetHeight;
+        modal.classList.add('show');
+    }
+    if (winnerBanner) {
+        winnerBanner.classList.add('hidden');
+    }
+
+    const canvas = document.getElementById('wheel-canvas');
+    if (!canvas) return;
+
+    // Draw initial wheel state
+    drawWheel(canvas, options, 0);
+
+    spinWheel(canvas, options, winningIndex, () => {
+        const winnerTextEl = document.getElementById('wheel-winner-text');
+        if (winnerTextEl) {
+            winnerTextEl.innerText = optionText;
+        }
+        if (winnerBanner) {
+            winnerBanner.classList.remove('hidden');
+        }
+
+        playBellSound();
+
+        setTimeout(() => {
+            if (modal) {
+                modal.classList.remove('show');
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                }, 500);
+            }
+        }, 6000);
+    });
+});
+
+// Music Queue flotante overlay logic
+let currentTrackSource = null;
+let activeTrack = null;
+let activeQueue = [];
+
+function updateMusicOverlayUI() {
+    const queueWidget = document.getElementById('overlay-music-queue');
+    if (!queueWidget) return;
+
+    if (!chatbotConfig || chatbotConfig.overlayMusicQueueEnabled === false) {
+        queueWidget.classList.add('hidden');
+        return;
+    }
+
+    if (!activeTrack) {
+        queueWidget.classList.add('hidden');
+        return;
+    }
+
+    queueWidget.classList.remove('hidden');
+
+    const artEl = document.getElementById('music-art');
+    if (artEl) {
+        if (activeTrack.albumArt) {
+            artEl.style.backgroundImage = `url(${activeTrack.albumArt})`;
+        } else {
+            artEl.style.backgroundImage = `url('assets/vinyl-center.jpg')`;
+        }
+    }
+
+    const titleEl = document.getElementById('music-title');
+    const artistEl = document.getElementById('music-artist');
+    if (titleEl) titleEl.innerText = activeTrack.name || activeTrack.title || 'Desconocido';
+    if (artistEl) artistEl.innerText = activeTrack.artists || activeTrack.artist || 'Desconocido';
+
+    const reqEl = document.getElementById('music-requester');
+    if (reqEl) {
+        if (activeTrack.requestedBy) {
+            const suffix = chatbotConfig.themeName === 'majo' ? '🕷' : '✨';
+            reqEl.innerText = `Pedida por @${activeTrack.requestedBy}${suffix}`;
+            reqEl.style.display = 'block';
+        } else {
+            reqEl.style.display = 'none';
+        }
+    }
+
+    const listEl = document.getElementById('music-queue-list');
+    if (listEl) {
+        listEl.innerHTML = '';
+        const items = activeQueue.slice(0, 2);
+        if (items.length > 0) {
+            items.forEach(item => {
+                const row = document.createElement('div');
+                row.className = 'queue-item';
+                const name = item.name || item.title || 'Canción';
+                const req = item.requestedBy ? `@${item.requestedBy}` : '';
+                row.innerHTML = `
+                    <span class="queue-item-title">${name}</span>
+                    <span class="queue-item-requester">${req}</span>
+                `;
+                listEl.appendChild(row);
+            });
+        } else {
+            listEl.innerHTML = '<div style="font-size: 10px; color: #666; text-align: center;">Sin canciones en cola</div>';
+        }
+    }
+}
+
+socket.on('spotify_track', (track) => {
+    if (track && track.isPlaying) {
+        currentTrackSource = 'spotify';
+        activeTrack = track;
+    } else if (currentTrackSource === 'spotify') {
+        activeTrack = null;
+    }
+    updateMusicOverlayUI();
+});
+
+socket.on('spotify_queue_updated', (queue) => {
+    if (currentTrackSource === 'spotify') {
+        activeQueue = queue || [];
+        updateMusicOverlayUI();
+    }
+});
+
+socket.on('youtube_track', (track) => {
+    if (track && track.isPlaying) {
+        currentTrackSource = 'youtube';
+        activeTrack = track;
+    } else if (currentTrackSource === 'youtube') {
+        activeTrack = null;
+    }
+    updateMusicOverlayUI();
+});
+
+socket.on('youtube_queue_updated', (queue) => {
+    if (currentTrackSource === 'youtube') {
+        activeQueue = queue || [];
+        updateMusicOverlayUI();
+    }
+});
+
+// Premium Chat bubbles overlays
+function addChatBubble(data) {
+    const container = document.getElementById('overlay-premium-chat');
+    if (!container) return;
+
+    if (!chatbotConfig || chatbotConfig.overlayChatEnabled === false) return;
+
+    const isModerator = !!data.isModerator;
+    const isSubscriber = !!data.isSubscriber;
+    const isPremiumFilter = chatbotConfig.overlayChatFilterPremium;
+    const uniqueId = (data.uniqueId || '').toLowerCase();
+    
+    // Qualifies if Mod, Sub or Top Donor (in active stream ranking)
+    const hasGiftsRank = rankings && rankings.gifts && rankings.gifts[uniqueId] && rankings.gifts[uniqueId].count > 0;
+    const isPremium = isModerator || isSubscriber || hasGiftsRank;
+
+    if (isPremiumFilter && !isPremium) {
+        return;
+    }
+
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble';
+
+    let badgeHtml = '';
+    if (isModerator) {
+        badgeHtml = '<span class="chat-bubble-badge badge-moderator">Mod</span>';
+    } else if (isSubscriber) {
+        badgeHtml = '<span class="chat-bubble-badge badge-subscriber">Sub</span>';
+    } else if (hasGiftsRank) {
+        badgeHtml = '<span class="chat-bubble-badge badge-gift">Top</span>';
+    }
+
+    const cleanName = stripEmojis(data.nickname || data.uniqueId);
+
+    bubble.innerHTML = `
+        <div class="chat-bubble-header">
+            ${badgeHtml}
+            <span class="chat-bubble-name">${cleanName}</span>
+        </div>
+        <div class="chat-bubble-text">${data.comment}</div>
+    `;
+
+    container.appendChild(bubble);
+
+    while (container.children.length > 4) {
+        container.children[0].remove();
+    }
+
+    setTimeout(() => {
+        bubble.classList.add('fade-out');
+        setTimeout(() => {
+            if (bubble.parentElement) {
+                bubble.remove();
+            }
+        }, 400);
+    }, 8000);
+}
 
 function processAndSpeak(data) {
     if (!chatbotConfig || !chatbotConfig.active) return;

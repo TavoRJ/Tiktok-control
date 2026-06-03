@@ -75,7 +75,26 @@ let chatbotSettings = {
     youtubeCommandPrefix: "!yt",
     youtubeVoteSkipLimit: 3,
     youtubeTheme: "red-neon",
-    youtubePosition: "bottom-left"
+    youtubePosition: "bottom-left",
+    // Music request monetization settings
+    spotifyMonetizationEnabled: false,
+    spotifyMinCoins: 5,
+    youtubeMonetizationEnabled: false,
+    youtubeMinCoins: 5,
+    // Sound alerts multimedia settings
+    soundAlertsEnabled: true,
+    soundAlerts: [],
+    customSounds: [],
+    giftMetadata: {},
+    goals: [],
+    wheelEnabled: false,
+    wheelTriggerCoins: 10,
+    wheelTriggerGift: "any",
+    wheelOptions: ["5 Sentadillas", "Cantar un fragmento", "Contar un chiste", "Saludar como ardilla", "Omitir canción gratis", "Hacer una mueca graciosa"],
+    overlayMusicQueueEnabled: true,
+    overlayChatEnabled: true,
+    overlayChatFilterPremium: true,
+    ttsEffectsEnabled: true
 };
 
 // Global in-memory rankings database for active stream session
@@ -91,6 +110,150 @@ let currentYoutubeTrack = { isPlaying: false };
 let youtubeVoteSkips = new Set();
 let currentActiveQueueYoutubeTrack = null;
 
+// User credits for request monetization (in-memory)
+let userMusicCredits = {};
+
+// Dynamic & hardcoded bilingual mapping for gift names (Spanish <-> English)
+const hardcodedGiftMappings = {
+    "rose": "rosa",
+    "white rose": "rosa blanca",
+    "corn": "es maíz",
+    "it's corn": "es maíz",
+    "it’s corn": "es maíz",
+    "tiktok": "tik tok",
+    "tiktok universe": "tik tok universo",
+    "heart": "corazón",
+    "donut": "dona",
+    "paper duck": "pato",
+    "duck": "pato",
+    "finger heart": "corazón coreano",
+    "crown": "corona",
+    "gg": "buen juego (gg)",
+    "cap": "gorra",
+    "tom's hug": "abrazo de tom",
+    "capybara": "capibara",
+    "love you": "te amo",
+    "rose cosmic": "rosa cosmica",
+    "rose eternity": "rosa de la eternidad",
+    "rose big": "rosa grande",
+    "coffee charm": "encanto del café",
+    "coffee cup": "encanto del café",
+    "motorcycle": "moto",
+    "star": "estrella",
+    
+    "rosa": "rose",
+    "rosa blanca": "white rose",
+    "es maíz": "corn",
+    "maiz": "corn",
+    "tik tok": "tiktok",
+    "tik tok universo": "tiktok universe",
+    "corazón": "heart",
+    "corazon": "heart",
+    "dona": "donut",
+    "pato": "duck",
+    "corazón coreano": "finger heart",
+    "corona": "crown",
+    "buen juego (gg)": "gg",
+    "gorra": "cap",
+    "abrazo de tom": "tom's hug",
+    "capibara": "capybara",
+    "te amo": "love you",
+    "rosa cosmica": "rose cosmic",
+    "rosa de la eternidad": "rose eternity",
+    "rosa grande": "rose big",
+    "encanto del café": "coffee charm",
+    "moto": "motorcycle",
+    "estrella": "star"
+};
+
+const giftNameMappings = { ...hardcodedGiftMappings };
+try {
+    const rawMappings = fs.readFileSync(path.join(__dirname, 'gifts_mapping.json'), 'utf8');
+    const mappings = JSON.parse(rawMappings);
+    mappings.forEach(item => {
+        if (item.name_en && item.name_es) {
+            const en = item.name_en.toLowerCase().trim();
+            const es = item.name_es.toLowerCase().trim();
+            if (!giftNameMappings[en]) giftNameMappings[en] = es;
+            if (!giftNameMappings[es]) giftNameMappings[es] = en;
+        }
+    });
+    console.info(`Loaded ${mappings.length} gift name translations.`);
+} catch (e) {
+    console.warn("Could not load gifts_mapping.json:", e.message);
+}
+
+function giftNamesMatch(trigger, giftName) {
+    if (!trigger || !giftName) return false;
+    const cleanTrigger = trigger.toLowerCase().trim();
+    const cleanGiftName = giftName.toLowerCase().trim();
+    if (cleanTrigger === cleanGiftName) return true;
+    if (cleanTrigger === 'any') return true;
+    
+    // Direct or translation matches
+    const mappedTrigger = giftNameMappings[cleanTrigger];
+    const mappedGiftName = giftNameMappings[cleanGiftName];
+    if (mappedTrigger && mappedTrigger === cleanGiftName) return true;
+    if (mappedGiftName && mappedGiftName === cleanTrigger) return true;
+    if (mappedTrigger && mappedGiftName && mappedTrigger === mappedGiftName) return true;
+    
+    // Normalized checks (stripping spaces & accents)
+    const normalizeString = (str) => {
+        return str.normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/\s+/g, "");
+    };
+    const normTrigger = normalizeString(cleanTrigger);
+    const normGiftName = normalizeString(cleanGiftName);
+    if (normTrigger === normGiftName) return true;
+    
+    const mappedNormTrigger = giftNameMappings[normTrigger];
+    const mappedNormGiftName = giftNameMappings[normGiftName];
+    if (mappedNormTrigger && normalizeString(mappedNormTrigger) === normGiftName) return true;
+    if (mappedNormGiftName && normalizeString(mappedNormGiftName) === normTrigger) return true;
+    
+    return false;
+}
+
+function updateGoalProgress(type, amount, giftName = null) {
+    if (!chatbotSettings.goals || !Array.isArray(chatbotSettings.goals) || chatbotSettings.goals.length === 0) return;
+    
+    let updated = false;
+    chatbotSettings.goals.forEach(goal => {
+        if (!goal.enabled) return;
+        
+        let match = false;
+        if (goal.type === type) {
+            if (type === 'gift') {
+                if (goal.giftName && goal.giftName !== 'any') {
+                    if (giftNamesMatch(goal.giftName, giftName)) {
+                        match = true;
+                    }
+                } else {
+                    match = true;
+                }
+            } else {
+                match = true;
+            }
+        }
+        
+        if (match) {
+            goal.current = (goal.current || 0) + amount;
+            if (goal.current > goal.target) goal.current = goal.target;
+            updated = true;
+        }
+    });
+    
+    if (updated) {
+        try {
+            fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
+            io.emit('goals_updated', chatbotSettings.goals);
+            io.emit('chatbot_settings_updated', chatbotSettings);
+        } catch (e) {
+            console.error('Error saving updated goal progress:', e);
+        }
+    }
+}
 
 // Helper to get local IP addresses
 function getLocalIPs() {
@@ -205,12 +368,105 @@ async function searchYouTube(query) {
     }
 }
 
+// Helper to strip emojis and symbols from names to prevent TTS from spelling them out
+function stripEmojis(text) {
+    if (typeof text !== 'string') return text;
+    try {
+        // Strip emoji presentation, symbols, pictographs, and all emojis
+        return text.replace(/\p{Emoji_Presentation}/gu, '')
+                   .replace(/\p{Emoji_Modifier_Base}/gu, '')
+                   .replace(/\p{Emoji_Component}/gu, '')
+                   .replace(/\p{Extended_Pictographic}/gu, '')
+                   .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F1E6}-\u{1F1FF}]/gu, '')
+                   .replace(/\s+/g, ' ')
+                   .trim();
+    } catch (e) {
+        // Fallback to basic regex if Unicode properties fail
+        return text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F1E6}-\u{1F1FF}\u{1F191}-\u{1F251}\u{1F004}\u{1F0CF}\u{1F170}-\u{1F171}\u{1F17E}-\u{1F17F}\u{1F18E}\u{3030}\u{2B50}\u{2B55}\u{2934}-\u{2935}\u{2B05}-\u{2B07}\u{2B1B}-\u{2B1C}\u{3297}\u{3299}\u{303D}\u{00A9}\u{00AE}\u{2122}\u{23E9}-\u{23EF}\u{23F0}\u{23F3}\u{23FA}\u{25B6}\u{25C0}]/gu, '')
+                   .replace(/\s+/g, ' ')
+                   .trim();
+    }
+}
+
+// Helper to format custom phrases with smart fallbacks if the user omits {username} or {gift}/{count}
+function formatCustomPhrase(phrase, eventType, displayName, giftName = "", count = 1) {
+    if (!phrase || phrase.trim() === "") return "";
+    
+    let formatted = phrase;
+    
+    // Check if the phrase does NOT contain the username placeholder
+    if (!formatted.toLowerCase().includes('{username}')) {
+        // Automatically prepend "Gracias {username}: "
+        formatted = `Gracias {username}: ${formatted}`;
+    }
+    
+    if (eventType === 'gift') {
+        // Check if {gift} or {count} is missing, and if so, append them naturally
+        if (!formatted.toLowerCase().includes('{gift}') && !formatted.toLowerCase().includes('{count}')) {
+            formatted = `${formatted} por {count} {gift}`;
+        } else {
+            if (!formatted.toLowerCase().includes('{gift}')) {
+                formatted = `${formatted} ({gift})`;
+            }
+            if (!formatted.toLowerCase().includes('{count}')) {
+                formatted = `${formatted} x{count}`;
+            }
+        }
+    }
+    
+    // Perform standard replacements
+    return formatted
+        .replace(/{username}/g, displayName)
+        .replace(/{gift}/g, giftName)
+        .replace(/{count}/g, count);
+}
+
 try {
+    const templateFile = path.join(__dirname, 'chatbot_settings.json');
+    let templateSettings = {};
+    if (fs.existsSync(templateFile)) {
+        try {
+            templateSettings = JSON.parse(fs.readFileSync(templateFile, 'utf-8'));
+        } catch (e) {
+            console.error('Error parsing template file chatbot_settings.json:', e);
+        }
+    }
+
     if (fs.existsSync(SETTINGS_FILE)) {
-        chatbotSettings = { ...chatbotSettings, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8')) };
+        const loaded = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8'));
+        chatbotSettings = { ...chatbotSettings, ...templateSettings, ...loaded };
+        
+        // If loaded values are empty strings or missing, fall back to template values
+        if (!chatbotSettings.spotifyClientId || chatbotSettings.spotifyClientId.trim() === "") {
+            chatbotSettings.spotifyClientId = templateSettings.spotifyClientId || "28b2a2ea9ff34b989b9b13fc7979691f";
+        }
+        if (!chatbotSettings.spotifyClientSecret || chatbotSettings.spotifyClientSecret.trim() === "") {
+            chatbotSettings.spotifyClientSecret = templateSettings.spotifyClientSecret || "b2e0324ac37f4a6abef68319d285fda2";
+        }
+        
+        // Ensure skip limits are valid numbers (minimum 1, default 3 if falsy)
+        chatbotSettings.spotifyVoteSkipLimit = parseInt(chatbotSettings.spotifyVoteSkipLimit) || 3;
+        chatbotSettings.youtubeVoteSkipLimit = parseInt(chatbotSettings.youtubeVoteSkipLimit) || 3;
+        if (chatbotSettings.spotifyVoteSkipLimit < 1) chatbotSettings.spotifyVoteSkipLimit = 3;
+        if (chatbotSettings.youtubeVoteSkipLimit < 1) chatbotSettings.youtubeVoteSkipLimit = 3;
+
+        // Initialize new customizable phrases and toggles if missing
+        if (chatbotSettings.filterEmojisFromNames === undefined) {
+            chatbotSettings.filterEmojisFromNames = templateSettings.filterEmojisFromNames !== undefined ? templateSettings.filterEmojisFromNames : false;
+        }
+        if (chatbotSettings.thankYouGiftPhrase === undefined) {
+            chatbotSettings.thankYouGiftPhrase = templateSettings.thankYouGiftPhrase || "";
+        }
+        if (chatbotSettings.thankYouFollowPhrase === undefined) {
+            chatbotSettings.thankYouFollowPhrase = templateSettings.thankYouFollowPhrase || "";
+        }
+        if (chatbotSettings.thankYouSharePhrase === undefined) {
+            chatbotSettings.thankYouSharePhrase = templateSettings.thankYouSharePhrase || "";
+        }
+        
+        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
     } else {
         // If it doesn't exist in writable folder, try to copy it from packaged app directory
-        const templateFile = path.join(__dirname, 'chatbot_settings.json');
         if (fs.existsSync(templateFile) && templateFile !== SETTINGS_FILE) {
             fs.copyFileSync(templateFile, SETTINGS_FILE);
             chatbotSettings = { ...chatbotSettings, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8')) };
@@ -219,18 +475,17 @@ try {
         }
     }
     
-    // Auto-detect theme based on loaded username
-    if (chatbotSettings.tiktokUsername) {
-        const usernameLower = chatbotSettings.tiktokUsername.toLowerCase();
-        if (usernameLower.includes('majo')) {
-            chatbotSettings.themeName = 'majo';
-        } else if (usernameLower.includes('naya')) {
-            chatbotSettings.themeName = 'naya';
-        } else {
-            chatbotSettings.themeName = 'neutral';
-        }
-    } else {
+    // Auto-detect theme based on loaded username ONLY if themeName is not set
+    if (!chatbotSettings.themeName) {
         chatbotSettings.themeName = 'neutral';
+        if (chatbotSettings.tiktokUsername) {
+            const usernameLower = chatbotSettings.tiktokUsername.toLowerCase();
+            if (usernameLower.includes('majo')) {
+                chatbotSettings.themeName = 'majo';
+            } else if (usernameLower.includes('naya')) {
+                chatbotSettings.themeName = 'naya';
+            }
+        }
     }
 } catch (err) {
     console.error('Error loading chatbot settings:', err);
@@ -392,7 +647,8 @@ async function handleCloudTTS(data) {
     // 8. Username reading format
     let textToSpeak = comment;
     if (chatbotSettings.readUsername) {
-        textToSpeak = `${nickname} dice: ${comment}`;
+        const displayName = stripEmojis(nickname);
+        textToSpeak = `${displayName} dice: ${comment}`;
     }
     
     // 9. Determine voice settings
@@ -434,7 +690,9 @@ async function handleCloudTTS(data) {
             
             io.emit('play_tts_audio', {
                 base64Audio,
-                playLocation: chatbotSettings.playLocation
+                playLocation: chatbotSettings.playLocation,
+                isModerator,
+                isSubscriber
             });
             
             fs.unlinkSync(tempFile);
@@ -609,6 +867,27 @@ async function handleYoutubeChatCommand(data) {
                 io.emit('system', { type: 'warning', message: `@${uniqueId} intentó pedir video de YouTube sin permisos (Subs).` });
                 return;
             }
+
+            // Monetization credit check
+            if (chatbotSettings.youtubeMonetizationEnabled) {
+                if (!isModerator && !isAnchor) {
+                    const credits = userMusicCredits[uniqueId.toLowerCase()] || 0;
+                    if (credits < 1) {
+                        io.emit('system', { 
+                            type: 'warning', 
+                            message: `@${uniqueId} intentó pedir video de YouTube pero no tiene créditos de música. Requiere enviar un regalo de al menos ${chatbotSettings.youtubeMinCoins} monedas.` 
+                        });
+                        return;
+                    }
+                    // Deduct credit
+                    userMusicCredits[uniqueId.toLowerCase()] = credits - 1;
+                    io.emit('system', { 
+                        type: 'info', 
+                        message: `@${uniqueId} usó 1 crédito de música. Créditos restantes: ${userMusicCredits[uniqueId.toLowerCase()]}` 
+                    });
+                }
+            }
+
             await handleYoutubeSongRequest(query, uniqueId);
         } else {
             sendCurrentYoutubeTrackToChatInfo();
@@ -1016,6 +1295,27 @@ async function handleSpotifyChatCommand(data) {
                 io.emit('system', { type: 'warning', message: `@${uniqueId} intentó pedir canción sin permisos (Subs).` });
                 return;
             }
+            
+            // Monetization credit check
+            if (chatbotSettings.spotifyMonetizationEnabled) {
+                if (!isModerator && !isAnchor) {
+                    const credits = userMusicCredits[uniqueId.toLowerCase()] || 0;
+                    if (credits < 1) {
+                        io.emit('system', { 
+                            type: 'warning', 
+                            message: `@${uniqueId} intentó pedir canción pero no tiene créditos de música. Requiere enviar un regalo de al menos ${chatbotSettings.spotifyMinCoins} monedas.` 
+                        });
+                        return;
+                    }
+                    // Deduct credit
+                    userMusicCredits[uniqueId.toLowerCase()] = credits - 1;
+                    io.emit('system', { 
+                        type: 'info', 
+                        message: `@${uniqueId} usó 1 crédito de música. Créditos restantes: ${userMusicCredits[uniqueId.toLowerCase()]}` 
+                    });
+                }
+            }
+
             await handleSongRequest(query, uniqueId);
         } else {
             sendCurrentTrackToChatInfo();
@@ -1045,8 +1345,8 @@ async function handleSpotifyChatCommand(data) {
 }
 
 async function refreshSpotifyToken() {
-    const clientId = chatbotSettings.spotifyClientId || 'd338de81e9fa498fb12b591b6c69784e';
-    const clientSecret = chatbotSettings.spotifyClientSecret || '5ba2066fa2eb4df782bf6b9b3294eeec';
+    const clientId = chatbotSettings.spotifyClientId || '28b2a2ea9ff34b989b9b13fc7979691f';
+    const clientSecret = chatbotSettings.spotifyClientSecret || 'b2e0324ac37f4a6abef68319d285fda2';
     
     if (!chatbotSettings.spotifyRefreshToken) {
         console.error('No refresh token available to renew Spotify session.');
@@ -1256,7 +1556,7 @@ app.get('/overlay', (req, res) => {
 
 // Route for Spotify Authorization Redirect
 app.get('/spotify-login', (req, res) => {
-    const clientId = chatbotSettings.spotifyClientId || 'd338de81e9fa498fb12b591b6c69784e';
+    const clientId = chatbotSettings.spotifyClientId || '28b2a2ea9ff34b989b9b13fc7979691f';
     const redirectUri = 'http://127.0.0.1:3000/spotify-callback';
     const scopes = 'user-read-currently-playing user-read-playback-state user-read-private user-modify-playback-state';
     const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}`;
@@ -1270,8 +1570,8 @@ app.get('/spotify-callback', async (req, res) => {
         return res.redirect('/?spotify=error&message=no_code');
     }
     
-    const clientId = chatbotSettings.spotifyClientId || 'd338de81e9fa498fb12b591b6c69784e';
-    const clientSecret = chatbotSettings.spotifyClientSecret || '5ba2066fa2eb4df782bf6b9b3294eeec';
+    const clientId = chatbotSettings.spotifyClientId || '28b2a2ea9ff34b989b9b13fc7979691f';
+    const clientSecret = chatbotSettings.spotifyClientSecret || 'b2e0324ac37f4a6abef68319d285fda2';
     const redirectUri = 'http://127.0.0.1:3000/spotify-callback';
     
     try {
@@ -1409,6 +1709,84 @@ app.delete('/api/custom-animations/:id', (req, res) => {
         res.json({ success: true });
     } catch (err) {
         console.error('Error deleting animation:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// API: Upload Custom Sound (Base64)
+app.post('/api/upload-sound', (req, res) => {
+    try {
+        const { filename, fileData } = req.body;
+        if (!filename || !fileData) {
+            return res.status(400).json({ error: 'Faltan campos requeridos (filename, fileData)' });
+        }
+
+        // Decode base64 data
+        const matches = fileData.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        let buffer;
+        if (matches && matches.length === 3) {
+            buffer = Buffer.from(matches[2], 'base64');
+        } else {
+            buffer = Buffer.from(fileData, 'base64');
+        }
+
+        const cleanName = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const safeFilename = `sound_${Date.now()}_${cleanName}`;
+        const filePath = path.join(UPLOADS_DIR, safeFilename);
+        fs.writeFileSync(filePath, buffer);
+
+        const newSound = {
+            id: `sound_${Date.now()}`,
+            name: filename.replace(/\.[^/.]+$/, ""), // Name without extension
+            filename: safeFilename,
+            filepath: `/uploads/${safeFilename}`
+        };
+
+        if (!chatbotSettings.customSounds) {
+            chatbotSettings.customSounds = [];
+        }
+        chatbotSettings.customSounds.push(newSound);
+
+        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
+        io.emit('chatbot_settings_updated', chatbotSettings);
+
+        res.json({ success: true, sound: newSound });
+    } catch (err) {
+        console.error('Error handling sound upload:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// API: Delete Custom Sound
+app.delete('/api/upload-sound/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!chatbotSettings.customSounds) {
+            chatbotSettings.customSounds = [];
+        }
+
+        const soundIdx = chatbotSettings.customSounds.findIndex(s => s.id === id);
+        if (soundIdx === -1) {
+            return res.status(404).json({ error: 'Sonido no encontrado' });
+        }
+
+        const sound = chatbotSettings.customSounds[soundIdx];
+        const filePath = path.join(UPLOADS_DIR, sound.filename);
+
+        // Safely remove file
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+
+        // Remove from list
+        chatbotSettings.customSounds.splice(soundIdx, 1);
+
+        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
+        io.emit('chatbot_settings_updated', chatbotSettings);
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error deleting sound:', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -1631,7 +2009,7 @@ function broadcastRankings() {
 }
 
 // Custom TTS generator for follows, shares, likes milestone and gift events
-async function speakCustomTts(text) {
+async function speakCustomTts(text, isGift = false) {
     if (!chatbotSettings || !chatbotSettings.active) return;
     if (chatbotSettings.ttsEngine !== 'cloud') return;
     
@@ -1662,7 +2040,8 @@ async function speakCustomTts(text) {
             
             io.emit('play_tts_audio', {
                 base64Audio,
-                playLocation: chatbotSettings.playLocation
+                playLocation: chatbotSettings.playLocation,
+                isGift
             });
             
             fs.unlinkSync(tempFile);
@@ -1672,6 +2051,81 @@ async function speakCustomTts(text) {
         if (fs.existsSync(tempFile)) {
             try { fs.unlinkSync(tempFile); } catch(e) {}
         }
+    }
+}
+
+function triggerSoundAlert(alert) {
+    if (!alert || !alert.enabled) return;
+    const soundUrl = alert.sound;
+    const volume = alert.volume !== undefined ? alert.volume : 100;
+    console.log(`Triggering sound alert: ${alert.soundName || soundUrl} at volume ${volume}%`);
+    io.emit('play_sound_alert', { soundUrl, volume });
+}
+
+const giftTTSAccumulator = {};
+
+function processAccumulatedGift(data, repeatCount) {
+    const uniqueId = (data.uniqueId || '').toLowerCase();
+    const nickname = data.nickname || data.uniqueId;
+    const coins = data.diamondCount || 0;
+    const totalCoins = coins * repeatCount;
+    
+    // 1. Grant music credits
+    if (totalCoins > 0 && (chatbotSettings.spotifyMonetizationEnabled || chatbotSettings.youtubeMonetizationEnabled)) {
+        let minCoins = Infinity;
+        if (chatbotSettings.spotifyMonetizationEnabled) {
+            minCoins = Math.min(minCoins, chatbotSettings.spotifyMinCoins || 5);
+        }
+        if (chatbotSettings.youtubeMonetizationEnabled) {
+            minCoins = Math.min(minCoins, chatbotSettings.youtubeMinCoins || 5);
+        }
+        
+        if (minCoins !== Infinity) {
+            const creditsEarned = Math.floor(totalCoins / minCoins);
+            if (creditsEarned > 0) {
+                userMusicCredits[uniqueId] = (userMusicCredits[uniqueId] || 0) + creditsEarned;
+                console.info(`@${uniqueId} earned ${creditsEarned} music credits. Total: ${userMusicCredits[uniqueId]}`);
+                io.emit('system', { 
+                    type: 'success', 
+                    message: `@${nickname} ganó ${creditsEarned} crédito(s) de música por enviar ${totalCoins} monedas. ¡Tiene ${userMusicCredits[uniqueId]} créditos en total!` 
+                });
+            }
+        }
+    }
+
+    // 2. Trigger Sound Alerts for Gifts (only once per accumulated gift combo)
+    if (chatbotSettings.soundAlertsEnabled && chatbotSettings.soundAlerts) {
+        chatbotSettings.soundAlerts.forEach(alert => {
+            if (alert.enabled && alert.type === 'gift') {
+                const matchesGift = alert.trigger === 'any' || (alert.trigger && giftNamesMatch(alert.trigger, data.giftName));
+                const matchesCount = repeatCount >= (alert.cantidad || 1);
+                if (matchesGift && matchesCount) {
+                    triggerSoundAlert(alert);
+                }
+            }
+        });
+    }
+
+    // 3. Speak custom TTS for the gift
+    if (chatbotSettings.readGiftsEnabled) {
+        const giftName = data.giftName;
+        const displayName = stripEmojis(nickname);
+        let ttsText = "";
+        
+        const customPhrase = chatbotSettings.thankYouGiftPhrase;
+        if (customPhrase && customPhrase.trim() !== "") {
+            ttsText = formatCustomPhrase(customPhrase, 'gift', displayName, giftName, repeatCount);
+        } else {
+            const theme = chatbotSettings.themeName || 'neutral';
+            if (theme === 'naya') {
+                ttsText = `¡Wow, muchísimas gracias @${displayName} por regalar ${repeatCount} ${giftName} a Naya!`;
+            } else if (theme === 'majo') {
+                ttsText = `¡Gracias @${displayName} por enviar ${repeatCount} ${giftName} al directo de Majo!`;
+            } else {
+                ttsText = `¡Gracias @${displayName} por regalar ${repeatCount} ${giftName}!`;
+            }
+        }
+        speakCustomTts(ttsText, true);
     }
 }
 
@@ -1688,6 +2142,7 @@ function connectToTikTok(username) {
         console.info(`Connected to roomId ${state.roomId}`);
         // Reset session rankings
         rankings = { likes: {}, gifts: {}, mvp: {} };
+        userMusicCredits = {};
         broadcastRankings();
         io.emit('system', { type: 'connected', message: `Conectado a @${username}` });
     }).catch(err => {
@@ -1750,6 +2205,42 @@ function connectToTikTok(username) {
                     extendedGiftInfo: data.extendedGiftInfo
                 });
 
+                // Update dynamic goals progress
+                updateGoalProgress('gift', 1, data.giftName);
+
+                // Check Interactive Wheel trigger
+                if (chatbotSettings.wheelEnabled && chatbotSettings.wheelOptions && chatbotSettings.wheelOptions.length > 0) {
+                    const totalCoins = (data.diamondCount || 0) * (data.repeatCount || 1);
+                    const triggerGift = (chatbotSettings.wheelTriggerGift || 'any').toLowerCase().trim();
+                    const triggerCoins = parseInt(chatbotSettings.wheelTriggerCoins || 10);
+                    
+                    let qualifies = false;
+                    if (triggerGift !== 'any' && giftNamesMatch(triggerGift, data.giftName)) {
+                        qualifies = true;
+                    } else if (triggerGift === 'any' && totalCoins >= triggerCoins) {
+                        qualifies = true;
+                    }
+                    
+                    if (qualifies) {
+                        const winIndex = Math.floor(Math.random() * chatbotSettings.wheelOptions.length);
+                        const winText = chatbotSettings.wheelOptions[winIndex];
+                        console.log(`[WHEEL] Triggered! Winner option index ${winIndex}: "${winText}"`);
+                        
+                        io.emit('trigger_wheel', {
+                            sender: data.nickname,
+                            giftName: data.giftName,
+                            winningIndex: winIndex,
+                            optionText: winText
+                        });
+                        
+                        setTimeout(() => {
+                            const cleanSender = stripEmojis(data.nickname || data.uniqueId);
+                            const speakText = `¡Wow! ${cleanSender} activó la ruleta y tocó: ${winText}!`;
+                            speakCustomTts(speakText);
+                        }, 7000);
+                    }
+                }
+
                 const uniqueId = (data.uniqueId || '').toLowerCase();
                 const nickname = data.nickname || data.uniqueId;
                 const coins = data.diamondCount || 0;
@@ -1764,25 +2255,64 @@ function connectToTikTok(username) {
                     broadcastRankings();
                 }
 
+                // Cache gift metadata for the selector modal
+                let iconUrl = '';
+                if (data.giftIcon) {
+                    if (typeof data.giftIcon === 'string') {
+                        iconUrl = data.giftIcon;
+                    } else if (data.giftIcon.url_list && data.giftIcon.url_list[0]) {
+                        iconUrl = data.giftIcon.url_list[0];
+                    } else if (data.giftIcon.url) {
+                        iconUrl = data.giftIcon.url;
+                    }
+                }
+                if (data.giftName && (!chatbotSettings.giftMetadata || !chatbotSettings.giftMetadata[data.giftName])) {
+                    if (!chatbotSettings.giftMetadata) {
+                        chatbotSettings.giftMetadata = {};
+                    }
+                    chatbotSettings.giftMetadata[data.giftName] = {
+                        name: data.giftName,
+                        coins: data.diamondCount || 1,
+                        iconUrl: iconUrl
+                    };
+                    try {
+                        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
+                        io.emit('chatbot_settings_updated', chatbotSettings);
+                    } catch (err) {
+                        console.error('Error saving cached gift metadata:', err);
+                    }
+                }
+
                 // Blacklist check
                 const blacklist = (chatbotSettings.ignoreUserList || []).map(u => u.toLowerCase().trim());
                 if (!blacklist.includes(uniqueId)) {
-                    // Check if it is the end of a repeat combo or a single gift
-                    const isComboEnd = data.repeatEnd || !data.extendedGiftInfo || !data.extendedGiftInfo.combo;
-                    if (chatbotSettings.readGiftsEnabled && isComboEnd) {
-                        const giftName = data.giftName;
-                        const count = data.repeatCount || 1;
-                        let ttsText = "";
-                        const theme = chatbotSettings.themeName || 'neutral';
-                        if (theme === 'naya') {
-                            ttsText = `¡Wow, muchísimas gracias @${nickname} por regalar ${count} ${giftName} a Naya!`;
-                        } else if (theme === 'majo') {
-                            ttsText = `¡Gracias @${nickname} por enviar ${count} ${giftName} al directo de Majo!`;
-                        } else {
-                            ttsText = `¡Gracias @${nickname} por regalar ${count} ${giftName}!`;
-                        }
-                        speakCustomTts(ttsText);
+                    // Debounce / Accumulate gifts to prevent repeat audio spam and create a combo sentence
+                    const giftKey = `${uniqueId}_${(data.giftName || '').toLowerCase().trim()}`;
+                    if (!giftTTSAccumulator[giftKey]) {
+                        console.log(`[TTS-Debounce] Starting new gift accumulator for key: ${giftKey}`);
+                        giftTTSAccumulator[giftKey] = {
+                            data: data,
+                            maxCount: 0,
+                            timer: null
+                        };
                     }
+                    
+                    // Math.max because repeatCount in Webcast is cumulative (e.g. 1, 2, 3...)
+                    giftTTSAccumulator[giftKey].maxCount = Math.max(giftTTSAccumulator[giftKey].maxCount, data.repeatCount || 1);
+                    console.log(`[TTS-Debounce] Accumulating key: ${giftKey}, current count: ${giftTTSAccumulator[giftKey].maxCount}`);
+                    
+                    if (giftTTSAccumulator[giftKey].timer) {
+                        clearTimeout(giftTTSAccumulator[giftKey].timer);
+                    }
+                    
+                    giftTTSAccumulator[giftKey].timer = setTimeout(() => {
+                        const finalGift = giftTTSAccumulator[giftKey];
+                        delete giftTTSAccumulator[giftKey];
+                        if (finalGift) {
+                            console.log(`[TTS-Debounce] Debounce window closed for key: ${giftKey}. Processing final count: ${finalGift.maxCount}`);
+                            processAccumulatedGift(finalGift.data, finalGift.maxCount);
+                        }
+                    }, 1200);
                 }
             }
 
@@ -1790,6 +2320,9 @@ function connectToTikTok(username) {
                 const uniqueId = (data.uniqueId || '').toLowerCase();
                 const nickname = data.nickname || data.uniqueId;
                 const count = data.likeCount || 1;
+                
+                // Update dynamic goals progress
+                updateGoalProgress('likes', count);
                 
                 if (uniqueId) {
                     if (!rankings.likes[uniqueId]) {
@@ -1804,6 +2337,20 @@ function connectToTikTok(username) {
                 // Blacklist check
                 const blacklist = (chatbotSettings.ignoreUserList || []).map(u => u.toLowerCase().trim());
                 if (!blacklist.includes(uniqueId)) {
+                    // Trigger Sound Alerts for Likes
+                    if (chatbotSettings.soundAlertsEnabled && chatbotSettings.soundAlerts) {
+                        chatbotSettings.soundAlerts.forEach(alert => {
+                            if (alert.enabled && alert.type === 'like') {
+                                const milestone = alert.cantidad || 100;
+                                const userLikes = rankings.likes[uniqueId] ? rankings.likes[uniqueId].count : 0;
+                                const previousLikes = userLikes - count;
+                                if (milestone > 0 && Math.floor(userLikes / milestone) > Math.floor(previousLikes / milestone)) {
+                                    triggerSoundAlert(alert);
+                                }
+                            }
+                        });
+                    }
+
                     // Cloud TTS milestone check
                     if (chatbotSettings.readLikesMilestoneEnabled && count >= (chatbotSettings.likesMilestoneValue || 100)) {
                         let ttsText = "";
@@ -1824,18 +2371,36 @@ function connectToTikTok(username) {
                 const uniqueId = (data.uniqueId || '').toLowerCase();
                 const nickname = data.nickname || data.uniqueId || 'Nuevo Seguidor';
                 
+                // Update dynamic goals progress
+                updateGoalProgress('follows', 1);
+                
                 // Blacklist check
                 const blacklist = (chatbotSettings.ignoreUserList || []).map(u => u.toLowerCase().trim());
                 if (!blacklist.includes(uniqueId)) {
+                    // Trigger Sound Alerts for Follows
+                    if (chatbotSettings.soundAlertsEnabled && chatbotSettings.soundAlerts) {
+                        chatbotSettings.soundAlerts.forEach(alert => {
+                            if (alert.enabled && alert.type === 'follow') {
+                                triggerSoundAlert(alert);
+                            }
+                        });
+                    }
+
                     if (chatbotSettings.readFollowsEnabled) {
+                        const displayName = stripEmojis(nickname);
                         let ttsText = "";
-                        const theme = chatbotSettings.themeName || 'neutral';
-                        if (theme === 'naya') {
-                            ttsText = `¡Bienvenido @${nickname} a la transmisión de Naya! Gracias por seguirme, linda.`;
-                        } else if (theme === 'majo') {
-                            ttsText = `¡Bienvenido @${nickname} a la telaraña de Majo! Gracias por unirte a nosotros.`;
+                        const customPhrase = chatbotSettings.thankYouFollowPhrase;
+                        if (customPhrase && customPhrase.trim() !== "") {
+                            ttsText = formatCustomPhrase(customPhrase, 'follow', displayName);
                         } else {
-                            ttsText = `¡Bienvenido @${nickname}, gracias por seguir la cuenta!`;
+                            const theme = chatbotSettings.themeName || 'neutral';
+                            if (theme === 'naya') {
+                                ttsText = `¡Bienvenido @${displayName} a la transmisión de Naya! Gracias por seguirme, linda.`;
+                            } else if (theme === 'majo') {
+                                ttsText = `¡Bienvenido @${displayName} a la telaraña de Majo! Gracias por unirte a nosotros.`;
+                            } else {
+                                ttsText = `¡Bienvenido @${displayName}, gracias por seguir la cuenta!`;
+                            }
                         }
                         speakCustomTts(ttsText);
                     }
@@ -1846,18 +2411,36 @@ function connectToTikTok(username) {
                 const uniqueId = (data.uniqueId || '').toLowerCase();
                 const nickname = data.nickname || data.uniqueId || 'Espectador';
                 
+                // Update dynamic goals progress
+                updateGoalProgress('shares', 1);
+                
                 // Blacklist check
                 const blacklist = (chatbotSettings.ignoreUserList || []).map(u => u.toLowerCase().trim());
                 if (!blacklist.includes(uniqueId)) {
+                    // Trigger Sound Alerts for Shares
+                    if (chatbotSettings.soundAlertsEnabled && chatbotSettings.soundAlerts) {
+                        chatbotSettings.soundAlerts.forEach(alert => {
+                            if (alert.enabled && alert.type === 'share') {
+                                triggerSoundAlert(alert);
+                            }
+                        });
+                    }
+
                     if (chatbotSettings.readSharesEnabled) {
+                        const displayName = stripEmojis(nickname);
                         let ttsText = "";
-                        const theme = chatbotSettings.themeName || 'neutral';
-                        if (theme === 'naya') {
-                            ttsText = `¡Muchísimas gracias @${nickname} por compartir el directo de Naya! Eres un sol.`;
-                        } else if (theme === 'majo') {
-                            ttsText = `¡Gracias @${nickname} por compartir el live de Majo! Súper genial.`;
+                        const customPhrase = chatbotSettings.thankYouSharePhrase;
+                        if (customPhrase && customPhrase.trim() !== "") {
+                            ttsText = formatCustomPhrase(customPhrase, 'share', displayName);
                         } else {
-                            ttsText = `¡Gracias @${nickname} por compartir la transmisión!`;
+                            const theme = chatbotSettings.themeName || 'neutral';
+                            if (theme === 'naya') {
+                                ttsText = `¡Muchísimas gracias @${displayName} por compartir el directo de Naya! Eres un sol.`;
+                            } else if (theme === 'majo') {
+                                ttsText = `¡Gracias @${displayName} por compartir el live de Majo! Súper genial.`;
+                            } else {
+                                ttsText = `¡Gracias @${displayName} por compartir la transmisión!`;
+                            }
                         }
                         speakCustomTts(ttsText);
                     }
@@ -1919,23 +2502,10 @@ io.on('connection', (socket) => {
         io.emit('overlay_command', data);
     });
 
-    // Handle chatbot settings updates
+        // Handle chatbot settings updates
     socket.on('update_chatbot_settings', (newSettings) => {
         const oldVolume = chatbotSettings.spotifyVolume;
         chatbotSettings = { ...chatbotSettings, ...newSettings };
-        
-        if (chatbotSettings.tiktokUsername) {
-            const usernameLower = chatbotSettings.tiktokUsername.toLowerCase();
-            if (usernameLower.includes('majo')) {
-                chatbotSettings.themeName = 'majo';
-            } else if (usernameLower.includes('naya')) {
-                chatbotSettings.themeName = 'naya';
-            } else {
-                chatbotSettings.themeName = 'neutral';
-            }
-        } else {
-            chatbotSettings.themeName = 'neutral';
-        }
         
         if (newSettings.spotifyVolume !== undefined && newSettings.spotifyVolume !== oldVolume) {
             setSpotifyVolume(chatbotSettings.spotifyVolume);
@@ -2023,8 +2593,6 @@ io.on('connection', (socket) => {
                 chatbotSettings.themeName = 'majo';
             } else if (usernameLower.includes('naya')) {
                 chatbotSettings.themeName = 'naya';
-            } else {
-                chatbotSettings.themeName = 'neutral';
             }
             
             try {

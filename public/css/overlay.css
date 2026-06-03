@@ -224,3 +224,436 @@ body, html {
 .battle-anim img {
     animation: pulse 0.5s infinite;
 }
+
+/* ==========================================
+   PREMIUM OVERLAYS STYLING (RELEASE 1.2.2)
+   ========================================== */
+
+/* Theme Variables Updates */
+body.theme-majo {
+    --accent-color: #9900ff;
+    --accent-glow: rgba(153, 0, 255, 0.4);
+    --secondary-color: #ffd700;
+    --glass-bg: rgba(20, 10, 30, 0.75);
+    --glass-border: 1px solid rgba(153, 0, 255, 0.3);
+    --neon-shadow: 0 0 15px rgba(153, 0, 255, 0.6);
+}
+
+body.theme-naya {
+    --accent-color: #d900ff;
+    --accent-glow: rgba(217, 0, 255, 0.4);
+    --secondary-color: #ff0055;
+    --glass-bg: rgba(30, 10, 25, 0.75);
+    --glass-border: 1px solid rgba(217, 0, 255, 0.3);
+    --neon-shadow: 0 0 15px rgba(217, 0, 255, 0.6);
+}
+
+body.theme-neutral {
+    --accent-color: #00d2ff;
+    --accent-glow: rgba(0, 210, 255, 0.4);
+    --secondary-color: #0066ff;
+    --glass-bg: rgba(10, 20, 30, 0.75);
+    --glass-border: 1px solid rgba(0, 210, 255, 0.3);
+    --neon-shadow: 0 0 15px rgba(0, 210, 255, 0.6);
+}
+
+/* 🎯 Metas Dinámicas Widget (Goals) */
+#overlay-goals-container {
+    position: absolute;
+    top: 90px;
+    right: 20px;
+    width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 15;
+}
+
+.goal-card {
+    background: var(--glass-bg);
+    border: var(--glass-border);
+    border-radius: 12px;
+    padding: 12px 15px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), var(--neon-shadow);
+    backdrop-filter: blur(8px);
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Specific Spiderweb / Stars decorations */
+body.theme-majo .goal-card::before {
+    content: "🕸";
+    position: absolute;
+    right: 10px;
+    top: 5px;
+    font-size: 24px;
+    opacity: 0.15;
+}
+
+body.theme-naya .goal-card::before {
+    content: "✨";
+    position: absolute;
+    right: 10px;
+    top: 5px;
+    font-size: 24px;
+    opacity: 0.15;
+}
+
+.goal-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.goal-card-title {
+    font-size: 14px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.goal-card-progress-text {
+    font-size: 13px;
+    font-weight: 900;
+    color: var(--secondary-color);
+}
+
+.goal-card-bar-container {
+    height: 12px;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.goal-card-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent-color), var(--secondary-color));
+    border-radius: 6px;
+    box-shadow: 0 0 10px var(--accent-color);
+    transition: width 0.8s cubic-bezier(0.1, 0.8, 0.2, 1);
+}
+
+/* 🎶 Widget Siguiente Canción (Up Next Music Queue) */
+#overlay-music-queue {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 320px;
+    background: var(--glass-bg);
+    border: var(--glass-border);
+    border-radius: 16px;
+    padding: 15px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), var(--neon-shadow);
+    backdrop-filter: blur(8px);
+    z-index: 15;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+#overlay-music-queue.hidden {
+    opacity: 0;
+    transform: translateY(30px);
+    pointer-events: none;
+}
+
+.vinyl-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    position: relative;
+}
+
+.vinyl-disc {
+    width: 64px;
+    height: 64px;
+    background: radial-gradient(circle, #333 15%, #111 16%, #000 100%);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    animation: rotateVinyl 4s linear infinite;
+}
+
+.vinyl-art {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background-size: cover;
+    background-position: center;
+    background-color: #333;
+    border: 2px solid #000;
+}
+
+.music-info {
+    flex: 1;
+    overflow: hidden;
+}
+
+.music-title {
+    font-size: 14px;
+    font-weight: 900;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+
+.music-artist {
+    font-size: 12px;
+    color: #ccc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.music-requester {
+    font-size: 10px;
+    color: var(--secondary-color);
+    font-weight: bold;
+    margin-top: 2px;
+}
+
+.music-queue-list {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.queue-item {
+    font-size: 11px;
+    color: #aaa;
+    display: flex;
+    justify-content: space-between;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.queue-item-title {
+    font-weight: bold;
+    color: #eee;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 70%;
+}
+
+.queue-item-requester {
+    color: var(--accent-color);
+}
+
+@keyframes rotateVinyl {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* 💬 Burbujas de Chat Premium (Premium Chat Feed) */
+#overlay-premium-chat {
+    position: absolute;
+    bottom: 120px;
+    left: 20px;
+    width: 380px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 15;
+}
+
+.chat-bubble {
+    background: var(--glass-bg);
+    border: var(--glass-border);
+    border-radius: 16px;
+    padding: 10px 14px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), var(--neon-shadow);
+    backdrop-filter: blur(8px);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    animation: popInBubble 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.chat-bubble.fade-out {
+    animation: fadeOutBubble 0.4s ease forwards;
+}
+
+.chat-bubble-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.chat-bubble-badge {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.badge-moderator { background: #00d2ff; color: #051a24; }
+.badge-subscriber { background: #ffd700; color: #332200; }
+.badge-gift { background: #ff007f; color: white; }
+.badge-vip { background: #9900ff; color: white; }
+
+.chat-bubble-name {
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--secondary-color);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.chat-bubble-text {
+    font-size: 13px;
+    line-height: 1.4;
+    word-break: break-word;
+    font-weight: 500;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes popInBubble {
+    0% { transform: scale(0.8) translateY(20px); opacity: 0; }
+    100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+@keyframes fadeOutBubble {
+    0% { transform: scale(1) translateY(0); opacity: 1; }
+    100% { transform: scale(0.9) translateY(-10px); opacity: 0; }
+}
+
+/* 🎡 Ruleta de Desafíos (Reward Wheel Modal) */
+#overlay-wheel-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(5px);
+    z-index: 999;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
+
+#overlay-wheel-container.show {
+    opacity: 1;
+}
+
+#overlay-wheel-container.hidden {
+    display: none !important;
+}
+
+.wheel-box {
+    background: var(--glass-bg);
+    border: var(--glass-border);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), var(--neon-shadow);
+    border-radius: 24px;
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    transform: scale(0.8);
+    transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    max-width: 500px;
+    width: 90%;
+    text-align: center;
+    color: white;
+}
+
+#overlay-wheel-container.show .wheel-box {
+    transform: scale(1);
+}
+
+.wheel-box h2 {
+    font-size: 26px;
+    font-weight: 900;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: white;
+    text-shadow: 0 0 10px var(--accent-color);
+}
+
+.wheel-spinner-container {
+    position: relative;
+    width: 320px;
+    height: 320px;
+    border-radius: 50%;
+    border: 8px solid var(--accent-color);
+    box-shadow: 0 0 25px var(--accent-color);
+    overflow: visible;
+}
+
+.wheel-pointer {
+    position: absolute;
+    top: -15px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 15px solid transparent;
+    border-right: 15px solid transparent;
+    border-top: 30px solid var(--secondary-color);
+    z-index: 10;
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.4));
+}
+
+#wheel-canvas {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: #222;
+}
+
+#wheel-winner-banner {
+    width: 100%;
+    background: linear-gradient(45deg, var(--accent-color), var(--secondary-color));
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: 0 4px 15px var(--accent-glow);
+    border: 1px solid white;
+    animation: pulse 1s infinite;
+}
+
+#wheel-winner-banner.hidden {
+    display: none !important;
+}
+
+.winner-title {
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.winner-text {
+    font-size: 22px;
+    font-weight: 900;
+    color: white;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+    margin-top: 2px;
+}
