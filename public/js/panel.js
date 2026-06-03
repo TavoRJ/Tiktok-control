@@ -503,8 +503,25 @@ function updateUIWithConfig(config) {
     if (ttsEffectsEl) ttsEffectsEl.checked = config.ttsEffectsEnabled !== false;
 
     // Render dynamic lists (Metas, Ruleta)
-    renderGoalsList(config.goals || []);
-    renderWheelOptionsList(config.wheelOptions || []);
+    try {
+        if (typeof renderGoalsList === 'function') {
+            renderGoalsList(config.goals || []);
+        } else {
+            console.warn('renderGoalsList is not defined yet');
+        }
+    } catch (e) {
+        console.error('Error rendering goals list:', e);
+    }
+    
+    try {
+        if (typeof renderWheelOptionsList === 'function') {
+            renderWheelOptionsList(config.wheelOptions || []);
+        } else {
+            console.warn('renderWheelOptionsList is not defined yet');
+        }
+    } catch (e) {
+        console.error('Error rendering wheel options list:', e);
+    }
     
     // Setup and Spotify values
     const setupUserEl = document.getElementById('setup-tiktok-username');
@@ -4700,91 +4717,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================================
     // DYNAMIC METAS (GOALS) & WHEEL OPTIONS (RULETA) LOGIC
     // =========================================================================
-
-    // Render goals table in chatbot settings view
-    function renderGoalsList(goals) {
-        const tbody = document.getElementById('goals-table-body');
-        if (!tbody) return;
-        tbody.innerHTML = '';
-
-        if (!goals || goals.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="3" style="text-align: center; color: #888; font-size: 12px; padding: 15px;">
-                        No hay metas configuradas. Crea una arriba.
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-
-        goals.forEach((goal, index) => {
-            const tr = document.createElement('tr');
-            
-            let typeLabel = '';
-            if (goal.type === 'likes') typeLabel = 'Me Gusta (Likes)';
-            else if (goal.type === 'follows') typeLabel = 'Seguidores';
-            else if (goal.type === 'shares') typeLabel = 'Compartidos';
-            else if (goal.type === 'gift') {
-                typeLabel = `Regalo: ${goal.giftName || 'Cualquiera'}`;
-            }
-
-            const pct = Math.min(100, Math.round(((goal.current || 0) / (goal.target || 1)) * 100));
-
-            tr.innerHTML = `
-                <td>
-                    <div style="font-weight: bold; color: white;">${goal.title || 'Sin título'}</div>
-                    <div style="font-size: 11px; color: #888;">${typeLabel}</div>
-                </td>
-                <td>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <div style="flex: 1; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; min-width: 60px;">
-                            <div style="width: ${pct}%; height: 100%; background: var(--accent-color, #d900ff); box-shadow: 0 0 8px var(--accent-color);"></div>
-                        </div>
-                        <span style="font-size: 12px; font-weight: bold; min-width: 60px; text-align: right;">${goal.current || 0} / ${goal.target}</span>
-                    </div>
-                </td>
-                <td class="text-right">
-                    <button class="btn-delete" onclick="window.deleteGoal(${index})" style="background: transparent; border: none; color: #ff3366; cursor: pointer; padding: 5px;">
-                        <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
-                    </button>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-
-        if (window.lucide) window.lucide.createIcons();
-    }
-
-    // Render wheel options list
-    function renderWheelOptionsList(options) {
-        const container = document.getElementById('wheel-options-list');
-        if (!container) return;
-        container.innerHTML = '';
-
-        if (!options || options.length === 0) {
-            container.innerHTML = `
-                <div style="text-align: center; color: #888; font-size: 11px; padding: 10px;">
-                    No hay opciones en la ruleta.
-                </div>
-            `;
-            return;
-        }
-
-        options.forEach((opt, index) => {
-            const item = document.createElement('div');
-            item.style = 'display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 6px 10px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1);';
-            item.innerHTML = `
-                <span style="font-size: 12px; color: white; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 80%;">${opt}</span>
-                <button onclick="window.deleteWheelOption(${index})" style="background: transparent; border: none; color: #ff3366; cursor: pointer; padding: 2px; display: flex; align-items: center;">
-                    <i data-lucide="x" style="width: 14px; height: 14px;"></i>
-                </button>
-            `;
-            container.appendChild(item);
-        });
-
-        if (window.lucide) window.lucide.createIcons();
-    }
+    // Note: renderGoalsList and renderWheelOptionsList have been moved to the global scope at the end of this file to prevent ReferenceErrors during early socket setup.
 
     // Define global action hooks
     window.deleteGoal = function(index) {
@@ -4898,5 +4831,94 @@ document.addEventListener('DOMContentLoaded', () => {
         renderGoalsList(goals);
     });
 });
+
+// =========================================================================
+// GLOBAL FUNCTIONS (HOISTED)
+// =========================================================================
+
+// Render goals table in chatbot settings view
+function renderGoalsList(goals) {
+    const tbody = document.getElementById('goals-table-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (!goals || goals.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="3" style="text-align: center; color: #888; font-size: 12px; padding: 15px;">
+                    No hay metas configuradas. Crea una arriba.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    goals.forEach((goal, index) => {
+        const tr = document.createElement('tr');
+        
+        let typeLabel = '';
+        if (goal.type === 'likes') typeLabel = 'Me Gusta (Likes)';
+        else if (goal.type === 'follows') typeLabel = 'Seguidores';
+        else if (goal.type === 'shares') typeLabel = 'Compartidos';
+        else if (goal.type === 'gift') {
+            typeLabel = `Regalo: ${goal.giftName || 'Cualquiera'}`;
+        }
+
+        const pct = Math.min(100, Math.round(((goal.current || 0) / (goal.target || 1)) * 100));
+
+        tr.innerHTML = `
+            <td>
+                <div style="font-weight: bold; color: white;">${goal.title || 'Sin título'}</div>
+                <div style="font-size: 11px; color: #888;">${typeLabel}</div>
+            </td>
+            <td>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="flex: 1; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; min-width: 60px;">
+                        <div style="width: ${pct}%; height: 100%; background: var(--accent-color, #d900ff); box-shadow: 0 0 8px var(--accent-color);"></div>
+                    </div>
+                    <span style="font-size: 12px; font-weight: bold; min-width: 60px; text-align: right;">${goal.current || 0} / ${goal.target}</span>
+                </div>
+            </td>
+            <td class="text-right">
+                <button class="btn-delete" onclick="window.deleteGoal(${index})" style="background: transparent; border: none; color: #ff3366; cursor: pointer; padding: 5px;">
+                    <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    if (window.lucide) window.lucide.createIcons();
+}
+
+// Render wheel options list
+function renderWheelOptionsList(options) {
+    const container = document.getElementById('wheel-options-list');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!options || options.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; color: #888; font-size: 11px; padding: 10px;">
+                No hay opciones en la ruleta.
+            </div>
+        `;
+        return;
+    }
+
+    options.forEach((opt, index) => {
+        const item = document.createElement('div');
+        item.style = 'display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 6px 10px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1);';
+        item.innerHTML = `
+            <span style="font-size: 12px; color: white; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 80%;">${opt}</span>
+            <button onclick="window.deleteWheelOption(${index})" style="background: transparent; border: none; color: #ff3366; cursor: pointer; padding: 2px; display: flex; align-items: center;">
+                <i data-lucide="x" style="width: 14px; height: 14px;"></i>
+            </button>
+        `;
+        container.appendChild(item);
+    });
+
+    if (window.lucide) window.lucide.createIcons();
+}
 
 
