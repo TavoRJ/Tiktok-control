@@ -16,3 +16,18 @@ temp_*.mp3
 # OS files
 .DS_Store
 Thumbs.db
+
+# Media assets - large binary files, tracked locally only
+public/sounds/
+public/assets/gift/
+public/assets/streamers/
+public/assets/app-assets/
+
+# Local data files - user-specific, not needed in source control
+sounds_config.json
+recetas_config.json
+gifts_mapping.json
+session_stats.json
+scratch/
+scratch_read_back.py
+step_*.txt
