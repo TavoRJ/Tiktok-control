@@ -6,29 +6,34 @@
     <title>Top Donadores - Overlay</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        if (window.self !== window.top) {
+            document.documentElement.classList.add('is-iframe');
+        }
+    </script>
     <style>
         :root {
-            --bg-glass: rgba(10, 10, 12, 0.6);
-            --border-color: rgba(255, 255, 255, 0.08);
+            --bg-glass: rgba(10, 10, 12, 0.25);
+            --border-color: rgba(255, 0, 119, 0.3);
             --text-main: #ffffff;
             --text-muted: #a0a0ab;
-            --accent-glow: rgba(0, 113, 227, 0.4);
-            --accent-color: #0071e3;
+            --accent-glow: transparent;
+            --accent-color: #ff0077;
         }
 
         body.theme-neutral {
-            --accent-glow: rgba(0, 113, 227, 0.4);
-            --accent-color: #0071e3;
+            --accent-glow: transparent;
+            --accent-color: #ff0077;
         }
 
         body.theme-naya {
-            --accent-glow: rgba(255, 105, 180, 0.5);
-            --accent-color: #ff69b4;
+            --accent-glow: transparent;
+            --accent-color: #ff0077;
         }
 
         body.theme-majo {
-            --accent-glow: rgba(153, 0, 255, 0.5);
-            --accent-color: #9900ff;
+            --accent-glow: transparent;
+            --accent-color: #ff0077;
         }
 
         * {
@@ -47,18 +52,24 @@
             padding: 15px;
         }
 
+        html.is-iframe body {
+            width: 100% !important;
+            height: 100% !important;
+            padding: 10px !important;
+            margin: 0 !important;
+        }
+
         .ranking-container {
             width: 100%;
             height: 100%;
             background: var(--bg-glass);
-            border: 2px solid var(--border-color);
+            border: 2px solid var(--accent-color);
             border-radius: 24px;
             padding: 20px;
             backdrop-filter: blur(15px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5), 0 0 20px var(--accent-glow);
+            box-shadow: none;
             display: flex;
             flex-direction: column;
-            border-color: var(--accent-color);
             transition: all 0.3s ease;
         }
 
@@ -75,7 +86,7 @@
             font-size: 20px;
             font-weight: 900;
             letter-spacing: 0.5px;
-            text-shadow: 0 0 10px var(--accent-glow);
+            text-shadow: none;
             text-transform: uppercase;
         }
 
@@ -107,7 +118,7 @@
             background: rgba(255, 255, 255, 0.06);
             transform: scale(1.03);
             border-color: var(--accent-color);
-            box-shadow: 0 0 10px var(--accent-glow);
+            box-shadow: none;
         }
 
         .rank-badge {
@@ -127,18 +138,18 @@
         .rank-1 .rank-badge {
             background: linear-gradient(135deg, #ffd700, #ffa500);
             color: #111;
-            box-shadow: 0 0 12px rgba(255, 215, 0, 0.6);
+            box-shadow: none;
             font-size: 16px;
         }
         .rank-2 .rank-badge {
             background: linear-gradient(135deg, #c0c0c0, #808080);
             color: #111;
-            box-shadow: 0 0 10px rgba(192, 192, 192, 0.5);
+            box-shadow: none;
         }
         .rank-3 .rank-badge {
             background: linear-gradient(135deg, #cd7f32, #8b4513);
             color: #fff;
-            box-shadow: 0 0 8px rgba(205, 127, 50, 0.4);
+            box-shadow: none;
         }
 
         .user-info {
@@ -198,13 +209,57 @@
     <script>
         const socket = io();
         const listContainer = document.getElementById('ranking-list');
+        const isIframe = window.self !== window.top;
 
         // Sync theme
         socket.on('chatbot_settings_updated', (config) => {
             if (config && config.themeName) {
                 document.body.className = 'theme-' + config.themeName;
             }
+            // Apply initial widget position and visibility from config
+            if (config && config.widgets && config.widgets.donors) {
+                applyWidgetState(config.widgets.donors);
+            }
         });
+
+        // Real-time position control from the scene designer
+        socket.on('widget_position_changed', (data) => {
+            if (data && data.widget === 'donors') {
+                if (!isIframe) {
+                    document.body.style.left = data.x + '%';
+                    document.body.style.top  = data.y + '%';
+                    if (data.width !== undefined) document.body.style.width = data.width + '%';
+                    if (data.height !== undefined) document.body.style.height = data.height + '%';
+                }
+            }
+        });
+
+        // Real-time visibility control from the scene designer
+        socket.on('widget_status_changed', (data) => {
+            if (data && data.widget === 'donors') {
+                document.body.style.display = data.active ? '' : 'none';
+            }
+        });
+
+        function applyWidgetState(cfg) {
+            if (!cfg) return;
+            if (isIframe) {
+                document.body.style.position = 'relative';
+                document.body.style.left = '0';
+                document.body.style.top = '0';
+                document.body.style.width = '100%';
+                document.body.style.height = '100%';
+                document.body.style.margin = '0';
+                document.body.style.display = cfg.active ? '' : 'none';
+            } else {
+                document.body.style.position = 'absolute';
+                document.body.style.left = cfg.x + '%';
+                document.body.style.top  = cfg.y + '%';
+                if (cfg.width) document.body.style.width = cfg.width + '%';
+                if (cfg.height) document.body.style.height = cfg.height + '%';
+                document.body.style.display = cfg.active ? '' : 'none';
+            }
+        }
 
         // Sync rankings
         socket.on('rankings_updated', (rankings) => {
@@ -233,8 +288,19 @@
                 else if (index === 1) medalEmoji = '🥈';
                 else if (index === 2) medalEmoji = '🥉';
 
+                const initials = (user.nickname || user.username || 'US').substring(0, 2).toUpperCase();
+                const hasAvatar = user.profilePictureUrl && user.profilePictureUrl.trim().length > 0;
+                const avatarImg = hasAvatar 
+                    ? `<img src="${escapeHtml(user.profilePictureUrl)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />`
+                    : '';
+                const fallbackStyle = hasAvatar ? 'style="display: none;"' : 'style="display: flex; width: 100%; height: 100%; justify-content: center; align-items: center;"';
+
                 item.innerHTML = `
                     <div class="rank-badge">${medalEmoji}</div>
+                    <div class="rank-avatar" style="position: relative; overflow: hidden; width: 34px; height: 34px; border-radius: 50%; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; color: var(--text-main); flex-shrink: 0;">
+                        ${avatarImg}
+                        <span class="rank-avatar-fallback" ${fallbackStyle}>${initials}</span>
+                    </div>
                     <div class="user-info">
                         <span class="nickname">${escapeHtml(user.nickname)}</span>
                         <span class="username">@${escapeHtml(user.username)}</span>

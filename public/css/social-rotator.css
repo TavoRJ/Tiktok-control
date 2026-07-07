@@ -1,0 +1,200 @@
+:root {
+    --bg-glass: rgba(15, 15, 20, 0.85);
+    --border-glass: rgba(255, 255, 255, 0.1);
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --brand-color: #a100ff;
+    --brand-shadow: rgba(161, 0, 255, 0.3);
+    
+    /* Brand specific theme colors */
+    --color-instagram: #e1306c;
+    --color-tiktok: #00f2fe;
+    --color-facebook: #1877f2;
+    --color-youtube: #ff0000;
+    --color-twitter: #1da1f2;
+    --color-discord: #5865f2;
+    --color-custom: #a100ff;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: transparent !important;
+    font-family: 'Outfit', sans-serif;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: flex-start;
+    align-items: flex-start;
+    padding: 20px;
+}
+
+/* Social Widget Base Card */
+.social-widget {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: var(--bg-glass);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border-glass);
+    border-radius: 12px;
+    padding: 12px 20px;
+    min-width: 260px;
+    max-width: 450px;
+    height: 60px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 
+                0 0 15px var(--brand-shadow);
+    transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+                box-shadow 0.4s ease,
+                border-color 0.4s ease;
+    overflow: hidden;
+}
+
+/* Animations states */
+.social-widget.hidden {
+    opacity: 0;
+    transform: translateY(-40px) scale(0.9);
+    pointer-events: none;
+}
+
+.social-widget.slide-in {
+    animation: slideIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.social-widget.slide-out {
+    animation: slideOut 0.5s cubic-bezier(0.7, 0, 0.84, 0) forwards;
+}
+
+/* Glow Background Effects */
+.glow-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    border-radius: 12px;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.glow-bg {
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, var(--brand-shadow) 0%, transparent 60%);
+    opacity: 0.8;
+    z-index: 0;
+    animation: rotateGlow 8s linear infinite;
+}
+
+.card-content {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    width: 100%;
+    z-index: 2;
+}
+
+/* Icon Container with Brand Specific Gradient/Colors */
+.icon-wrapper {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: var(--brand-color);
+    box-shadow: 0 4px 10px var(--brand-shadow);
+    color: white;
+    flex-shrink: 0;
+    transition: background-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+.icon-wrapper svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+}
+
+/* Text Styling */
+.text-wrapper {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.platform-label {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--brand-color);
+    transition: color 0.4s ease;
+}
+
+.username-text {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 1px;
+}
+
+/* Progress bar timer */
+.progress-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    background: var(--brand-color);
+    box-shadow: 0 0 8px var(--brand-color);
+    width: 100%;
+    transform-origin: left;
+    z-index: 3;
+    transition: background 0.4s ease, box-shadow 0.4s ease;
+}
+
+/* Animation Keyframes */
+@keyframes slideIn {
+    0% {
+        opacity: 0;
+        transform: translateY(-30px) scale(0.92);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes slideOut {
+    0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+    }
+}
+
+@keyframes rotateGlow {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}

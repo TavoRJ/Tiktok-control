@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GRLive - Unified Widgets Overlay</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;900&display=swap" rel="stylesheet">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 1080px;
+            height: 1920px;
+            background: transparent;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Unified overlay container representing the 9:16 mobile canvas */
+        .widgets-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        /* Styling for each active iframe widget container */
+        .overlay-widget-container {
+            position: absolute;
+            border: none;
+            background: transparent;
+            overflow: hidden;
+            pointer-events: none;
+            display: none;
+            box-sizing: border-box;
+        }
+
+        .overlay-widget-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: transparent;
+            overflow: hidden;
+            pointer-events: none;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="widgets-container" id="widgets-container">
+        <!-- Iframe widgets will be injected and positioned dynamically here -->
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/widgets-overlay.js"></script>
+</body>
+</html>

@@ -1,74 +1,41 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TikTok Live - Overlay</title>
+    <title>TikTok Live - Overlay (Animaciones)</title>
     <link rel="stylesheet" href="css/overlay.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@900&family=Outfit:wght@400;600;800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
+    <style>
+        body, html {
+            background-color: transparent !important;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        /* Centering for custom video/image animations */
+        .anim-container {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+        .anim-container video, .anim-container img {
+            max-width: 500px;
+            max-height: 500px;
+            object-fit: contain;
+        }
+    </style>
 </head>
-
 <body>
-    <!-- Tabla Versus Persistente -->
-    <div id="versus-container" class="versus-container hidden">
-        <div class="vs-side host-side">
-            <span id="vs-host-name">Host</span>
-        </div>
-        <div class="vs-badge">
-            <span>VS</span>
-        </div>
-        <div class="vs-side opponent-side">
-            <span id="vs-opponent-name">Esperando...</span>
-        </div>
-    </div>
-
-    <!-- Mini Alertas para Regalos Pequeños -->
-    <div id="mini-alerts-container" class="mini-alerts-container"></div>
-
-    <!-- Capa Trasera (Background Animations) -->
     <div id="layer-back" class="layer"></div>
-
-    <!-- Capa Delantera (Foreground Animations) -->
     <div id="layer-front" class="layer"></div>
-
-    <!-- Nuevos Overlays Premium 1.2.2 -->
-    <div id="overlay-goals-container"></div>
-    
-    <div id="overlay-music-queue" class="hidden">
-        <div class="vinyl-wrapper">
-            <div class="vinyl-disc">
-                <div class="vinyl-art" id="music-art"></div>
-            </div>
-            <div class="music-info">
-                <div class="music-title" id="music-title">Cargando canción...</div>
-                <div class="music-artist" id="music-artist">Artista</div>
-                <div class="music-requester" id="music-requester"></div>
-            </div>
-        </div>
-        <div class="music-queue-list" id="music-queue-list">
-            <!-- Render next songs -->
-        </div>
-    </div>
-
-    <div id="overlay-premium-chat"></div>
-
-    <div id="overlay-wheel-container" class="hidden">
-        <div class="wheel-box">
-            <h2 id="wheel-title">Desafío para Majo 🕸</h2>
-            <div class="wheel-spinner-container">
-                <div class="wheel-pointer"></div>
-                <canvas id="wheel-canvas" width="400" height="400"></canvas>
-            </div>
-            <div id="wheel-winner-banner" class="hidden">
-                <div class="winner-title">¡Desafío seleccionado!</div>
-                <div class="winner-text" id="wheel-winner-text">Cantar</div>
-            </div>
-        </div>
-    </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="js/overlay.js"></script>
 </body>
-
 </html>

@@ -508,73 +508,140 @@ body, html {
 
 /* 3. Theme Coquette Hearts (Pastel Femenino Coqueto) */
 .theme-coquette-hearts {
-    background: rgba(255, 240, 245, 0.88) !important;
+    background: linear-gradient(135deg, rgba(255, 240, 248, 0.92) 0%, rgba(255, 220, 232, 0.95) 100%) !important;
     border: 2px solid #ffb3d9 !important;
-    box-shadow: 0 20px 50px rgba(255, 179, 217, 0.3), 0 0 30px rgba(255, 179, 217, 0.15) !important;
+    box-shadow: 0 20px 50px rgba(255, 150, 200, 0.25), 0 0 35px rgba(255, 179, 217, 0.2) !important;
     border-radius: 35px !important;
+    overflow: visible !important;
+}
+/* Floating hearts via pseudo-elements */
+.theme-coquette-hearts::before {
+    content: '💕';
+    position: absolute;
+    font-size: 22px;
+    bottom: 18px;
+    left: 18px;
+    opacity: 0.7;
+    animation: floatHeart1 3.5s ease-in-out infinite alternate, contentAlternate1 10s step-end infinite;
+    z-index: 10;
+    pointer-events: none;
+}
+.theme-coquette-hearts::after {
+    content: '🎀';
+    position: absolute;
+    font-size: 20px;
+    top: 18px;
+    right: 18px;
+    opacity: 0.75;
+    animation: floatHeart2 4s ease-in-out infinite alternate-reverse, contentAlternate2 10s step-end infinite;
+    z-index: 10;
+    pointer-events: none;
+}
+@keyframes contentAlternate1 {
+    0%, 50% { content: '💕'; }
+    50.001%, 100% { content: '🧁'; }
+}
+@keyframes contentAlternate2 {
+    0%, 50% { content: '🎀'; }
+    50.001%, 100% { content: '🍳'; }
+}
+@keyframes floatHeart1 {
+    from { transform: translateY(0) rotate(-8deg); opacity: 0.6; }
+    to   { transform: translateY(-10px) rotate(8deg); opacity: 0.9; }
+}
+@keyframes floatHeart2 {
+    from { transform: translateY(0) rotate(6deg) scale(1); opacity: 0.7; }
+    to   { transform: translateY(-8px) rotate(-6deg) scale(1.1); opacity: 1; }
 }
 .theme-coquette-hearts .glowing-text {
-    color: #ff5599 !important;
+    color: #e8478c !important;
     font-family: 'Outfit', cursive, sans-serif;
-    text-shadow: 0 2px 5px rgba(255, 85, 153, 0.15) !important;
-    animation: heartPulse 1.5s infinite alternate !important;
+    text-shadow: 0 2px 8px rgba(232, 71, 140, 0.2) !important;
+    animation: heartPulse 1.8s ease-in-out infinite alternate !important;
 }
 @keyframes heartPulse {
     from { transform: scale(1); }
-    to { transform: scale(1.03); }
+    to   { transform: scale(1.025); }
 }
 .theme-coquette-hearts .tocadiscos {
-    background: linear-gradient(135deg, #fff0f5 0%, #ffe4e1 100%) !important;
+    background: linear-gradient(145deg, #fff0f8 0%, #ffd6ea 100%) !important;
     border: 2px dashed #ffb3d9 !important;
-    box-shadow: inset 0 0 10px rgba(255, 179, 217, 0.15), 0 10px 25px rgba(255, 179, 217, 0.08) !important;
+    box-shadow: inset 0 0 12px rgba(255, 179, 217, 0.2), 0 10px 25px rgba(255, 150, 200, 0.12) !important;
     border-radius: 25px !important;
 }
+/* Vinyl record: pink pastel with rose gradient */
+.theme-coquette-hearts .vinyl-record {
+    background: radial-gradient(circle at 30% 30%, #ffb3d9 0%, #ff6eb4 35%, #cc2a6e 65%, #7a0e3c 100%) !important;
+    box-shadow: 0 0 0 4px #ffcce5, 0 0 0 8px rgba(255,105,180,0.25), 0 10px 30px rgba(200,50,120,0.4) !important;
+}
+.theme-coquette-hearts .vinyl-record::before {
+    background: rgba(255, 255, 255, 0.12) !important;
+    border-top: 1px solid rgba(255,255,255,0.3) !important;
+}
+.theme-coquette-hearts .vinyl-center {
+    background: radial-gradient(circle, #fff0f5 0%, #ffc2d4 60%, #ff80ab 100%) !important;
+    border: 2px solid #ffb3d9 !important;
+    box-shadow: 0 0 10px rgba(255, 105, 180, 0.4) !important;
+}
 .theme-coquette-hearts .platter-area {
-    background: #ffe4e1 !important;
+    background: #ffe4f0 !important;
     border: 3px solid #ffb3d9 !important;
+    box-shadow: inset 0 0 8px rgba(255,105,180,0.15) !important;
 }
 .theme-coquette-hearts #song-title {
-    color: #d13d7a !important;
+    color: #c0246a !important;
+    font-weight: 900 !important;
     text-shadow: none !important;
 }
 .theme-coquette-hearts #song-artist {
-    color: #ff5599 !important;
+    color: #e8478c !important;
+    font-weight: 700 !important;
 }
 .theme-coquette-hearts .progress-container {
-    background: rgba(255, 179, 217, 0.2) !important;
+    background: rgba(255, 179, 217, 0.25) !important;
     height: 5px !important;
     border-radius: 5px !important;
 }
 .theme-coquette-hearts .progress-bar-fill {
-    background: #ff5599 !important;
-    box-shadow: 0 0 8px rgba(255, 85, 153, 0.3) !important;
+    background: linear-gradient(90deg, #ff80ab, #e8478c) !important;
+    box-shadow: 0 0 10px rgba(232, 71, 140, 0.4) !important;
 }
 .theme-coquette-hearts .song-requester {
-    color: #d13d7a !important;
+    color: #c0246a !important;
     text-shadow: none !important;
     font-style: italic;
+    font-weight: 600;
 }
-.theme-coquette-hearts::after {
-    content: '🌸';
-    position: absolute;
-    font-size: 20px;
-    top: 15px;
-    right: 15px;
-    opacity: 0.65;
-    animation: floatDecor 4s ease-in-out infinite alternate;
+/* Naya logo badge positioned elegantly in top-left */
+.theme-coquette-hearts #widget-chibi-character {
+    display: block !important;
+    background-image: url('/streamer-assets/naya-logo.png') !important;
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    width: 64px !important;
+    height: 64px !important;
+    position: absolute !important;
+    top: -18px !important;
+    left: -18px !important;
+    border-radius: 50% !important;
+    border: 2px solid #ffb3d9 !important;
+    box-shadow: 0 4px 16px rgba(255,105,180,0.4) !important;
+    filter: drop-shadow(0 2px 8px rgba(255,105,180,0.5)) !important;
+    animation: nayaLogoFloat 4s ease-in-out infinite alternate !important;
+    z-index: 20 !important;
 }
-.theme-coquette-hearts::before {
-    content: '🎀';
-    position: absolute;
-    font-size: 20px;
-    bottom: 15px;
-    left: 15px;
-    opacity: 0.65;
-    animation: floatDecor 4s ease-in-out infinite alternate-reverse;
+@keyframes nayaLogoFloat {
+    from { transform: translateY(0) rotate(-3deg); }
+    to   { transform: translateY(-6px) rotate(3deg); }
 }
-@keyframes floatDecor {
-    from { transform: translateY(0) rotate(0deg); }
-    to { transform: translateY(-6px) rotate(12deg); }
+/* Horizontal layout adaptation */
+.theme-coquette-hearts.layout-horizontal #widget-chibi-character {
+    top: auto !important;
+    bottom: -18px !important;
+    left: -18px !important;
+    width: 80px !important;
+    height: 80px !important;
 }
 
 /* 4. Theme Anime Luffy (Subtle yellow straw-hat background, blue, red accents, floating chibi Luffy) */
@@ -635,7 +702,7 @@ body, html {
 }
 .theme-anime-luffy #widget-chibi-character {
     display: block !important;
-    background-image: url('../assets/luffy-3d.png') !important; /* Use 3D Luffy */
+    background-image: url('/streamer-assets/luffy-3d.png') !important; /* Use 3D Luffy */
     bottom: -10px;
     right: -10px;
     width: 120px;
@@ -739,7 +806,7 @@ body, html {
 }
 .theme-naya-chibi #widget-chibi-character {
     display: block !important;
-    background-image: url('../assets/naya-logo.png') !important; /* Use Naya Chibi Logo */
+    background-image: url('/streamer-assets/naya-logo.png') !important; /* Use Naya Chibi Logo */
     bottom: -15px;
     right: -15px;
     width: 120px;
@@ -810,7 +877,7 @@ body, html {
 }
 .theme-anime-gojo #widget-chibi-character {
     display: block !important;
-    background-image: url('../assets/gojo-chibi.png') !important; /* Use Gojo Chibi */
+    background-image: url('/streamer-assets/gojo-chibi.png') !important; /* Use Gojo Chibi */
     bottom: -15px;
     right: -10px;
     width: 120px;
@@ -881,7 +948,7 @@ body, html {
 }
 .theme-majo-spider #widget-chibi-character {
     display: block !important;
-    background-image: url('../assets/majo-logo.png') !important; /* Use Majo Logo */
+    background-image: url('/streamer-assets/majo-logo2.png') !important; /* Use Majo Logo */
     bottom: -15px;
     right: -15px;
     width: 120px;
@@ -1081,4 +1148,12 @@ body, html {
     height: 60px !important;
     bottom: -5px !important;
     right: -5px !important;
+}
+
+/* Vertical 9:16 scaling inside 1080x1920 screens */
+@media (width: 1080px) and (height: 1920px) {
+    .widget-wrapper:not(.layout-horizontal) {
+        transform: scale(1.4) !important;
+        transform-origin: bottom left !important;
+    }
 }

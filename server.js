@@ -1,3 +1,4 @@
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -7,13 +8,266 @@ const fs = require('fs');
 const { EdgeTTS } = require('node-edge-tts');
 const os = require('os');
 const packageJson = require('./package.json');
+const ytdl = require('@distube/ytdl-core');
+const play = require('play-dl');
+
+// Known fallback public Cobalt instances
+let workingCobaltApis = [
+    "https://api.cobalt.blackcat.sweeux.org",
+    "https://apicobalt.mgytr.top",
+    "https://subito-c.meowing.de",
+    "https://api.qwkuns.me",
+    "https://dog.kittycat.boo",
+    "https://rue-cobalt.xenon.zone",
+    "https://nuko-c.meowing.de",
+    "https://cobaltapi.kittycat.boo"
+];
+
+async function updateCobaltApis() {
+    try {
+        console.log('[YouTube Audio] Actualizando instancias de Cobalt desde cobalt.directory...');
+        const res = await fetch('https://cobalt.directory/api/working?type=api', {
+            signal: AbortSignal.timeout(5000)
+        });
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.youtube && Array.isArray(data.youtube) && data.youtube.length > 0) {
+                workingCobaltApis = data.youtube;
+                console.log('[YouTube Audio] Lista de Cobalt APIs actualizada con éxito:', workingCobaltApis);
+            } else if (data && data.Frontend && Array.isArray(data.Frontend) && data.Frontend.length > 0) {
+                workingCobaltApis = data.Frontend;
+                console.log('[YouTube Audio] Lista de Cobalt APIs actualizada (Frontend fallback):', workingCobaltApis);
+            }
+        }
+    } catch (err) {
+        console.error('[YouTube Audio] Error al actualizar las Cobalt APIs:', err.message);
+    }
+}
 
 const writableDir = process.env.USER_DATA_PATH || __dirname;
-const SETTINGS_FILE = path.join(writableDir, 'chatbot_settings.json');
+// Base fallback paths
+const DEFAULT_SETTINGS_FILE = path.join(writableDir, 'chatbot_settings.json');
+const DEFAULT_SOUNDS_CONFIG_FILE = path.join(writableDir, 'sounds_config.json');
+const DEFAULT_DINAMICAS_CONFIG_FILE = path.join(writableDir, 'dinamicas_config.json');
+const DEFAULT_RECETAS_CONFIG_FILE = path.join(writableDir, 'recetas_config.json');
+const DEFAULT_GOALS_CATALOG_FILE = path.join(writableDir, 'goals_catalog.json');
+
+// Active mutable config paths (initially pointing to defaults)
+let SETTINGS_FILE = DEFAULT_SETTINGS_FILE;
+let SOUNDS_CONFIG_FILE = DEFAULT_SOUNDS_CONFIG_FILE;
+let DINAMICAS_CONFIG_FILE = DEFAULT_DINAMICAS_CONFIG_FILE;
+let RECETAS_CONFIG_FILE = DEFAULT_RECETAS_CONFIG_FILE;
+let GOALS_CATALOG_FILE = DEFAULT_GOALS_CATALOG_FILE;
+
+// Safely intercept fs.writeFileSync locally to prevent any configuration JSON corruption
+const originalWriteFileSync = fs.writeFileSync;
+fs.writeFileSync = function(filePath, data, options) {
+    const isTargetConfigFile = 
+        filePath === SETTINGS_FILE || 
+        filePath === SOUNDS_CONFIG_FILE || 
+        filePath === DINAMICAS_CONFIG_FILE || 
+        filePath === RECETAS_CONFIG_FILE || 
+        filePath === GOALS_CATALOG_FILE ||
+        filePath === DEFAULT_SETTINGS_FILE ||
+        filePath === DEFAULT_SOUNDS_CONFIG_FILE ||
+        filePath === DEFAULT_DINAMICAS_CONFIG_FILE ||
+        filePath === DEFAULT_RECETAS_CONFIG_FILE ||
+        filePath === DEFAULT_GOALS_CATALOG_FILE;
+
+    if (isTargetConfigFile) {
+        try {
+            // Verificar validez del contenido si es JSON en formato string
+            if (typeof data === 'string') {
+                JSON.parse(data);
+            }
+            
+            let tempBackup = null;
+            if (fs.existsSync(filePath)) {
+                tempBackup = filePath + '.tmp';
+                originalWriteFileSync(tempBackup, fs.readFileSync(filePath), 'utf8');
+            }
+            
+            originalWriteFileSync(filePath, data, options);
+            
+            // Validar que quedó legible tras ser escrito
+            const verifyContent = fs.readFileSync(filePath, 'utf8');
+            JSON.parse(verifyContent);
+            
+            if (tempBackup && fs.existsSync(tempBackup)) {
+                fs.unlinkSync(tempBackup);
+            }
+        } catch (err) {
+            console.error(`[Guardado Seguro FS] Falló la escritura en ${filePath}. Restaurando versión anterior...`, err);
+            const tempBackup = filePath + '.tmp';
+            if (fs.existsSync(tempBackup)) {
+                try {
+                    originalWriteFileSync(filePath, fs.readFileSync(tempBackup), options);
+                    fs.unlinkSync(tempBackup);
+                    console.info(`[Guardado Seguro FS] Versión anterior restaurada con éxito.`);
+                } catch (restoreErr) {
+                    console.error(`[Guardado Seguro FS] Error crítico restaurando el respaldo:`, restoreErr);
+                }
+            }
+            throw err;
+        }
+    } else {
+        return originalWriteFileSync(filePath, data, options);
+    }
+};
 
 // Ensure writable directories exist
 if (process.env.USER_DATA_PATH && !fs.existsSync(writableDir)) {
     fs.mkdirSync(writableDir, { recursive: true });
+}
+
+// ============================================================
+// CATÁLOGO CEREBRO: gifts_mapping.json
+// Archivo maestro que recibe todos los registros de regalos
+// en tiempo real desde TikTok Live.
+// Debe vivir en writableDir (igual que todos los configs) para
+// ser escribible tanto en modo dev como en el .exe instalado.
+// ============================================================
+const GIFTS_MAPPING_FILE = path.join(writableDir, 'gifts_mapping.json');
+const BUNDLE_GIFTS_MAPPING_FILE = path.join(__dirname, 'gifts_mapping.json');
+
+// Recommended banned terms list (groserías, insultos y albures mexicanos comunes)
+const RECOMMENDED_BANNED_WORDS = [
+    "verga", "puto", "puta", "mierda", "pendejo", "pendeja", "concha", "culo", "culero", "culera", "maricon", "maricón", 
+    "joto", "zorra", "estupido", "estúpido", "estupida", "estúpida", "cagon", "cagón", "chinga", "chingar", "chingao", 
+    "cabron", "cabrón", "orto", "tetas", "mamon", "mamón", "pene", "vagina", "ano", "singar", "cojer",
+    "caverga", "caver ga", "querri caver ga", "querri caverga", "elver galarga", "elvergalarga", "elver ga", 
+    "rosa melano", "rosamelano", "rosame lano", "benito camelas", "benitocamelas", "benito ca", "lomas turbas", 
+    "lomasturbas", "lomas turba", "manguera", "chupa", "chupalo", "chúpalo", "mamalo", "mámalo", "debora melo", 
+    "deboramelo", "chupa melo", "chupamelo", "chupa pito", "chupapito", "chupa verga", "chupaverga", "techo ca",
+    "elber", "galarga", "melano", "camelan", "camelar", "camelas", "turbas", "aquiles baeza", "aquilesbaeza", 
+    "aquiles ba", "teco ge", "tecoge", "telas pon", "telaspon", "telas po", "melochupas", "melo chupas",
+    "me lo chupas", "chupamelapija", "chupame la pija", "hijo de puta", "hijodeputa", "hijo de perra", 
+    "hijodeperra", "chupatela", "chúpatela", "mamas", "mamadas", "mamada", "soplapollas", "sopla pollas"
+];
+
+function createBackup(filePath, suffix = '') {
+    try {
+        if (!fs.existsSync(filePath)) return null;
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const backupPath = `${filePath}.${timestamp}${suffix}.bak`;
+        fs.copyFileSync(filePath, backupPath);
+        console.info(`[Cerebro] Backup creado: ${backupPath}`);
+        return backupPath;
+    } catch (err) {
+        console.error(`[Cerebro] No se pudo crear backup de ${filePath}:`, err);
+        return null;
+    }
+}
+
+function readJsonFileSafe(filePath, defaultValue = {}) {
+    if (!fs.existsSync(filePath)) return defaultValue;
+    try {
+        const raw = fs.readFileSync(filePath, 'utf8');
+        return raw.trim() ? JSON.parse(raw) : defaultValue;
+    } catch (err) {
+        const backupPath = createBackup(filePath, '.invalid');
+        console.error(`[Cerebro] Error leyendo JSON en ${filePath}. Se respaldó el archivo corrupto en ${backupPath}:`, err);
+        return defaultValue;
+    }
+}
+
+function writeJsonFileSafe(filePath, data) {
+    try {
+        const content = JSON.stringify(data, null, 2);
+        JSON.parse(content); // Validar estructura
+        
+        let tempBackup = null;
+        if (fs.existsSync(filePath)) {
+            tempBackup = filePath + '.tmp';
+            fs.copyFileSync(filePath, tempBackup);
+        }
+        
+        fs.writeFileSync(filePath, content, 'utf8');
+        
+        // Verificar que quedó legible
+        const verifyContent = fs.readFileSync(filePath, 'utf8');
+        JSON.parse(verifyContent);
+        
+        if (tempBackup && fs.existsSync(tempBackup)) {
+            fs.unlinkSync(tempBackup);
+        }
+        return true;
+    } catch (err) {
+        console.error(`[Guardado Seguro] Falló la escritura en ${filePath}. Restaurando respaldo temporal...`, err);
+        const tempBackup = filePath + '.tmp';
+        if (fs.existsSync(tempBackup)) {
+            try {
+                fs.copyFileSync(tempBackup, filePath);
+                fs.unlinkSync(tempBackup);
+                console.info(`[Guardado Seguro] Respaldo anterior restaurado con éxito.`);
+            } catch (restoreErr) {
+                console.error(`[Guardado Seguro] Error crítico restaurando el respaldo:`, restoreErr);
+            }
+        }
+        throw err;
+    }
+}
+
+function mergeGiftsMappingFromBundle() {
+    try {
+        const bundleExists = fs.existsSync(BUNDLE_GIFTS_MAPPING_FILE);
+        const userExists = fs.existsSync(GIFTS_MAPPING_FILE);
+        const bundleData = bundleExists ? readJsonFileSafe(BUNDLE_GIFTS_MAPPING_FILE, {}) : {};
+        const userData = userExists ? readJsonFileSafe(GIFTS_MAPPING_FILE, {}) : {};
+
+        if (!userExists) {
+            if (bundleExists) {
+                fs.writeFileSync(GIFTS_MAPPING_FILE, JSON.stringify(bundleData, null, 2), 'utf8');
+                console.info('[Cerebro] gifts_mapping.json inicializado desde el bundle en writableDir:', GIFTS_MAPPING_FILE);
+            } else {
+                fs.writeFileSync(GIFTS_MAPPING_FILE, JSON.stringify({}, null, 2), 'utf8');
+                console.info('[Cerebro] gifts_mapping.json creado nuevo en writableDir:', GIFTS_MAPPING_FILE);
+            }
+            return;
+        }
+
+        let merged = false;
+        const defaultName = (id) => `Gift ${id}`;
+
+        for (const giftId of Object.keys(bundleData)) {
+            const bundleEntry = bundleData[giftId];
+            if (!userData[giftId]) {
+                userData[giftId] = bundleEntry;
+                merged = true;
+                continue;
+            }
+
+            const userEntry = userData[giftId];
+            if ((!userEntry.name || userEntry.name.trim() === '' || userEntry.name === defaultName(giftId)) && bundleEntry.name) {
+                userEntry.name = bundleEntry.name;
+                merged = true;
+            }
+            if ((!userEntry.coins || userEntry.coins <= 0) && bundleEntry.coins) {
+                userEntry.coins = bundleEntry.coins;
+                merged = true;
+            }
+            if ((!userEntry.image || userEntry.image.trim() === '') && bundleEntry.image) {
+                userEntry.image = bundleEntry.image;
+                merged = true;
+            }
+        }
+
+        if (merged) {
+            createBackup(GIFTS_MAPPING_FILE);
+            fs.writeFileSync(GIFTS_MAPPING_FILE, JSON.stringify(userData, null, 2), 'utf8');
+            console.info('[Cerebro] gifts_mapping.json fusionado con el bundle sin borrar datos existentes:', GIFTS_MAPPING_FILE);
+        } else {
+            console.info('[Cerebro] No fue necesario fusionar gifts_mapping.json; el archivo del usuario ya estaba completo.');
+        }
+    } catch (err) {
+        console.error('[Cerebro] Error al fusionar gifts_mapping.json desde el bundle:', err);
+    }
+}
+
+try {
+    mergeGiftsMappingFromBundle();
+} catch (err) {
+    console.error('[Cerebro] Error al inicializar gifts_mapping.json:', err);
 }
 
 let chatbotSettings = {
@@ -25,6 +279,10 @@ let chatbotSettings = {
     voiceName: "",
     ttsEngine: "cloud",
     cloudVoiceName: "es-CO-SalomeNeural",
+    geminiModel: "gemini-3.1-flash-tts",
+    geminiVoiceName: "Aoede",
+    geminiStyleInstructions: "Read aloud in a warm, welcoming tone.",
+    geminiLanguage: "es-MX",
     volume: 1.0,
     pitch: 1.0,
     rate: 1.0,
@@ -38,6 +296,7 @@ let chatbotSettings = {
     // New settings
     tiktokUsername: "",
     autoConnect: true,
+    geminiApiKey: "",
     spotifyClientId: "",
     spotifyClientSecret: "",
     spotifyEnabled: false,
@@ -55,6 +314,7 @@ let chatbotSettings = {
     spotifyPermission: "all",
     spotifyCommandPrefix: "!song",
     spotifyVoteSkipLimit: 3,
+    spotifySkipAllowedUsers: "",
     spotifyNeonColor: "pink",
     spotifyVinylSpeed: "normal",
     spotifyVinylDesign: "classic",
@@ -67,6 +327,15 @@ let chatbotSettings = {
     readGiftsEnabled: false,
     readLikesMilestoneEnabled: false,
     likesMilestoneValue: 100,
+    shareAction: "read",
+    shareSound: "",
+    followAction: "read",
+    followSound: "",
+    giftAction: "read",
+    giftSound: "",
+    likeAction: "read",
+    likeSound: "",
+    thankYouLikePhrase: "",
     // YouTube settings
     youtubeEnabled: false,
     youtubeVolume: 80,
@@ -76,6 +345,7 @@ let chatbotSettings = {
     youtubeVoteSkipLimit: 3,
     youtubeTheme: "red-neon",
     youtubePosition: "bottom-left",
+    youtubeSearchEngine: "youtube",
     // Music request monetization settings
     spotifyMonetizationEnabled: false,
     spotifyMinCoins: 5,
@@ -94,15 +364,78 @@ let chatbotSettings = {
     overlayMusicQueueEnabled: true,
     overlayChatEnabled: true,
     overlayChatFilterPremium: true,
-    ttsEffectsEnabled: true
+    ttsEffectsEnabled: true,
+    recipeGoalColor: "#ff477e",
+    bannerSlide1: "Ejemplo de texto",
+    bannerSlide2: "¡Pide tu canción en el chat usando !song 🎵",
+    bannerSlide3: "Meta de Regalos Activa (Calculada automáticamente)",
+    widgets: {
+        spotify: { active: true, x: 5, y: 70, width: 90, height: 15 },
+        youtube: { active: false, x: 5, y: 70, width: 90, height: 15 },
+        banner: { active: true, x: 0, y: 0, width: 100, height: 8 },
+        donors: { active: true, x: 5, y: 10, width: 90, height: 10 },
+        taps: { active: true, x: 5, y: 22, width: 90, height: 10 },
+        mvp: { active: true, x: 5, y: 34, width: 90, height: 10 },
+        songlist: { active: true, x: 5, y: 46, width: 90, height: 12 },
+        recetas: { active: true, x: 5, y: 59, width: 90, height: 10 },
+        dinamicas: { active: true, x: 5, y: 70, width: 90, height: 10 },
+        ruleta: { active: true, x: 5, y: 30, width: 90, height: 40 },
+        socials: { active: true, x: 5, y: 82, width: 90, height: 8 }
+    },
+    globalWidgetStyles: {
+        fontFamily: "Outfit",
+        borderThickness: 2,
+        borderColor: "#ff0077",
+        bgColor: "#0f0514",
+        bgOpacity: 60,
+        textScale: 100
+    },
+    ai: {
+        naya: {
+            ai_bot_active: false,
+            ai_monetization_active: false,
+            ai_min_coins: 5,
+            ai_max_chars: 150,
+            ai_cooldown: 10,
+            ai_read_username: true,
+            ai_prompt_personality: "Habla como un chibi rosa tierno, dulce y alegre."
+        },
+        majo: {
+            ai_bot_active: false,
+            ai_monetization_active: false,
+            ai_min_coins: 10,
+            ai_max_chars: 150,
+            ai_cooldown: 10,
+            ai_read_username: true,
+            ai_prompt_personality: "Habla como Gojo de forma sarcástica, confiada y misteriosa con toques oscuros."
+        }
+    },
+    apuestas: {
+        enabled: false,
+        title: "¿Quién ganará hoy?",
+        count: 4,
+        p1: { name: "Participante 1", giftId: "8913", giftName: "Rosa", votes: 0, voters: [] },
+        p2: { name: "Participante 2", giftId: "9947", giftName: "BFF Necklace", votes: 0, voters: [] },
+        p3: { name: "Participante 3", giftId: "45", giftName: "Corazón", votes: 0, voters: [] },
+        p4: { name: "Participante 4", giftId: "46", giftName: "Confeti", votes: 0, voters: [] }
+    }
 };
 
 // Global in-memory rankings database for active stream session
 let rankings = {
-    likes: {},  // { username: { nickname, count } }
-    gifts: {},  // { username: { nickname, count } }
-    mvp: {}     // { username: { nickname, count } }
+    likes: {},  // { username: { nickname, count, profilePictureUrl } }
+    gifts: {},  // { username: { nickname, count, profilePictureUrl } }
+    mvp: {}     // { username: { nickname, count, profilePictureUrl } }
 };
+
+// Global cache for the current creator's profile picture
+let currentCreatorAvatar = '';
+let currentRoomId = '';
+
+// Global session stats for persistence and real-time dashboard tracking
+let totalSessionDiamonds = 0;
+let totalSessionLikes = 0;
+let totalSessionViewers = 0;
 
 // YouTube Queue & Variables for active stream session
 let youtubeQueue = [];
@@ -112,76 +445,45 @@ let currentActiveQueueYoutubeTrack = null;
 
 // User credits for request monetization (in-memory)
 let userMusicCredits = {};
+let userAiCredits = {};
+let lastAiCallTime = 0;
+let aiCommandQueue = [];
+let isAiProcessing = false;
+let aiQueueCounter = 0;
 
-// Dynamic & hardcoded bilingual mapping for gift names (Spanish <-> English)
-const hardcodedGiftMappings = {
-    "rose": "rosa",
-    "white rose": "rosa blanca",
-    "corn": "es maíz",
-    "it's corn": "es maíz",
-    "it’s corn": "es maíz",
-    "tiktok": "tik tok",
-    "tiktok universe": "tik tok universo",
-    "heart": "corazón",
-    "donut": "dona",
-    "paper duck": "pato",
-    "duck": "pato",
-    "finger heart": "corazón coreano",
-    "crown": "corona",
-    "gg": "buen juego (gg)",
-    "cap": "gorra",
-    "tom's hug": "abrazo de tom",
-    "capybara": "capibara",
-    "love you": "te amo",
-    "rose cosmic": "rosa cosmica",
-    "rose eternity": "rosa de la eternidad",
-    "rose big": "rosa grande",
-    "coffee charm": "encanto del café",
-    "coffee cup": "encanto del café",
-    "motorcycle": "moto",
-    "star": "estrella",
-    
-    "rosa": "rose",
-    "rosa blanca": "white rose",
-    "es maíz": "corn",
-    "maiz": "corn",
-    "tik tok": "tiktok",
-    "tik tok universo": "tiktok universe",
-    "corazón": "heart",
-    "corazon": "heart",
-    "dona": "donut",
-    "pato": "duck",
-    "corazón coreano": "finger heart",
-    "corona": "crown",
-    "buen juego (gg)": "gg",
-    "gorra": "cap",
-    "abrazo de tom": "tom's hug",
-    "capibara": "capybara",
-    "te amo": "love you",
-    "rosa cosmica": "rose cosmic",
-    "rosa de la eternidad": "rose eternity",
-    "rosa grande": "rose big",
-    "encanto del café": "coffee charm",
-    "moto": "motorcycle",
-    "estrella": "star"
+// Track gift coins received per user in current session (for monetization)
+let sessionGiftCoins = {}; // { uniqueId: totalCoinsReceivedThisSession }
+
+// Dictionary of TikTok Gift ID -> { name, coins }
+const tiktokGiftDatabase = {
+    5655: { name: 'Rose', coins: 1 },
+    7934: { name: 'Heart Me', coins: 1 },
+    5266: { name: 'Ice Cream', coins: 1 },
+    5585: { name: 'Weights', coins: 1 },
+    5620: { name: 'Glow-in-the-Dark Wand', coins: 1 },
+    5617: { name: 'GG', coins: 1 },
+    5760: { name: 'Finger Heart', coins: 5 },
+    5659: { name: 'Mini Fridge', coins: 10 },
+    5660: { name: 'Perfume', coins: 20 },
+    5879: { name: 'Doughnut', coins: 30 },
+    5509: { name: 'Paper Crane', coins: 99 },
+    7163: { name: 'Mishka Bear', coins: 100 },
+    5763: { name: 'Boxing Gloves', coins: 299 },
+    6042: { name: 'Galaxy', coins: 1000 },
+    6424: { name: 'Fireworks', coins: 1088 }
 };
 
-const giftNameMappings = { ...hardcodedGiftMappings };
-try {
-    const rawMappings = fs.readFileSync(path.join(__dirname, 'gifts_mapping.json'), 'utf8');
-    const mappings = JSON.parse(rawMappings);
-    mappings.forEach(item => {
-        if (item.name_en && item.name_es) {
-            const en = item.name_en.toLowerCase().trim();
-            const es = item.name_es.toLowerCase().trim();
-            if (!giftNameMappings[en]) giftNameMappings[en] = es;
-            if (!giftNameMappings[es]) giftNameMappings[es] = en;
-        }
-    });
-    console.info(`Loaded ${mappings.length} gift name translations.`);
-} catch (e) {
-    console.warn("Could not load gifts_mapping.json:", e.message);
+function getGiftCoinValue(data) {
+    if (!data) return 1;
+    const giftId = data.giftId;
+    const dbGift = tiktokGiftDatabase[giftId];
+    if (dbGift) {
+        return dbGift.coins;
+    }
+    return data.diamondCount || 1;
 }
+
+
 
 function giftNamesMatch(trigger, giftName) {
     if (!trigger || !giftName) return false;
@@ -190,35 +492,22 @@ function giftNamesMatch(trigger, giftName) {
     if (cleanTrigger === cleanGiftName) return true;
     if (cleanTrigger === 'any') return true;
     
-    // Direct or translation matches
-    const mappedTrigger = giftNameMappings[cleanTrigger];
-    const mappedGiftName = giftNameMappings[cleanGiftName];
-    if (mappedTrigger && mappedTrigger === cleanGiftName) return true;
-    if (mappedGiftName && mappedGiftName === cleanTrigger) return true;
-    if (mappedTrigger && mappedGiftName && mappedTrigger === mappedGiftName) return true;
-    
-    // Normalized checks (stripping spaces & accents)
+    // Normalized checks (stripping spaces & accents) in English natively
     const normalizeString = (str) => {
         return str.normalize("NFD")
             .replace(/[\u0300-\u036f]/g, "")
             .replace(/\s+/g, "");
     };
-    const normTrigger = normalizeString(cleanTrigger);
-    const normGiftName = normalizeString(cleanGiftName);
-    if (normTrigger === normGiftName) return true;
-    
-    const mappedNormTrigger = giftNameMappings[normTrigger];
-    const mappedNormGiftName = giftNameMappings[normGiftName];
-    if (mappedNormTrigger && normalizeString(mappedNormTrigger) === normGiftName) return true;
-    if (mappedNormGiftName && normalizeString(mappedNormGiftName) === normTrigger) return true;
-    
-    return false;
+    return normalizeString(cleanTrigger) === normalizeString(cleanGiftName);
 }
 
 function updateGoalProgress(type, amount, giftName = null) {
     if (!chatbotSettings.goals || !Array.isArray(chatbotSettings.goals) || chatbotSettings.goals.length === 0) return;
     
     let updated = false;
+    let activeGoalUpdated = false;
+    const activeGoal = chatbotSettings.goals.find(g => g.type === 'gift' && g.enabled);
+    
     chatbotSettings.goals.forEach(goal => {
         if (!goal.enabled) return;
         
@@ -241,6 +530,9 @@ function updateGoalProgress(type, amount, giftName = null) {
             goal.current = (goal.current || 0) + amount;
             if (goal.current > goal.target) goal.current = goal.target;
             updated = true;
+            if (goal === activeGoal) {
+                activeGoalUpdated = true;
+            }
         }
     });
     
@@ -249,6 +541,14 @@ function updateGoalProgress(type, amount, giftName = null) {
             fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
             io.emit('goals_updated', chatbotSettings.goals);
             io.emit('chatbot_settings_updated', chatbotSettings);
+            
+            if (activeGoalUpdated && activeGoal) {
+                io.emit('meta_goal_updated', {
+                    giftName: activeGoal.giftName,
+                    current: activeGoal.current,
+                    target: activeGoal.target
+                });
+            }
         } catch (e) {
             console.error('Error saving updated goal progress:', e);
         }
@@ -298,6 +598,86 @@ async function getYoutubeOEmbedInfo(videoId) {
     }
 }
 
+function findFirstVideoRenderer(obj) {
+    if (!obj || typeof obj !== 'object') return null;
+    if (obj.videoRenderer) return obj.videoRenderer;
+    for (const key in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            const found = findFirstVideoRenderer(obj[key]);
+            if (found) return found;
+        }
+    }
+    return null;
+}
+
+// Helper to parse duration string (like "2:24") to milliseconds
+function parseDurationToMs(durationStr) {
+    if (!durationStr) return 0;
+    const parts = durationStr.split(':').map(Number);
+    if (parts.length === 2) {
+        return (parts[0] * 60 + parts[1]) * 1000;
+    } else if (parts.length === 3) {
+        return ((parts[0] * 60 + parts[1]) * 60 + parts[2]) * 1000;
+    }
+    return Number(durationStr) * 1000 || 0;
+}
+
+// Search and retrieve track details from SoundCloud using play-dl
+async function searchSoundCloud(query) {
+    try {
+        console.log(`[SoundCloud] Buscando: "${query}"...`);
+        // Get free Client ID dynamically
+        const client_id = await play.getFreeClientID();
+        await play.setToken({
+            soundcloud: {
+                client_id: client_id
+            }
+        });
+
+        const results = await play.search(query, {
+            limit: 1,
+            source: { soundcloud: 'tracks' }
+        });
+
+        if (results && results.length > 0) {
+            const track = results[0];
+            const durationSec = track.durationInSec || 0;
+            const durationMs = durationSec * 1000;
+            
+            // Format duration as minutes:seconds
+            const mins = Math.floor(durationSec / 60);
+            const secs = durationSec % 60;
+            const durationText = `${mins}:${secs.toString().padStart(2, '0')}`;
+
+            return {
+                id: track.id ? String(track.id) : 'sc-' + Date.now(),
+                title: track.name || track.title || 'SoundCloud Track',
+                artist: track.user?.username || track.author?.name || 'SoundCloud',
+                albumArt: track.thumbnail || track.artwork_url || '',
+                uri: track.permalink || track.url || '',
+                durationText: durationText,
+                durationMs: durationMs,
+                source: 'soundcloud'
+            };
+        } else {
+            console.log(`[SoundCloud] No se encontraron canciones para: "${query}"`);
+            return null;
+        }
+    } catch (err) {
+        console.error('[SoundCloud] Error en searchSoundCloud:', err);
+        const errMsg = err.message || '';
+        if (errMsg.includes('ENOTFOUND') || errMsg.includes('ETIMEDOUT') || errMsg.includes('ECONN') || errMsg.includes('fetch failed')) {
+            if (typeof io !== 'undefined') {
+                io.emit('system', { 
+                    type: 'warning', 
+                    message: '⚠️ Error de red con SoundCloud: Se detectó un bloqueo de conexión. Si estás en una red corporativa/de trabajo, el cortafuegos podría estar bloqueando SoundCloud. Intenta en tu WiFi de hogar.' 
+                });
+            }
+        }
+        return null;
+    }
+}
+
 // Scrape YouTube search results to get first video
 async function searchYouTube(query) {
     const videoId = parseYoutubeId(query);
@@ -321,28 +701,22 @@ async function searchYouTube(query) {
         const ytInitialDataMatch = html.match(/var ytInitialData\s*=\s*({.+?});/);
         if (ytInitialDataMatch) {
             const data = JSON.parse(ytInitialDataMatch[1]);
-            const contents = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents;
-            
-            if (contents && contents.length > 0) {
-                for (const item of contents) {
-                    if (item.videoRenderer) {
-                        const video = item.videoRenderer;
-                        const vId = video.videoId;
-                        const title = video.title?.runs?.[0]?.text || '';
-                        const artist = video.ownerText?.runs?.[0]?.text || 'YouTube';
-                        const durationText = video.lengthText?.simpleText || '0:00';
-                        const albumArt = video.thumbnail?.thumbnails?.[0]?.url || `https://img.youtube.com/vi/${vId}/hqdefault.jpg`;
-                        
-                        return {
-                            id: vId,
-                            title,
-                            artist,
-                            albumArt,
-                            uri: `https://www.youtube.com/watch?v=${vId}`,
-                            durationText
-                        };
-                    }
-                }
+            const video = findFirstVideoRenderer(data);
+            if (video) {
+                const vId = video.videoId;
+                const title = video.title?.runs?.[0]?.text || '';
+                const artist = video.ownerText?.runs?.[0]?.text || 'YouTube';
+                const durationText = video.lengthText?.simpleText || '0:00';
+                const albumArt = video.thumbnail?.thumbnails?.[0]?.url || `https://img.youtube.com/vi/${vId}/hqdefault.jpg`;
+                
+                return {
+                    id: vId,
+                    title,
+                    artist,
+                    albumArt,
+                    uri: `https://www.youtube.com/watch?v=${vId}`,
+                    durationText
+                };
             }
         }
         
@@ -432,11 +806,44 @@ try {
         }
     }
 
+    // On clean install, copy template file first if it exists
+    if (!fs.existsSync(SETTINGS_FILE) && fs.existsSync(templateFile) && templateFile !== SETTINGS_FILE) {
+        try {
+            fs.copyFileSync(templateFile, SETTINGS_FILE);
+            console.info('[Settings Loader] Copied template chatbot_settings.json to writable dir');
+        } catch (copyErr) {
+            console.error('[Settings Loader] Failed to copy template settings file:', copyErr);
+        }
+    }
+
+    let loaded = {};
+    let parseError = false;
+
     if (fs.existsSync(SETTINGS_FILE)) {
-        const loaded = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8'));
+        try {
+            const rawContent = fs.readFileSync(SETTINGS_FILE, 'utf-8');
+            if (rawContent.trim() === '') {
+                throw new Error('File is empty');
+            }
+            loaded = JSON.parse(rawContent);
+        } catch (e) {
+            console.error(`[Settings Loader] SETTINGS_FILE is empty or corrupt. Creating a backup...`, e);
+            parseError = true;
+            try {
+                const backupPath = SETTINGS_FILE + '.bak';
+                fs.copyFileSync(SETTINGS_FILE, backupPath);
+                console.info(`[Settings Loader] Backup created at: ${backupPath}`);
+            } catch (backupErr) {
+                console.error(`[Settings Loader] Failed to create backup file:`, backupErr);
+            }
+        }
+    }
+
+    // Merge settings: defaults first, then template settings, then loaded settings
+    if (!parseError) {
         chatbotSettings = { ...chatbotSettings, ...templateSettings, ...loaded };
         
-        // If loaded values are empty strings or missing, fall back to template values
+        // Enforce structures and schemas
         if (!chatbotSettings.spotifyClientId || chatbotSettings.spotifyClientId.trim() === "") {
             chatbotSettings.spotifyClientId = templateSettings.spotifyClientId || "28b2a2ea9ff34b989b9b13fc7979691f";
         }
@@ -444,13 +851,21 @@ try {
             chatbotSettings.spotifyClientSecret = templateSettings.spotifyClientSecret || "b2e0324ac37f4a6abef68319d285fda2";
         }
         
-        // Ensure skip limits are valid numbers (minimum 1, default 3 if falsy)
         chatbotSettings.spotifyVoteSkipLimit = parseInt(chatbotSettings.spotifyVoteSkipLimit) || 3;
         chatbotSettings.youtubeVoteSkipLimit = parseInt(chatbotSettings.youtubeVoteSkipLimit) || 3;
         if (chatbotSettings.spotifyVoteSkipLimit < 1) chatbotSettings.spotifyVoteSkipLimit = 3;
         if (chatbotSettings.youtubeVoteSkipLimit < 1) chatbotSettings.youtubeVoteSkipLimit = 3;
 
-        // Initialize new customizable phrases and toggles if missing
+        let settingsModified = false;
+        if (!chatbotSettings.bannedWords || chatbotSettings.bannedWords.length === 0) {
+            chatbotSettings.bannedWords = [...RECOMMENDED_BANNED_WORDS];
+            settingsModified = true;
+        }
+        if (!chatbotSettings.bannedUsernames || chatbotSettings.bannedUsernames.length === 0) {
+            chatbotSettings.bannedUsernames = [...RECOMMENDED_BANNED_WORDS];
+            settingsModified = true;
+        }
+
         if (chatbotSettings.filterEmojisFromNames === undefined) {
             chatbotSettings.filterEmojisFromNames = templateSettings.filterEmojisFromNames !== undefined ? templateSettings.filterEmojisFromNames : false;
         }
@@ -463,32 +878,360 @@ try {
         if (chatbotSettings.thankYouSharePhrase === undefined) {
             chatbotSettings.thankYouSharePhrase = templateSettings.thankYouSharePhrase || "";
         }
+        if (chatbotSettings.thankYouLikePhrase === undefined) {
+            chatbotSettings.thankYouLikePhrase = templateSettings.thankYouLikePhrase || "";
+        }
+        if (chatbotSettings.bannerSlide1 === undefined) {
+            chatbotSettings.bannerSlide1 = "Ejemplo de texto";
+        }
+        if (chatbotSettings.bannerSlide2 === undefined) {
+            chatbotSettings.bannerSlide2 = "¡Pide tu canción en el chat usando !song! 🎵";
+        }
+        if (chatbotSettings.bannerSlide3 === undefined) {
+            chatbotSettings.bannerSlide3 = "Meta de Regalos Activa (Calculada automáticamente)";
+        }
         
-        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
-    } else {
-        // If it doesn't exist in writable folder, try to copy it from packaged app directory
-        if (fs.existsSync(templateFile) && templateFile !== SETTINGS_FILE) {
-            fs.copyFileSync(templateFile, SETTINGS_FILE);
-            chatbotSettings = { ...chatbotSettings, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8')) };
-        } else {
+        // Enforce sub-arrays
+        chatbotSettings.goals = chatbotSettings.goals || [];
+        let goalsModified = false;
+        chatbotSettings.goals.forEach((goal, idx) => {
+            if (goal && !goal.id) {
+                goal.id = 'goal_' + Date.now() + '_' + idx;
+                goalsModified = true;
+            }
+        });
+        if (goalsModified || settingsModified) {
             fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
         }
+        chatbotSettings.wheelOptions = chatbotSettings.wheelOptions || ["5 Sentadillas", "Cantar un fragmento", "Contar un chiste", "Saludar como ardilla", "Omitir canción gratis", "Hacer una mueca graciosa"];
+        chatbotSettings.soundAlerts = chatbotSettings.soundAlerts || [];
+        chatbotSettings.customSounds = chatbotSettings.customSounds || [];
+        
+        chatbotSettings.widgets = chatbotSettings.widgets || {};
+        // Ensure each widget key exists with defaults if missing
+        chatbotSettings.widgets.spotify  = chatbotSettings.widgets.spotify  || { active: true,  x: 80, y: 10 };
+        chatbotSettings.widgets.youtube  = chatbotSettings.widgets.youtube  || { active: false, x: 10, y: 10 };
+        chatbotSettings.widgets.donors   = chatbotSettings.widgets.donors   || { active: true,  x: 5,  y: 30 };
+        chatbotSettings.widgets.taps     = chatbotSettings.widgets.taps     || { active: true,  x: 5,  y: 55 };
+        chatbotSettings.widgets.mvp      = chatbotSettings.widgets.mvp      || { active: true,  x: 5,  y: 80 };
+        chatbotSettings.widgets.songlist = chatbotSettings.widgets.songlist || { active: true,  x: 55, y: 80 };
+        chatbotSettings.widgets.banner   = chatbotSettings.widgets.banner   || { active: true,  x: 0,  y: 0, width: 100, height: 10 };
+        chatbotSettings.widgets.socialRotator = chatbotSettings.widgets.socialRotator || { active: true, x: 35, y: 85 };
+        
+        chatbotSettings.socials = chatbotSettings.socials || [];
+        chatbotSettings.socialsSettings = chatbotSettings.socialsSettings || { displayTime: 10, pauseTime: 2, enabled: true };
+        chatbotSettings.bannerSettings = chatbotSettings.bannerSettings || {
+            width: '100%',
+            height: '80px',
+            borderWidth: '2px',
+            borderColor: '#ff0077',
+            borderStyle: 'solid',
+            borderRadius: '25px',
+            backgroundColor: '#140a0f',
+            backgroundOpacity: 45,
+            fontFamily: 'Outfit',
+            fontSize: '24px',
+            fontColor: '#ffffff',
+            rotationSpeed: 8,
+            slides: [
+                "Ejemplo de texto",
+                "¡Pide tu canción en el chat usando !song 🎵",
+                "Meta de Regalos Activa (Calculada automáticamente)"
+            ]
+        };
+        
+        // Ensure AI settings schema exists
+        if (!chatbotSettings.ai) {
+            chatbotSettings.ai = {
+                naya: {
+                    ai_bot_active: false,
+                    ai_monetization_active: false,
+                    ai_min_coins: 5,
+                    ai_max_chars: 150,
+                    ai_cooldown: 10,
+                    ai_read_username: true,
+                    ai_prompt_personality: "Habla como un chibi rosa tierno, dulce y alegre."
+                },
+                majo: {
+                    ai_bot_active: false,
+                    ai_monetization_active: false,
+                    ai_min_coins: 10,
+                    ai_max_chars: 150,
+                    ai_cooldown: 10,
+                    ai_read_username: true,
+                    ai_prompt_personality: "Habla como Gojo de forma sarcástica, confiada y misteriosa con toques oscuros."
+                }
+            };
+        } else {
+            chatbotSettings.ai.naya = chatbotSettings.ai.naya || {};
+            chatbotSettings.ai.naya.ai_bot_active = chatbotSettings.ai.naya.ai_bot_active !== undefined ? chatbotSettings.ai.naya.ai_bot_active : false;
+            chatbotSettings.ai.naya.ai_monetization_active = chatbotSettings.ai.naya.ai_monetization_active !== undefined ? chatbotSettings.ai.naya.ai_monetization_active : false;
+            chatbotSettings.ai.naya.ai_min_coins = chatbotSettings.ai.naya.ai_min_coins !== undefined ? chatbotSettings.ai.naya.ai_min_coins : 5;
+            chatbotSettings.ai.naya.ai_max_chars = chatbotSettings.ai.naya.ai_max_chars !== undefined ? chatbotSettings.ai.naya.ai_max_chars : 150;
+            chatbotSettings.ai.naya.ai_cooldown = chatbotSettings.ai.naya.ai_cooldown !== undefined ? chatbotSettings.ai.naya.ai_cooldown : 10;
+            chatbotSettings.ai.naya.ai_read_username = chatbotSettings.ai.naya.ai_read_username !== undefined ? chatbotSettings.ai.naya.ai_read_username : true;
+            chatbotSettings.ai.naya.ai_prompt_personality = chatbotSettings.ai.naya.ai_prompt_personality !== undefined ? chatbotSettings.ai.naya.ai_prompt_personality : "Habla como un chibi rosa tierno, dulce y alegre.";
+
+            chatbotSettings.ai.majo = chatbotSettings.ai.majo || {};
+            chatbotSettings.ai.majo.ai_bot_active = chatbotSettings.ai.majo.ai_bot_active !== undefined ? chatbotSettings.ai.majo.ai_bot_active : false;
+            chatbotSettings.ai.majo.ai_monetization_active = chatbotSettings.ai.majo.ai_monetization_active !== undefined ? chatbotSettings.ai.majo.ai_monetization_active : false;
+            chatbotSettings.ai.majo.ai_min_coins = chatbotSettings.ai.majo.ai_min_coins !== undefined ? chatbotSettings.ai.majo.ai_min_coins : 10;
+            chatbotSettings.ai.majo.ai_max_chars = chatbotSettings.ai.majo.ai_max_chars !== undefined ? chatbotSettings.ai.majo.ai_max_chars : 150;
+            chatbotSettings.ai.majo.ai_cooldown = chatbotSettings.ai.majo.ai_cooldown !== undefined ? chatbotSettings.ai.majo.ai_cooldown : 10;
+            chatbotSettings.ai.majo.ai_read_username = chatbotSettings.ai.majo.ai_read_username !== undefined ? chatbotSettings.ai.majo.ai_read_username : true;
+            chatbotSettings.ai.majo.ai_prompt_personality = chatbotSettings.ai.majo.ai_prompt_personality !== undefined ? chatbotSettings.ai.majo.ai_prompt_personality : "Habla como Gojo de forma sarcástica, confiada y misteriosa con toques oscuros.";
+        }
+        
+        chatbotSettings.geminiApiKey = chatbotSettings.geminiApiKey || "";
+        chatbotSettings.spotifySkipAllowedUsers = chatbotSettings.spotifySkipAllowedUsers || "";
+        
+        // Enforce apuestas structure
+        chatbotSettings.apuestas = chatbotSettings.apuestas || {
+            enabled: false,
+            title: "¿Quién ganará hoy?",
+            count: 4,
+            p1: { name: "Participante 1", giftId: "8913", giftName: "Rosa", votes: 0, voters: [] },
+            p2: { name: "Participante 2", giftId: "9947", giftName: "BFF Necklace", votes: 0, voters: [] },
+            p3: { name: "Participante 3", giftId: "45", giftName: "Corazón", votes: 0, voters: [] },
+            p4: { name: "Participante 4", giftId: "46", giftName: "Confeti", votes: 0, voters: [] }
+        };
+        // Safety checks for properties inside apuestas
+        chatbotSettings.apuestas.enabled = chatbotSettings.apuestas.enabled !== undefined ? chatbotSettings.apuestas.enabled : false;
+        chatbotSettings.apuestas.title = chatbotSettings.apuestas.title || "¿Quién ganará hoy?";
+        chatbotSettings.apuestas.count = parseInt(chatbotSettings.apuestas.count) || 4;
+        chatbotSettings.apuestas.p1 = chatbotSettings.apuestas.p1 || { name: "Participante 1", giftId: "8913", giftName: "Rosa", votes: 0, voters: [] };
+        chatbotSettings.apuestas.p2 = chatbotSettings.apuestas.p2 || { name: "Participante 2", giftId: "9947", giftName: "BFF Necklace", votes: 0, voters: [] };
+        chatbotSettings.apuestas.p3 = chatbotSettings.apuestas.p3 || { name: "Participante 3", giftId: "45", giftName: "Corazón", votes: 0, voters: [] };
+        chatbotSettings.apuestas.p4 = chatbotSettings.apuestas.p4 || { name: "Participante 4", giftId: "46", giftName: "Confeti", votes: 0, voters: [] };
+
+        if (chatbotSettings.apuestas.p1 && chatbotSettings.apuestas.p1.name === "Naya") {
+            chatbotSettings.apuestas.p1.name = "Participante 1";
+        }
+        if (chatbotSettings.apuestas.p2 && chatbotSettings.apuestas.p2.name === "Majo") {
+            chatbotSettings.apuestas.p2.name = "Participante 2";
+        }
+
+        // Ensure voters array and votes exists for each participant
+        ['p1', 'p2', 'p3', 'p4'].forEach(pKey => {
+            if (chatbotSettings.apuestas[pKey]) {
+                chatbotSettings.apuestas[pKey].voters = chatbotSettings.apuestas[pKey].voters || [];
+                chatbotSettings.apuestas[pKey].votes = parseInt(chatbotSettings.apuestas[pKey].votes) || 0;
+            }
+        });
+
+        // Always write final merged schema to ensure all keys are physically present
+        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
+    } else {
+        // Enforce safe memory settings from default + template
+        chatbotSettings = { ...chatbotSettings, ...templateSettings };
+        chatbotSettings.bannerSlide1 = chatbotSettings.bannerSlide1 || "Ejemplo de texto";
+        chatbotSettings.bannerSlide2 = chatbotSettings.bannerSlide2 || "¡Pide tu canción en el chat usando !song 🎵";
+        chatbotSettings.bannerSlide3 = chatbotSettings.bannerSlide3 || "Meta de Regalos Activa (Calculada automáticamente)";
+        chatbotSettings.goals = chatbotSettings.goals || [];
+        chatbotSettings.wheelOptions = chatbotSettings.wheelOptions || ["5 Sentadillas", "Cantar un fragmento", "Contar un chiste", "Saludar como ardilla", "Omitir canción gratis", "Hacer una mueca graciosa"];
+        chatbotSettings.widgets = chatbotSettings.widgets || {};
+        chatbotSettings.widgets.spotify  = chatbotSettings.widgets.spotify  || { active: true,  x: 80, y: 10 };
+        chatbotSettings.widgets.youtube  = chatbotSettings.widgets.youtube  || { active: false, x: 10, y: 10 };
+        chatbotSettings.widgets.donors   = chatbotSettings.widgets.donors   || { active: true,  x: 5,  y: 30 };
+        chatbotSettings.widgets.taps     = chatbotSettings.widgets.taps     || { active: true,  x: 5,  y: 55 };
+        chatbotSettings.widgets.mvp      = chatbotSettings.widgets.mvp      || { active: true,  x: 5,  y: 80 };
+        chatbotSettings.widgets.songlist = chatbotSettings.widgets.songlist || { active: true,  x: 55, y: 80 };
+        chatbotSettings.widgets.banner   = chatbotSettings.widgets.banner   || { active: true,  x: 0,  y: 0, width: 100, height: 10 };
+        chatbotSettings.widgets.socialRotator = chatbotSettings.widgets.socialRotator || { active: true, x: 35, y: 85 };
+        
+        chatbotSettings.socials = chatbotSettings.socials || [];
+        chatbotSettings.socialsSettings = chatbotSettings.socialsSettings || { displayTime: 10, pauseTime: 2, enabled: true };
     }
     
-    // Auto-detect theme based on loaded username ONLY if themeName is not set
-    if (!chatbotSettings.themeName) {
-        chatbotSettings.themeName = 'neutral';
-        if (chatbotSettings.tiktokUsername) {
-            const usernameLower = chatbotSettings.tiktokUsername.toLowerCase();
-            if (usernameLower.includes('majo')) {
-                chatbotSettings.themeName = 'majo';
-            } else if (usernameLower.includes('naya')) {
-                chatbotSettings.themeName = 'naya';
-            }
-        }
+    // Load last connected profile configuration if exists
+    if (chatbotSettings.tiktokUsername) {
+        loadProfile(chatbotSettings.tiktokUsername);
     }
 } catch (err) {
     console.error('Error loading chatbot settings:', err);
+}
+
+let soundsConfig = {};
+try {
+    soundsConfig = readJsonFileSafe(SOUNDS_CONFIG_FILE, {});
+    if (!fs.existsSync(SOUNDS_CONFIG_FILE)) {
+        writeJsonFileSafe(SOUNDS_CONFIG_FILE, soundsConfig);
+    }
+} catch (err) {
+    console.error('Error loading sounds_config.json:', err);
+}
+
+// ============================================================
+// CATÁLOGO ESPEJO: goals_catalog.json
+// Copia del cerebro (gifts_mapping.json) usada exclusivamente
+// como picker de regalos en el módulo Dinámicas.
+// Solo recibe nuevas entradas cuando el cerebro registra
+// un regalo nuevo. Nunca contiene metas activas.
+// ============================================================
+let goalsCatalog = {};
+try {
+    let brainData = readJsonFileSafe(GIFTS_MAPPING_FILE, {});
+    goalsCatalog = readJsonFileSafe(GOALS_CATALOG_FILE, {});
+    
+    let updated = false;
+    if (Object.keys(goalsCatalog).length === 0) {
+        // First run or empty catalog: build goals catalog from brain
+        Object.entries(brainData).forEach(([gid, gdata]) => {
+            goalsCatalog[gid] = { name: gdata.name, coins: gdata.coins, image: gdata.image };
+        });
+        updated = true;
+        console.info('[Goals Catalog] goals_catalog.json inicializado desde el cerebro con', Object.keys(goalsCatalog).length, 'regalos.');
+    } else {
+        // Sync any new brain entries not yet in goals catalog
+        Object.entries(brainData).forEach(([gid, gdata]) => {
+            if (!goalsCatalog[gid]) {
+                goalsCatalog[gid] = { name: gdata.name, coins: gdata.coins, image: gdata.image };
+                updated = true;
+            }
+        });
+    }
+    if (updated) {
+        writeJsonFileSafe(GOALS_CATALOG_FILE, goalsCatalog);
+    }
+} catch (err) {
+    console.error('Error loading/creating goals_catalog.json:', err);
+}
+
+/**
+ * syncMirrorCatalogs — llama al registrar un nuevo regalo en el cerebro.
+ * Propaga el nuevo regalo al catálogo espejo de Dinámicas (goals_catalog.json).
+ * NO toca sounds_config.json (multimedia maneja eso de forma independiente).
+ */
+function syncMirrorCatalogs(giftId, giftData) {
+    // Solo goals_catalog recibe la sincronización automática del cerebro.
+    // Multimedia agrega regalos manualmente a través del modal de selección.
+    if (!goalsCatalog[giftId]) {
+        goalsCatalog[giftId] = {
+            name: giftData.name,
+            coins: giftData.coins,
+            image: giftData.image
+        };
+        try {
+            writeJsonFileSafe(GOALS_CATALOG_FILE, goalsCatalog);
+            console.info(`[Sync Espejo] Nuevo regalo propagado a goals_catalog: ${giftData.name} (ID: ${giftId})`);
+        } catch (err) {
+            console.error('Error sync goals_catalog.json:', err);
+        }
+    }
+}
+
+let recetasConfig = {
+    title: "RECETA DEL DÍA: PASTEL DE FRESAS",
+    items: [
+        { name: "Fresas Frescas 10 tazas" },
+        { name: "Harina de Trigo 300g" },
+        { name: "Azúcar Morena 150g" },
+        { name: "Esencia de Vainilla 2 cdas" }
+    ],
+    visible: true
+};
+try {
+    recetasConfig = readJsonFileSafe(RECETAS_CONFIG_FILE, recetasConfig);
+    if (!fs.existsSync(RECETAS_CONFIG_FILE)) {
+        writeJsonFileSafe(RECETAS_CONFIG_FILE, recetasConfig);
+    }
+} catch (err) {
+    console.error('Error loading recetas_config.json:', err);
+}
+
+let dinamicasConfig = [];
+try {
+    dinamicasConfig = readJsonFileSafe(DINAMICAS_CONFIG_FILE, []);
+    if (!fs.existsSync(DINAMICAS_CONFIG_FILE)) {
+        writeJsonFileSafe(DINAMICAS_CONFIG_FILE, dinamicasConfig);
+    }
+} catch (err) {
+    console.error('Error loading dinamicas_config.json:', err);
+}
+
+
+
+// In-memory sets and caches for TTS chatbot
+let quieremeAllowedUsers = new Set();
+let lastQuieremeResetDate = new Date().toDateString();
+const userSpamCache = {};
+
+// Helper to clean username for TTS reading (removing numbers, underscores, dots)
+function cleanUsernameForReading(name) {
+    if (!name) return 'usuario';
+    let clean = stripEmojis(name);
+    // Remove trailing numbers (e.g. user123 -> user)
+    clean = clean.replace(/\d+$/, '');
+    // Replace underscores, dashes, dots with space
+    clean = clean.replace(/[-_.]/g, ' ').trim();
+    if (!clean || clean.length < 2) {
+        clean = stripEmojis(name).trim();
+    }
+    if (!clean) {
+        clean = 'usuario';
+    }
+    return clean;
+}
+
+// Helper to normalize common chat abbreviations in Spanish
+function normalizeChatAbbreviations(text) {
+    if (!text) return '';
+    let words = text.split(/\s+/);
+    const abbrevMap = {
+        'pq': 'porque',
+        'q': 'que',
+        'k': 'que',
+        'tb': 'también',
+        'tmb': 'también',
+        'grx': 'gracias',
+        'grs': 'gracias',
+        'ty': 'gracias',
+        'gpi': 'gracias por invitar',
+        'dts': 'datos',
+        'xd': 'equis de',
+        'tqm': 'te quiero mucho',
+        'x2': 'por dos'
+    };
+    
+    return words.map(word => {
+        const cleanWord = word.toLowerCase().replace(/[^a-zñáéíóú]/g, '');
+        if (abbrevMap[cleanWord]) {
+            return word.toLowerCase().replace(cleanWord, abbrevMap[cleanWord]);
+        }
+        return word;
+    }).join(' ');
+}
+
+// Reduce repeated letters (e.g. holaaaaa -> holaa)
+function reduceRepeatedLetters(text) {
+    if (!text) return '';
+    return text.replace(/([a-zA-ZáéíóúÁÉÍÓÚñÑ])\1{2,}/g, '$1$1');
+}
+
+// Banned words detector using word boundaries (prevents false positives like "en la noche" -> "ano")
+function isBannedText(text, isUsername = false) {
+    if (!text) return false;
+    
+    // Normalize to handle accents, but preserve spaces for word boundary checking
+    let normalized = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    
+    const wordList = isUsername 
+        ? (chatbotSettings.bannedUsernames || chatbotSettings.bannedWords || [])
+        : (chatbotSettings.bannedWords || []);
+        
+    const banned = wordList.map(w => w.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()).filter(w => w.length > 0);
+    
+    for (const word of banned) {
+        // Escape any regex special characters in the banned word
+        const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Use word boundaries \b to ensure it matches whole words only
+        const regex = new RegExp(`\\b${escapedWord}\\b`, 'i');
+        
+        if (regex.test(normalized)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // Helper to replace text-based emojis with friendly Spanish words
@@ -541,7 +1284,7 @@ function replaceTextEmojis(text) {
         if (emojiMap[key]) return emojiMap[key];
         const keyWithUnderscores = p1.toLowerCase().trim();
         if (emojiMap[keyWithUnderscores]) return emojiMap[keyWithUnderscores];
-        return ""; // Clear unmapped tech descriptions inside brackets
+        return p1; // Preserve unmapped text (like [Naya] -> Naya)
     });
 
     // Replace colon ones like :laugh_cry: or :rose:
@@ -550,7 +1293,7 @@ function replaceTextEmojis(text) {
         if (emojiMap[key]) return emojiMap[key];
         const keyWithUnderscores = p1.toLowerCase().trim();
         if (emojiMap[keyWithUnderscores]) return emojiMap[keyWithUnderscores];
-        return ""; // Clear unmapped
+        return p1; // Preserve unmapped
     });
 
     // Replace raw phrases like "laught cry" or "laugh_cry" if they appear as standalone words
@@ -564,11 +1307,45 @@ function replaceTextEmojis(text) {
 }
 
 // Helper to generate cloud TTS audio
+// Entry point for chat comments. Implements Rate Limiter and Queue to prevent TTS spam.
 async function handleCloudTTS(data) {
     if (!chatbotSettings) return;
-    if (chatbotSettings.ttsEngine !== 'cloud') return;
+    if (chatbotSettings.ttsEngine !== 'cloud' && chatbotSettings.ttsEngine !== 'gemini') return;
     
+    // Ignore all chat comment readings if permission is set to none (No leer a ninguno / Solo alertas)
+    if (chatbotSettings.permission === 'none') return;
+
     const uniqueId = (data.uniqueId || '').toLowerCase();
+    const nickname = data.nickname || data.uniqueId || '';
+
+    // 1. Username filter (moderation)
+    if (isBannedText(uniqueId, true) || isBannedText(nickname, true)) {
+        console.warn(`[TTS Moderación] Omitiendo mensaje de usuario bloqueado por nombre vulgar: @${uniqueId}`);
+        return;
+    }
+
+    // 2. Anti-spam (repetitive comments check)
+    const commentNorm = (data.comment || '').trim().toLowerCase();
+    const now = Date.now();
+    if (userSpamCache[uniqueId]) {
+        const cache = userSpamCache[uniqueId];
+        if (cache.lastComment === commentNorm && (now - cache.lastTime < 60000)) {
+            console.info(`[TTS Spam Shield] Ignorando comentario duplicado de @${uniqueId} ("${commentNorm}")`);
+            return;
+        }
+    }
+    // Update cache
+    userSpamCache[uniqueId] = {
+        lastComment: commentNorm,
+        lastTime: now
+    };
+    
+    // 3. Sliding window rate limiter (3 messages per second globally triggers High Flow Mode)
+    const nowTimestamp = Date.now();
+    ttsMessageTimestamps.push(nowTimestamp);
+    ttsMessageTimestamps = ttsMessageTimestamps.filter(t => nowTimestamp - t < 1000);
+    const isHighFlowMode = ttsMessageTimestamps.length > 3;
+
     const isExclusiveUser = chatbotSettings.exclusiveTtsEnabled && 
                             chatbotSettings.exclusiveTtsUser && 
                             uniqueId === chatbotSettings.exclusiveTtsUser.toLowerCase().trim();
@@ -582,25 +1359,125 @@ async function handleCloudTTS(data) {
     if (chatbotSettings.exclusiveTtsEnabled) {
         if (!isExclusiveUser) return;
     }
+
+    // User permissions & badges
+    const isAnchor = (data.userIdentity && typeof data.userIdentity.isAnchor !== 'undefined')
+        ? data.userIdentity.isAnchor
+        : (uniqueId === chatbotSettings.tiktokUsername.toLowerCase());
+        
+    const isModerator = isAnchor || ((data.userIdentity && typeof data.userIdentity.isModeratorOfAnchor !== 'undefined')
+        ? data.userIdentity.isModeratorOfAnchor
+        : !!data.isModerator);
+        
+    const isSubscriber = isAnchor || ((data.userIdentity && typeof data.userIdentity.isSubscriberOfAnchor !== 'undefined')
+        ? data.userIdentity.isSubscriberOfAnchor
+        : !!data.isSubscriber);
+
+    const gifterLevel = data.gifterLevel || (data.badgeAttributes && data.badgeAttributes.gifterLevel) || 0;
+    const isDonor = gifterLevel >= 5;
+
+    let comment = data.comment || '';
+    const isCommand = comment.trim().startsWith('!') || (chatbotSettings.prefixes || ['.', '/']).some(p => comment.trim().startsWith(p));
+
+    // Under High Flow Mode, drop messages from standard users
+    if (isHighFlowMode) {
+        if (!isSubscriber && !isModerator && !isAnchor && !isDonor && !isCommand) {
+            console.log(`[TTS Spam Shield] High Flow Mode active (${ttsMessageTimestamps.length} msg/s). Dropping message from @${data.uniqueId}`);
+            return;
+        }
+    }
+
+    // Determine priority
+    const isPriority = isSubscriber || isModerator || isAnchor || isDonor || isCommand || isExclusiveUser;
+
+    // Enqueue the TTS generation task
+    ttsQueue.push({
+        data,
+        isPriority,
+        timestamp: now
+    });
+
+    // Limit queue size to 5 elements maximum to prevent latency accumulation > 1000ms
+    while (ttsQueue.length > 5) {
+        const oldestNonPriorityIdx = ttsQueue.findIndex(task => !task.isPriority);
+        if (oldestNonPriorityIdx !== -1) {
+            console.info(`[TTS Spam Shield] Queue exceeded limit. Purging oldest non-priority TTS task.`);
+            ttsQueue.splice(oldestNonPriorityIdx, 1);
+        } else {
+            console.info(`[TTS Spam Shield] Queue exceeded limit. Purging oldest priority task to protect latency.`);
+            ttsQueue.shift(); // Drop the oldest priority task if queue is full of priorities
+        }
+    }
+
+    // Process the queue
+    processTtsQueue();
+}
+
+// Process the async queue of TTS tasks sequentially
+async function processTtsQueue() {
+    if (isProcessingTts) return;
+    if (ttsQueue.length === 0) return;
+
+    isProcessingTts = true;
+    const currentTask = ttsQueue.shift();
+
+    try {
+        await generateAndPlayTTS(currentTask.data);
+    } catch (err) {
+        console.error('[TTS Queue] Error generating/playing voice buffer:', err);
+    } finally {
+        isProcessingTts = false;
+        // Proceed to next message with a brief gap to prevent CPU blocking
+        setTimeout(processTtsQueue, 50);
+    }
+}
+
+// Low-level voice generation using Microsoft Edge neural translation service
+async function generateAndPlayTTS(data) {
+    const uniqueId = (data.uniqueId || '').toLowerCase();
     
+    const isAnchor = (data.userIdentity && typeof data.userIdentity.isAnchor !== 'undefined')
+        ? data.userIdentity.isAnchor
+        : (uniqueId === chatbotSettings.tiktokUsername.toLowerCase());
+        
+    const isModerator = isAnchor || ((data.userIdentity && typeof data.userIdentity.isModeratorOfAnchor !== 'undefined')
+        ? data.userIdentity.isModeratorOfAnchor
+        : !!data.isModerator);
+        
+    const isSubscriber = isAnchor || ((data.userIdentity && typeof data.userIdentity.isSubscriberOfAnchor !== 'undefined')
+        ? data.userIdentity.isSubscriberOfAnchor
+        : !!data.isSubscriber);
     const nickname = data.nickname || data.uniqueId || 'Usuario';
     let comment = data.comment || '';
     
-    // 1. Blacklist check
+    // 1. Blacklist & Banned Username check
     const blacklist = (chatbotSettings.ignoreUserList || []).map(u => u.toLowerCase().trim());
     if (blacklist.includes(uniqueId)) return;
+    if (isBannedText(uniqueId, true) || isBannedText(nickname, true)) {
+        console.warn(`[TTS Moderación] Omitiendo lectura de TTS de @${uniqueId} por nombre vulgar.`);
+        return;
+    }
     
-    // 2. Permission check
+    // 2. Reset Quiéreme set if day has changed (Midnight check)
+    const currentDate = new Date().toDateString();
+    if (currentDate !== lastQuieremeResetDate) {
+        quieremeAllowedUsers.clear();
+        lastQuieremeResetDate = currentDate;
+        console.info("[Quiereme Reset] Midnight reset of allowed users list.");
+    }
+    
+    // 3. Permission check (with Quiéreme bypass)
     const userRole = chatbotSettings.permission || 'all';
-    const isSubscriber = data.isSubscriber || (data.userIdentity && data.userIdentity.isSubscriberOfAnchor);
-    const isModerator = data.isModerator || (data.userIdentity && data.userIdentity.isModeratorOfAnchor);
-    const isAnchor = data.isAnchor || (data.userIdentity && data.userIdentity.isAnchor);
+    const isQuieremeAllowed = quieremeAllowedUsers.has(uniqueId);
     
-    if (userRole === 'mods' && !isModerator && !isAnchor) return;
-    if (userRole === 'subs' && !isSubscriber && !isModerator && !isAnchor) return;
+    if (!data.isAiResponse && !isQuieremeAllowed) {
+        if (userRole === 'mods' && !isModerator && !isAnchor) return;
+        if (userRole === 'subs' && !isSubscriber && !isModerator && !isAnchor) return;
+        if (userRole === 'quiereme' && !isModerator && !isAnchor) return;
+    }
     
-    // 3. Prefix command check
-    if (chatbotSettings.readPrefixRequired) {
+    // 4. Prefix command check
+    if (!data.isAiResponse && chatbotSettings.readPrefixRequired) {
         const prefixes = chatbotSettings.prefixes || ['.', '/'];
         const hasPrefix = prefixes.some(p => comment.trim().startsWith(p));
         if (!hasPrefix) return;
@@ -613,56 +1490,83 @@ async function handleCloudTTS(data) {
         }
     }
     
-    // 4. Character filtering (block rare languages)
+    // 5. Character filtering (block rare languages)
     if (chatbotSettings.blockRareLanguages) {
         const disallowedRegex = /[\u0900-\u097F\u0600-\u06FF\u0400-\u04FF\u4e00-\u9fa5]/;
         if (disallowedRegex.test(comment)) return;
     }
     
-    // 5. Clean emojis
+    // 6. Clean emojis and replace text mappings
     comment = comment.replace(/[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F1E6}-\u{1F1FF}]|[\u{1F900}-\u{1F9FF}]|[\u{1F300}-\u{1F5FF}]|[\u{1F700}-\u{1F77F}]|[\u{1F780}-\u{1F7FF}]|[\u{1F800}-\u{1F8FF}]|[\u{1F900}-\u{1F9FF}]|[\u{1FA00}-\u{1FA6F}]|[\u{1FA70}-\u{1FAFF}]/gu, '');
     comment = replaceTextEmojis(comment);
     
+    // Slang normalizer & repeated letters compressor
+    comment = normalizeChatAbbreviations(comment);
+    comment = reduceRepeatedLetters(comment);
+    
     if (!comment.trim()) return;
     
-    // 6. Custom Blocked Words check
-    const banned = (chatbotSettings.bannedWords || []).map(w => w.toLowerCase().trim()).filter(w => w.length > 0);
-    for (const word of banned) {
-        if (comment.toLowerCase().includes(word)) {
-            if (chatbotSettings.bannedWordsAction === 'skip') {
-                return;
-            } else {
+    // 7. Custom Blocked Words check (Skip for AI since Gemini is safe, avoids false positives)
+    if (!data.isAiResponse && isBannedText(comment)) {
+        if (chatbotSettings.bannedWordsAction === 'skip') {
+            return;
+        } else {
+            const banned = (chatbotSettings.bannedWords || []).map(w => w.toLowerCase().trim()).filter(w => w.length > 0);
+            for (const word of banned) {
                 const censorRegex = new RegExp(word, 'gi');
                 comment = comment.replace(censorRegex, '***');
             }
         }
     }
     
-    // 7. Limit length
-    const maxChars = parseInt(chatbotSettings.maxCharacters ?? 150);
-    if (comment.length > maxChars) {
-        comment = comment.substring(0, maxChars) + '...';
+    // 8. Limit length
+    if (!data.isAiResponse) {
+        const maxChars = parseInt(chatbotSettings.maxCharacters ?? 150);
+        if (comment.length > maxChars) {
+            comment = comment.substring(0, maxChars) + '...';
+        }
     }
     
-    // 8. Username reading format
+    // 9. Username reading format (clean username)
     let textToSpeak = comment;
-    if (chatbotSettings.readUsername) {
-        const displayName = stripEmojis(nickname);
+    if (!data.isAiResponse && chatbotSettings.readUsername) {
+        const displayName = cleanUsernameForReading(nickname);
         textToSpeak = `${displayName} dice: ${comment}`;
     }
     
     // 9. Determine voice settings
-    const userVoiceRule = (chatbotSettings.userVoices || []).find(v => v.username.toLowerCase() === uniqueId);
-    let voiceName = chatbotSettings.cloudVoiceName || 'es-CO-SalomeNeural';
+    let voiceName = 'es-CO-SalomeNeural';
+    if (chatbotSettings.ttsEngine === 'gemini') {
+        voiceName = chatbotSettings.geminiVoiceName || 'Aoede';
+    } else {
+        voiceName = chatbotSettings.cloudVoiceName || 'es-CO-SalomeNeural';
+    }
     let volume = chatbotSettings.volume ?? 1;
     let pitch = chatbotSettings.pitch ?? 1;
     let rate = chatbotSettings.rate ?? 1;
+    let customStyle = null; // Will override global geminiStyleInstructions if set
     
-    if (userVoiceRule) {
-        voiceName = userVoiceRule.voice;
-        volume = userVoiceRule.volume ?? 1;
-        pitch = userVoiceRule.pitch ?? 1;
-        rate = userVoiceRule.rate ?? 1;
+    if (data.isAiResponse) {
+        const themeName = chatbotSettings.themeName || 'neutral';
+        const aiProfile = themeName === 'majo' ? 'majo' : 'naya';
+        const aiConfig = (chatbotSettings.ai && chatbotSettings.ai[aiProfile]) || {};
+        if (aiConfig.ai_voice_name && aiConfig.ai_voice_name !== 'default') {
+            voiceName = aiConfig.ai_voice_name;
+        }
+        if (aiConfig.ai_voice_style) {
+            customStyle = aiConfig.ai_voice_style;
+        }
+    } else {
+        const userVoiceRule = (chatbotSettings.userVoices || []).find(v => v.username.toLowerCase() === uniqueId);
+        if (userVoiceRule) {
+            voiceName = userVoiceRule.voice;
+            volume = userVoiceRule.volume ?? 1;
+            pitch = userVoiceRule.pitch ?? 1;
+            rate = userVoiceRule.rate ?? 1;
+            if (userVoiceRule.style) {
+                customStyle = userVoiceRule.style;
+            }
+        }
     }
     
     const tempFile = path.join(writableDir, `temp_tts_${Date.now()}_${Math.floor(Math.random() * 1000)}.mp3`);
@@ -674,28 +1578,29 @@ async function handleCloudTTS(data) {
     // Pitch formatting
     const pitchPercentage = Math.round((pitch - 1) * 50);
     const pitchStr = pitchPercentage >= 0 ? `+${pitchPercentage}Hz` : `${pitchPercentage}Hz`;
-    
+
     try {
-        const tts = new EdgeTTS({
-            voice: voiceName,
-            rate: rateStr,
-            pitch: pitchStr
-        });
-        
-        await tts.ttsPromise(textToSpeak, tempFile);
+        await synthesizeSpeech(textToSpeak, voiceName, rateStr, pitchStr, tempFile, customStyle);
         
         if (fs.existsSync(tempFile)) {
-            const audioBuffer = fs.readFileSync(tempFile);
-            const base64Audio = audioBuffer.toString('base64');
+            let audioBuffer = fs.readFileSync(tempFile);
+            let base64Audio = audioBuffer.toString('base64');
             
             io.emit('play_tts_audio', {
                 base64Audio,
-                playLocation: chatbotSettings.playLocation,
+                playLocation: 'panel',
                 isModerator,
                 isSubscriber
             });
             
             fs.unlinkSync(tempFile);
+            
+            // Clear references immediately to free RAM
+            audioBuffer = null;
+            base64Audio = null;
+            if (global.gc) {
+                try { global.gc(); } catch (e) {}
+            }
         }
     } catch (error) {
         console.error('Error generating Edge TTS:', error);
@@ -721,6 +1626,7 @@ async function playNextYoutubeInQueue() {
     
     const nextTrack = youtubeQueue.shift();
     io.emit('youtube_queue_updated', youtubeQueue);
+    emitMonetizedUsersUpdate(false);
     
     youtubeVoteSkips.clear();
     io.emit('youtube_votes_updated', { votes: 0, limit: chatbotSettings.youtubeVoteSkipLimit });
@@ -737,7 +1643,9 @@ async function playNextYoutubeInQueue() {
         uri: nextTrack.uri,
         requester: nextTrack.requester,
         progressMs: 0,
-        durationMs: 0
+        durationMs: nextTrack.durationMs || 0,
+        mediaUrl: nextTrack.mediaUrl || '',
+        source: nextTrack.source || 'youtube'
     };
     
     io.emit('youtube_track', currentYoutubeTrack);
@@ -747,6 +1655,7 @@ async function playNextYoutubeInQueue() {
 function addYoutubeTrackToQueue(track) {
     youtubeQueue.push(track);
     io.emit('youtube_queue_updated', youtubeQueue);
+    emitMonetizedUsersUpdate(false);
     console.info(`Agregado a cola de YouTube: ${track.title} (Pedido por @${track.requester})`);
     
     if (youtubeQueue.length === 1 && (!currentYoutubeTrack || !currentYoutubeTrack.isPlaying)) {
@@ -755,14 +1664,15 @@ function addYoutubeTrackToQueue(track) {
 }
 
 function handleYoutubeVoteSkip(requester, isStaff) {
-    if (isStaff) {
-        console.log(`Skip YouTube forzado por staff: @${requester}`);
-        io.emit('system', { type: 'info', message: `@${requester} omitió el video de YouTube.` });
-        playNextYoutubeInQueue();
+    // !ytskip SIEMPRE requiere votos para TODOS (incluyendo moderadores)
+    // Los moderadores pueden usar !ytskipforce o !ytskipsong para saltar sin votos
+    
+    if (!currentYoutubeTrack || !currentYoutubeTrack.isPlaying) {
         return;
     }
     
-    if (!currentYoutubeTrack || !currentYoutubeTrack.isPlaying) {
+    if (youtubeVoteSkips.has(requester)) {
+        io.emit('system', { type: 'warning', message: `@${requester} ya votó para omitir este video.` });
         return;
     }
     
@@ -775,18 +1685,176 @@ function handleYoutubeVoteSkip(requester, isStaff) {
     
     if (currentVotes >= votesNeeded) {
         console.log(`Límite de votos YouTube alcanzado (${currentVotes}/${votesNeeded}). Omitiendo video...`);
-        io.emit('system', { type: 'info', message: `Límite de votos alcanzado. Omitiendo video de YouTube...` });
+        io.emit('system', { type: 'info', message: `🎬 Límite de votos alcanzado. Omitiendo video de YouTube...` });
         playNextYoutubeInQueue();
     }
 }
 
 async function handleYoutubeSongRequest(query, requester) {
-    console.log(`Procesando solicitud de YouTube: "${query}" por @${requester}`);
-    io.emit('system', { type: 'info', message: `Buscando en YouTube: "${query}"...` });
+    const engine = chatbotSettings.youtubeSearchEngine || 'youtube';
+    console.log(`Procesando solicitud de música (${engine}): "${query}" por @${requester}`);
+    
+    let track = null;
+    if (engine === 'soundcloud') {
+        io.emit('system', { type: 'info', message: `Buscando en SoundCloud: "${query}"...` });
+        const scInfo = await searchSoundCloud(query);
+        if (scInfo) {
+            track = { ...scInfo };
+            
+            let extractedUrl = null;
+            let connectionErrors = 0;
+            // Loop through working Cobalt instances to find a working stream URL
+            for (const apiBase of workingCobaltApis) {
+                try {
+                    console.log(`[SoundCloud Audio] Intentando extraer con instancia Cobalt: ${apiBase}`);
+                    const cobaltRes = await fetch(apiBase, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'User-Agent': 'Mozilla/5.0'
+                        },
+                        body: JSON.stringify({
+                            url: scInfo.uri,
+                            downloadMode: 'audio',
+                            audioFormat: 'mp3'
+                        }),
+                        signal: AbortSignal.timeout(5000)
+                    });
+                    
+                    if (cobaltRes.ok) {
+                        const data = await cobaltRes.json();
+                        if (data && data.url) {
+                            extractedUrl = data.url;
+                            console.log(`[SoundCloud Audio] Éxito con ${apiBase}! URL extraída.`);
+                            break;
+                        }
+                    } else {
+                        console.warn(`[SoundCloud Audio] Instancia ${apiBase} respondió con estado ${cobaltRes.status}`);
+                        connectionErrors++;
+                    }
+                } catch (e) {
+                    console.warn(`[SoundCloud Audio] Error con ${apiBase}:`, e.message);
+                    connectionErrors++;
+                }
+            }
 
-    const track = await searchYouTube(query);
+            if (extractedUrl) {
+                track.mediaUrl = `/api/stream-audio?url=${encodeURIComponent(extractedUrl)}`;
+                track.source = 'soundcloud';
+            } else {
+                console.warn(`[SoundCloud Audio] No se pudo extraer audio en ninguna de las ${workingCobaltApis.length} APIs.`);
+                if (connectionErrors >= workingCobaltApis.length) {
+                    io.emit('system', { 
+                        type: 'warning', 
+                        message: '⚠️ Error de conexión en SoundCloud: Todos los servidores de extracción (Cobalt) fallaron. El cortafuegos corporativo podría estar bloqueando el acceso. En tu WiFi de hogar debería funcionar.' 
+                    });
+                } else {
+                    io.emit('system', { type: 'warning', message: `No se pudo extraer audio directo para "${scInfo.title}".` });
+                }
+                track = null; // force search failure since soundcloud doesn't have an iframe fallback
+            }
+        }
+    } else if (engine === 'youtube_audio') {
+        io.emit('system', { type: 'info', message: `Buscando audio de YouTube sin restricciones: "${query}"...` });
+        const ytInfo = await searchYouTube(query);
+        if (ytInfo) {
+            track = { ...ytInfo };
+            
+            const durationMs = parseDurationToMs(ytInfo.durationText || '0:00');
+            if (durationMs > 0) {
+                track.durationMs = durationMs;
+            }
+
+            let extractedUrl = null;
+            let connectionErrors = 0;
+            const videoUrl = `https://www.youtube.com/watch?v=${ytInfo.id}`;
+            
+            // Loop through working Cobalt instances to find a working stream URL
+            for (const apiBase of workingCobaltApis) {
+                try {
+                    console.log(`[YouTube Audio] Intentando extraer con instancia Cobalt: ${apiBase}`);
+                    const cobaltRes = await fetch(apiBase, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
+                        },
+                        body: JSON.stringify({
+                            url: videoUrl,
+                            downloadMode: 'audio',
+                            audioFormat: 'mp3'
+                        }),
+                        signal: AbortSignal.timeout(5000)
+                    });
+                    
+                    if (cobaltRes.ok) {
+                        const data = await cobaltRes.json();
+                        if (data && data.url) {
+                            extractedUrl = data.url;
+                            console.log(`[YouTube Audio] Éxito con ${apiBase}! URL extraída.`);
+                            break;
+                        }
+                    } else {
+                        // Fallback to v7 format check
+                        const cobaltResV7 = await fetch(apiBase, {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json',
+                                'User-Agent': 'Mozilla/5.0'
+                            },
+                            body: JSON.stringify({
+                                url: videoUrl,
+                                isAudioOnly: true,
+                                aFormat: 'mp3'
+                            }),
+                            signal: AbortSignal.timeout(5000)
+                        });
+                        if (cobaltResV7.ok) {
+                            const data = await cobaltResV7.json();
+                            if (data && data.url) {
+                                extractedUrl = data.url;
+                                console.log(`[YouTube Audio] Éxito con ${apiBase} (v7 fallback)! URL extraída.`);
+                                break;
+                            }
+                        } else {
+                            console.warn(`[YouTube Audio] Instancia ${apiBase} y fallback v7 respondieron sin éxito.`);
+                            connectionErrors++;
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`[YouTube Audio] Error con ${apiBase}:`, e.message);
+                    connectionErrors++;
+                }
+            }
+
+            if (extractedUrl) {
+                // Route through our local proxy to prevent any CORS block and keep it robust
+                track.mediaUrl = `/api/stream-audio?url=${encodeURIComponent(extractedUrl)}`;
+                track.source = 'youtube_audio';
+            } else {
+                console.warn(`[YouTube Audio] No se pudo extraer audio en ninguna de las ${workingCobaltApis.length} APIs. Revirtiendo a reproductor estándar.`);
+                if (connectionErrors >= workingCobaltApis.length) {
+                    io.emit('system', { 
+                        type: 'warning', 
+                        message: '⚠️ Error de conexión en YouTube Audio: Todos los servidores de extracción (Cobalt) fallaron. El cortafuegos corporativo podría estar bloqueándolos. Se usará el reproductor de YouTube estándar (puede no sonar en la empresa).' 
+                    });
+                } else {
+                    io.emit('system', { type: 'warning', message: `No se pudo extraer audio directo para "${ytInfo.title}". Usando reproductor de YouTube estándar.` });
+                }
+                track.source = 'youtube'; // Fallback a iframe
+            }
+        }
+    } else {
+        io.emit('system', { type: 'info', message: `Buscando en YouTube: "${query}"...` });
+        track = await searchYouTube(query);
+    }
+
     if (!track) {
-        io.emit('system', { type: 'warning', message: `No se encontraron videos en YouTube para "${query}".` });
+        const engineLabel = engine === 'soundcloud' ? 'SoundCloud' : (engine === 'youtube_audio' ? 'YouTube Audio' : 'YouTube');
+        io.emit('system', { type: 'warning', message: `No se encontraron canciones en ${engineLabel} para "${query}".` });
         return;
     }
     
@@ -797,11 +1865,15 @@ async function handleYoutubeSongRequest(query, requester) {
         albumArt: track.albumArt,
         uri: track.uri,
         requester: requester,
-        durationText: track.durationText
+        durationText: track.durationText,
+        durationMs: track.durationMs || 0,
+        mediaUrl: track.mediaUrl || '',
+        source: track.source || 'youtube'
     };
     
     addYoutubeTrackToQueue(trackItem);
-    io.emit('system', { type: 'success', message: `@${requester} añadió a la cola de YouTube: "${trackItem.title}"` });
+    const engineLabel = engine === 'soundcloud' ? 'SoundCloud' : (engine === 'youtube_audio' ? 'YouTube Audio' : 'YouTube');
+    io.emit('system', { type: 'success', message: `@${requester} añadió a la cola de ${engineLabel}: "${trackItem.title}"` });
 }
 
 function sendCurrentYoutubeTrackToChatInfo() {
@@ -848,14 +1920,44 @@ async function handleYoutubeChatCommand(data) {
     const uniqueId = data.uniqueId;
     const nickname = data.nickname || uniqueId;
     
-    const isSubscriber = data.isSubscriber || (data.userIdentity && data.userIdentity.isSubscriberOfAnchor);
-    const isModerator = data.isModerator || (data.userIdentity && data.userIdentity.isModeratorOfAnchor);
-    const isAnchor = data.isAnchor || (data.userIdentity && data.userIdentity.isAnchor);
+    const isAnchor = (data.userIdentity && typeof data.userIdentity.isAnchor !== 'undefined')
+        ? data.userIdentity.isAnchor
+        : (uniqueId && chatbotSettings.tiktokUsername && uniqueId.toLowerCase() === chatbotSettings.tiktokUsername.toLowerCase());
+        
+    const isModerator = isAnchor || ((data.userIdentity && typeof data.userIdentity.isModeratorOfAnchor !== 'undefined')
+        ? data.userIdentity.isModeratorOfAnchor
+        : !!data.isModerator);
+        
+    const isSubscriber = isAnchor || ((data.userIdentity && typeof data.userIdentity.isSubscriberOfAnchor !== 'undefined')
+        ? data.userIdentity.isSubscriberOfAnchor
+        : !!data.isSubscriber);
     
     const prefix = (chatbotSettings.youtubeCommandPrefix || '!yt').trim();
     const lowerComment = comment.toLowerCase();
     
-    if (lowerComment.startsWith(prefix.toLowerCase())) {
+    if (lowerComment === '!ytcurrent' || lowerComment === '!ytcancion') {
+        sendCurrentYoutubeTrackToChatInfo();
+    } else if (lowerComment === '!ytqueue' || lowerComment === '!ytcola') {
+        sendYoutubeQueueToChatInfo();
+    } else if (lowerComment === '!skipyt' || lowerComment === '!ytskip' || lowerComment === '!ytomitir') {
+        handleYoutubeVoteSkip(uniqueId, isModerator || isAnchor);
+    } else if (lowerComment === '!ytvotos') {
+        sendYoutubeVoteStatusToChatInfo();
+    } else if (lowerComment === '!skipytforce' || lowerComment === '!ytskipforce' || lowerComment === '!ytskipsong') {
+        if (isModerator || isAnchor) {
+            console.log(`Force YouTube skip por @${uniqueId}`);
+            io.emit('system', { type: 'info', message: `@${uniqueId} omitió el video de YouTube.` });
+            playNextYoutubeInQueue();
+        }
+    } else if (lowerComment === '!ytclearqueue' || lowerComment === '!ytlimpiarcola') {
+        if (isModerator || isAnchor) {
+            console.log(`Cola de YouTube vaciada por @${uniqueId}`);
+            youtubeQueue = [];
+            io.emit('youtube_queue_updated', youtubeQueue);
+            emitMonetizedUsersUpdate(false);
+            io.emit('system', { type: 'info', message: `@${uniqueId} vació la cola de YouTube.` });
+        }
+    } else if (lowerComment.startsWith(prefix.toLowerCase())) {
         const query = comment.substring(prefix.length).trim();
         if (query.length > 0) {
             const perm = chatbotSettings.youtubePermission || 'all';
@@ -871,47 +1973,39 @@ async function handleYoutubeChatCommand(data) {
             // Monetization credit check
             if (chatbotSettings.youtubeMonetizationEnabled) {
                 if (!isModerator && !isAnchor) {
+                    const minCoins = chatbotSettings.youtubeMinCoins || 5;
+                    const sessionCoins = sessionGiftCoins[uniqueId.toLowerCase()] || 0;
                     const credits = userMusicCredits[uniqueId.toLowerCase()] || 0;
-                    if (credits < 1) {
+                    const hasPermission = (sessionCoins >= minCoins) || (credits >= 1);
+                    
+                    if (!hasPermission) {
                         io.emit('system', { 
                             type: 'warning', 
-                            message: `@${uniqueId} intentó pedir video de YouTube pero no tiene créditos de música. Requiere enviar un regalo de al menos ${chatbotSettings.youtubeMinCoins} monedas.` 
+                            message: `@${uniqueId} no tiene permiso para pedir video de YouTube. Requiere enviar un regalo de al menos ${minCoins} monedas.` 
                         });
                         return;
                     }
-                    // Deduct credit
-                    userMusicCredits[uniqueId.toLowerCase()] = credits - 1;
-                    io.emit('system', { 
-                        type: 'info', 
-                        message: `@${uniqueId} usó 1 crédito de música. Créditos restantes: ${userMusicCredits[uniqueId.toLowerCase()]}` 
-                    });
+                    
+                    // Deduct credit (prefer session coins first)
+                    if (sessionCoins >= minCoins) {
+                        sessionGiftCoins[uniqueId.toLowerCase()] -= minCoins;
+                        io.emit('system', { 
+                            type: 'info', 
+                            message: `@${uniqueId} usó ${minCoins} monedas de regalos para pedir video. Monedas restantes en sesión: ${sessionGiftCoins[uniqueId.toLowerCase()]}` 
+                        });
+                    } else if (credits >= 1) {
+                        userMusicCredits[uniqueId.toLowerCase()] = credits - 1;
+                        io.emit('system', { 
+                            type: 'info', 
+                            message: `@${uniqueId} usó 1 crédito de música. Créditos restantes: ${userMusicCredits[uniqueId.toLowerCase()]}` 
+                        });
+                    }
                 }
             }
 
             await handleYoutubeSongRequest(query, uniqueId);
         } else {
             sendCurrentYoutubeTrackToChatInfo();
-        }
-    } else if (lowerComment === '!ytcurrent' || lowerComment === '!ytcancion') {
-        sendCurrentYoutubeTrackToChatInfo();
-    } else if (lowerComment === '!ytqueue' || lowerComment === '!ytcola') {
-        sendYoutubeQueueToChatInfo();
-    } else if (lowerComment === '!ytskip' || lowerComment === '!ytomitir') {
-        handleYoutubeVoteSkip(uniqueId, isModerator || isAnchor);
-    } else if (lowerComment === '!ytvotos') {
-        sendYoutubeVoteStatusToChatInfo();
-    } else if (lowerComment === '!ytskipforce' || lowerComment === '!ytskipsong') {
-        if (isModerator || isAnchor) {
-            console.log(`Force YouTube skip por @${uniqueId}`);
-            io.emit('system', { type: 'info', message: `@${uniqueId} omitió el video de YouTube.` });
-            playNextYoutubeInQueue();
-        }
-    } else if (lowerComment === '!ytclearqueue' || lowerComment === '!ytlimpiarcola') {
-        if (isModerator || isAnchor) {
-            console.log(`Cola de YouTube vaciada por @${uniqueId}`);
-            youtubeQueue = [];
-            io.emit('youtube_queue_updated', youtubeQueue);
-            io.emit('system', { type: 'info', message: `@${uniqueId} vació la cola de YouTube.` });
         }
     }
 }
@@ -923,6 +2017,83 @@ async function handleYoutubeChatCommand(data) {
 let currentSpotifyTrack = { isPlaying: false };
 let spotifyQueue = [];
 let spotifyVoteSkips = new Set();
+
+function levenshtein(a, b) {
+    const matrix = [];
+    for (let i = 0; i <= b.length; i++) {
+        matrix[i] = [i];
+    }
+    for (let j = 0; j <= a.length; j++) {
+        matrix[0][j] = j;
+    }
+    for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+            if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j - 1] + 1,
+                    matrix[i][j - 1] + 1,
+                    matrix[i - 1][j] + 1
+                );
+            }
+        }
+    }
+    return matrix[b.length][a.length];
+}
+
+function wordsMatchFuzzy(w1, w2) {
+    if (w1 === w2) return true;
+    if (w1.includes(w2) || w2.includes(w1)) return true;
+    if (w1.length >= 3 && w2.length >= 3) {
+        const distance = levenshtein(w1, w2);
+        const maxAllowed = Math.min(2, Math.floor(Math.min(w1.length, w2.length) / 2));
+        if (distance <= maxAllowed) return true;
+    }
+    return false;
+}
+
+function scoreTrack(track, query) {
+    const cleanQuery = query.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "");
+    const queryWords = cleanQuery.split(/\s+/).filter(w => w.length > 0);
+    
+    const cleanTitle = track.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "");
+    const titleWords = cleanTitle.split(/\s+/).filter(w => w.length > 0);
+    
+    const artists = track.artists.map(a => a.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, ""));
+    const artistWords = artists.flatMap(a => a.split(/\s+/)).filter(w => w.length > 0);
+    
+    let matchedQueryWords = 0;
+    for (const qw of queryWords) {
+        let titleMatched = false;
+        for (const tw of titleWords) {
+            if (wordsMatchFuzzy(tw, qw)) {
+                titleMatched = true;
+                break;
+            }
+        }
+        if (titleMatched || cleanTitle.includes(qw)) {
+            matchedQueryWords += 2;
+        } else {
+            let artistMatched = false;
+            for (const aw of artistWords) {
+                if (wordsMatchFuzzy(aw, qw)) {
+                    artistMatched = true;
+                    break;
+                }
+            }
+            if (artistMatched) {
+                matchedQueryWords += 1;
+            }
+        }
+    }
+    
+    if (cleanTitle.includes(cleanQuery)) {
+        matchedQueryWords += 3;
+    }
+    
+    return matchedQueryWords;
+}
 
 async function searchSpotify(query, type = 'track,artist', limit = 5) {
     if (!chatbotSettings.spotifyAccessToken) return null;
@@ -1087,6 +2258,10 @@ async function playNextInQueue() {
                 }
             });
             currentActiveQueueTrack = null;
+            if (response.ok) {
+                // Force play/resume after skipping native track
+                await resumeSpotify();
+            }
             return response.ok;
         } catch (e) {
             console.error('Error skipping to next native song:', e);
@@ -1096,6 +2271,7 @@ async function playNextInQueue() {
     
     const nextTrack = spotifyQueue.shift();
     io.emit('spotify_queue_updated', spotifyQueue);
+    emitMonetizedUsersUpdate(true);
     
     spotifyVoteSkips.clear();
     io.emit('spotify_votes_updated', { votes: 0, limit: chatbotSettings.spotifyVoteSkipLimit });
@@ -1122,6 +2298,7 @@ async function playNextInQueue() {
 function addTrackToQueue(track) {
     spotifyQueue.push(track);
     io.emit('spotify_queue_updated', spotifyQueue);
+    emitMonetizedUsersUpdate(true);
     console.info(`Agregado a la cola: ${track.title} - ${track.artist} (Pedido por @${track.requester})`);
     
     if (spotifyQueue.length === 1 && (!currentSpotifyTrack || !currentSpotifyTrack.isPlaying)) {
@@ -1130,14 +2307,15 @@ function addTrackToQueue(track) {
 }
 
 function handleVoteSkip(requester, isStaff) {
-    if (isStaff) {
-        console.log(`Skip forzado por staff: @${requester}`);
-        io.emit('system', { type: 'info', message: `@${requester} omitió la canción.` });
-        playNextInQueue();
+    // !skip SIEMPRE requiere votos para TODOS (incluyendo moderadores)
+    // Los moderadores pueden usar !skipforce o !skipsong para saltar sin votos
+    
+    if (!currentSpotifyTrack || !currentSpotifyTrack.isPlaying) {
         return;
     }
     
-    if (!currentSpotifyTrack || !currentSpotifyTrack.isPlaying) {
+    if (spotifyVoteSkips.has(requester)) {
+        io.emit('system', { type: 'warning', message: `@${requester} ya votó para omitir esta canción.` });
         return;
     }
     
@@ -1150,7 +2328,7 @@ function handleVoteSkip(requester, isStaff) {
     
     if (currentVotes >= votesNeeded) {
         console.log(`Límite de votos alcanzado (${currentVotes}/${votesNeeded}). Omitiendo canción...`);
-        io.emit('system', { type: 'info', message: `Límite de votos alcanzado. Omitiendo canción...` });
+        io.emit('system', { type: 'info', message: `🎵 Límite de votos alcanzado. Omitiendo canción...` });
         playNextInQueue();
     }
 }
@@ -1198,9 +2376,34 @@ async function handleSongRequest(query, requester) {
     
     if (!chosenTrack) {
         try {
-            const trackSearch = await searchSpotify(query, 'track', 1);
+            // Limpiar query de operadores de búsqueda (como el guion "-" y el signo "+") que causan problemas de exclusión en Spotify
+            const cleanQuery = query.replace(/[-+]/g, ' ').trim();
+            console.log(`Buscando pistas para query limpio: "${cleanQuery}"`);
+            const trackSearch = await searchSpotify(cleanQuery, 'track', 5);
             if (trackSearch && trackSearch.tracks && trackSearch.tracks.items.length > 0) {
-                chosenTrack = trackSearch.tracks.items[0];
+                const tracks = trackSearch.tracks.items;
+                let allowedTracks = tracks;
+                if (!chatbotSettings.spotifyExplicitAllowed) {
+                    allowedTracks = tracks.filter(t => !t.explicit);
+                }
+                
+                if (allowedTracks.length > 0) {
+                    const tracksWithScores = allowedTracks.map(track => ({
+                        track,
+                        score: scoreTrack(track, cleanQuery)
+                    }));
+                    
+                    // Ordenar por puntaje descendente y usar la popularidad como desempate
+                    tracksWithScores.sort((a, b) => {
+                        if (b.score !== a.score) {
+                            return b.score - a.score;
+                        }
+                        return (b.track.popularity || 0) - (a.track.popularity || 0);
+                    });
+                    
+                    chosenTrack = tracksWithScores[0].track;
+                    console.log(`Mejor pista coincidente elegida: "${chosenTrack.name}" por "${chosenTrack.artists.map(a => a.name).join(', ')}" (Score: ${tracksWithScores[0].score}, Pop: ${chosenTrack.popularity})`);
+                }
             }
         } catch (e) {
             console.error('Error in track search:', e);
@@ -1267,6 +2470,232 @@ function sendVoteStatusToChatInfo() {
     });
 }
 
+function getMonetizedUsersData(isSpotify = true) {
+    const minCoins = isSpotify ? (chatbotSettings.spotifyMinCoins || 5) : (chatbotSettings.youtubeMinCoins || 5);
+    const monetizedUsers = [];
+    
+    for (const [userId, coins] of Object.entries(sessionGiftCoins)) {
+        if (coins >= minCoins) {
+            monetizedUsers.push({
+                userId: userId,
+                totalCoins: coins,
+                creditsAvailable: Math.floor(coins / minCoins),
+                nickname: userId // Will be enriched with actual nickname if stored
+            });
+        }
+    }
+    
+    // Sort by coins in descending order
+    return monetizedUsers.sort((a, b) => b.totalCoins - a.totalCoins);
+}
+
+function emitMonetizedUsersUpdate(isSpotify = true) {
+    const users = getMonetizedUsersData(isSpotify);
+    if (isSpotify) {
+        io.emit('spotify_monetized_users_updated', users);
+    } else {
+        io.emit('youtube_monetized_users_updated', users);
+    }
+}
+
+// Function to emit AI queue updates to frontend
+function emitAiQueueUpdate() {
+    io.emit('ai_queue_updated', aiCommandQueue);
+}
+
+// Check the AI queue every second
+setInterval(async () => {
+    if (isAiProcessing || aiCommandQueue.length === 0) return;
+    
+    // Check global cooldown
+    const themeName = chatbotSettings?.themeName || 'neutral';
+    const aiProfile = themeName === 'majo' ? 'majo' : 'naya';
+    const aiConfig = (chatbotSettings?.ai && chatbotSettings.ai[aiProfile]) || {};
+    const cooldownMs = (aiConfig.ai_cooldown || 10) * 1000;
+    
+    if (Date.now() - lastAiCallTime < cooldownMs) return;
+
+    // Pop the next item
+    const item = aiCommandQueue.shift();
+    emitAiQueueUpdate();
+    
+    if (item) {
+        await executeAiCommand(item);
+    }
+}, 1000);
+
+async function handleAiChatCommand(data) {
+    if (!chatbotSettings) return;
+
+    const themeName = chatbotSettings.themeName || 'neutral';
+    const aiProfile = themeName === 'majo' ? 'majo' : 'naya';
+    const aiConfig = (chatbotSettings.ai && chatbotSettings.ai[aiProfile]) || {};
+
+    if (!aiConfig.ai_bot_active) return;
+
+    const commandPrefix = (aiConfig.ai_command_prefix || '!ia').toLowerCase().trim() + ' ';
+    const comment = (data.comment || '').trim();
+    if (!comment.toLowerCase().startsWith(commandPrefix)) return;
+
+    const prompt = comment.substring(commandPrefix.length).trim();
+    if (!prompt) return;
+
+    const uniqueId = (data.uniqueId || '').toLowerCase().trim();
+    const nickname = data.nickname || data.uniqueId;
+
+    // Check monetization for chat commands
+    if (aiConfig.ai_monetization_active) {
+        const credits = userAiCredits[uniqueId] || 0;
+        if (credits < 1) {
+            console.warn(`[AI Gemini] @${uniqueId} intentó usar la IA sin créditos.`);
+            io.emit('system', { 
+                type: 'warning', 
+                message: `@${nickname} necesita créditos de IA. Envía regalos para ganar créditos (Mínimo: ${aiConfig.ai_min_coins} monedas).` 
+            });
+            return;
+        }
+        // Deduct 1 credit
+        userAiCredits[uniqueId] = credits - 1;
+        io.emit('system', { 
+            type: 'info', 
+            message: `@${nickname} usó 1 crédito de IA. Créditos restantes: ${userAiCredits[uniqueId]}` 
+        });
+    }
+
+    // Add to queue
+    aiQueueCounter++;
+    aiCommandQueue.push({
+        id: `ai_${Date.now()}_${aiQueueCounter}`,
+        uniqueId,
+        nickname,
+        prompt,
+        comment,
+        isAutoGift: false
+    });
+    
+    console.info(`[AI Gemini] Petición de @${uniqueId} añadida a la cola. Posición: ${aiCommandQueue.length}`);
+    io.emit('system', { type: 'info', message: `IA encolada para @${nickname} (Posición ${aiCommandQueue.length})` });
+    emitAiQueueUpdate();
+}
+
+async function executeAiCommand(item) {
+    if (!chatbotSettings) return;
+    
+    isAiProcessing = true;
+    
+    const themeName = chatbotSettings.themeName || 'neutral';
+    const aiProfile = themeName === 'majo' ? 'majo' : 'naya';
+    const aiConfig = (chatbotSettings.ai && chatbotSettings.ai[aiProfile]) || {};
+
+    const uniqueId = item.uniqueId;
+    const nickname = item.nickname;
+    const prompt = item.prompt;
+
+    const apiKey = chatbotSettings.geminiApiKey;
+    if (!apiKey || apiKey.trim() === "") {
+        console.error("[AI Gemini] Error: Gemini API Key no configurada.");
+        io.emit('system', { type: 'error', message: 'ERROR: API Key de Gemini no configurada en los ajustes.' });
+        
+        // Refund credit if it was a manual command and monetization was active
+        if (!item.isAutoGift && aiConfig.ai_monetization_active) {
+            userAiCredits[uniqueId] = (userAiCredits[uniqueId] || 0) + 1;
+        }
+        isAiProcessing = false;
+        return;
+    }
+
+    // Set last call time
+    lastAiCallTime = Date.now();
+
+    let systemPrompt = aiConfig.ai_prompt_personality || "Habla de forma tierna y alegre.";
+    systemPrompt += "\n[REGLAS CRÍTICAS DE FORMATO: Responde siempre en español latino de forma concisa. NO uses emojis. NO uses formato markdown (como asteriscos '*' o negrita). Termina siempre tus oraciones de forma completa, no dejes ideas a medias ni puntos suspensivos.]";
+
+    try {
+        console.info(`[AI Gemini] Enviando prompt a Gemini 3.5 Flash para @${uniqueId}: "${prompt}"`);
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [ { parts: [ { text: prompt } ] } ],
+                system_instruction: { parts: [ { text: systemPrompt } ] }
+            })
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Gemini API error (Status ${response.status}): ${errText}`);
+        }
+
+        const result = await response.json();
+        let aiResponseText = "";
+        if (result.candidates && result.candidates[0] && result.candidates[0].content && result.candidates[0].content.parts[0]) {
+            aiResponseText = result.candidates[0].content.parts[0].text || "";
+        }
+
+        aiResponseText = aiResponseText.trim();
+        if (!aiResponseText) {
+            console.warn("[AI Gemini] Respuesta vacía de Gemini.");
+            isAiProcessing = false;
+            return;
+        }
+
+        const maxChars = parseInt(aiConfig.ai_max_chars) || 150;
+        if (aiResponseText.length > maxChars) {
+            const truncated = aiResponseText.substring(0, maxChars);
+            const lastSentenceBoundary = Math.max(
+                truncated.lastIndexOf('.'),
+                truncated.lastIndexOf('?'),
+                truncated.lastIndexOf('!')
+            );
+            
+            if (lastSentenceBoundary > maxChars * 0.4) {
+                aiResponseText = truncated.substring(0, lastSentenceBoundary + 1);
+            } else {
+                const lastSpace = truncated.lastIndexOf(' ');
+                if (lastSpace > 0) {
+                    aiResponseText = truncated.substring(0, lastSpace) + "...";
+                } else {
+                    aiResponseText = truncated + "...";
+                }
+            }
+        }
+
+        io.emit('tiktok_event_raw', {
+            eventType: 'ai_response',
+            data: { nickname: 'AI', comment: aiResponseText }
+        });
+
+        let spokenText = aiResponseText;
+        if (aiConfig.ai_read_username) {
+            spokenText = `Respondiendo a ${cleanUsernameForReading(nickname)}, ${aiResponseText}`;
+        }
+
+        console.info(`[AI Gemini] Generada respuesta: "${spokenText}"`);
+
+        ttsQueue.push({
+            data: {
+                uniqueId: "gemini_ai",
+                nickname: "Gemini",
+                comment: spokenText,
+                isAiResponse: true
+            },
+            isPriority: true,
+            timestamp: Date.now()
+        });
+        processTtsQueue();
+
+    } catch (err) {
+        console.error('[AI Gemini] Error al llamar a Gemini:', err);
+        io.emit('system', { type: 'error', message: `Error en la IA: ${err.message}` });
+        
+        if (!item.isAutoGift && aiConfig.ai_monetization_active) {
+            userAiCredits[uniqueId] = (userAiCredits[uniqueId] || 0) + 1;
+        }
+    }
+    
+    isAiProcessing = false;
+}
+
 async function handleSpotifyChatCommand(data) {
     if (!chatbotSettings.spotifyConnected || !chatbotSettings.spotifyEnabled || !chatbotSettings.spotifyChatQueueEnabled) {
         return;
@@ -1276,9 +2705,17 @@ async function handleSpotifyChatCommand(data) {
     const uniqueId = data.uniqueId;
     const nickname = data.nickname || uniqueId;
     
-    const isSubscriber = data.isSubscriber || (data.userIdentity && data.userIdentity.isSubscriberOfAnchor);
-    const isModerator = data.isModerator || (data.userIdentity && data.userIdentity.isModeratorOfAnchor);
-    const isAnchor = data.isAnchor || (data.userIdentity && data.userIdentity.isAnchor);
+    const isAnchor = (data.userIdentity && typeof data.userIdentity.isAnchor !== 'undefined')
+        ? data.userIdentity.isAnchor
+        : (uniqueId && chatbotSettings.tiktokUsername && uniqueId.toLowerCase() === chatbotSettings.tiktokUsername.toLowerCase());
+        
+    const isModerator = isAnchor || ((data.userIdentity && typeof data.userIdentity.isModeratorOfAnchor !== 'undefined')
+        ? data.userIdentity.isModeratorOfAnchor
+        : !!data.isModerator);
+        
+    const isSubscriber = isAnchor || ((data.userIdentity && typeof data.userIdentity.isSubscriberOfAnchor !== 'undefined')
+        ? data.userIdentity.isSubscriberOfAnchor
+        : !!data.isSubscriber);
     
     const prefix = (chatbotSettings.spotifyCommandPrefix || '!song').trim();
     const lowerComment = comment.toLowerCase();
@@ -1299,20 +2736,33 @@ async function handleSpotifyChatCommand(data) {
             // Monetization credit check
             if (chatbotSettings.spotifyMonetizationEnabled) {
                 if (!isModerator && !isAnchor) {
+                    const minCoins = chatbotSettings.spotifyMinCoins || 5;
+                    const sessionCoins = sessionGiftCoins[uniqueId.toLowerCase()] || 0;
                     const credits = userMusicCredits[uniqueId.toLowerCase()] || 0;
-                    if (credits < 1) {
+                    const hasPermission = (sessionCoins >= minCoins) || (credits >= 1);
+                    
+                    if (!hasPermission) {
                         io.emit('system', { 
                             type: 'warning', 
-                            message: `@${uniqueId} intentó pedir canción pero no tiene créditos de música. Requiere enviar un regalo de al menos ${chatbotSettings.spotifyMinCoins} monedas.` 
+                            message: `@${uniqueId} no tiene permiso para pedir canción. Requiere enviar un regalo de al menos ${minCoins} monedas.` 
                         });
                         return;
                     }
-                    // Deduct credit
-                    userMusicCredits[uniqueId.toLowerCase()] = credits - 1;
-                    io.emit('system', { 
-                        type: 'info', 
-                        message: `@${uniqueId} usó 1 crédito de música. Créditos restantes: ${userMusicCredits[uniqueId.toLowerCase()]}` 
-                    });
+                    
+                    // Deduct credit (prefer session coins first)
+                    if (sessionCoins >= minCoins) {
+                        sessionGiftCoins[uniqueId.toLowerCase()] -= minCoins;
+                        io.emit('system', { 
+                            type: 'info', 
+                            message: `@${uniqueId} usó ${minCoins} monedas de regalos para pedir canción. Monedas restantes en sesión: ${sessionGiftCoins[uniqueId.toLowerCase()]}` 
+                        });
+                    } else if (credits >= 1) {
+                        userMusicCredits[uniqueId.toLowerCase()] = credits - 1;
+                        io.emit('system', { 
+                            type: 'info', 
+                            message: `@${uniqueId} usó 1 crédito de música. Créditos restantes: ${userMusicCredits[uniqueId.toLowerCase()]}` 
+                        });
+                    }
                 }
             }
 
@@ -1329,7 +2779,13 @@ async function handleSpotifyChatCommand(data) {
     } else if (lowerComment === '!votos') {
         sendVoteStatusToChatInfo();
     } else if (lowerComment === '!skipsong' || lowerComment === '!skipforce') {
-        if (isModerator || isAnchor) {
+        const allowedUsers = (chatbotSettings.spotifySkipAllowedUsers || '')
+            .split(',')
+            .map(u => u.trim().toLowerCase())
+            .filter(Boolean);
+        const isAllowedUser = allowedUsers.includes(uniqueId.toLowerCase());
+        
+        if (isModerator || isAnchor || isAllowedUser) {
             console.log(`Force skip por @${uniqueId}`);
             io.emit('system', { type: 'info', message: `@${uniqueId} omitió la canción.` });
             playNextInQueue();
@@ -1339,6 +2795,7 @@ async function handleSpotifyChatCommand(data) {
             console.log(`Cola vaciada por @${uniqueId}`);
             spotifyQueue = [];
             io.emit('spotify_queue_updated', spotifyQueue);
+            emitMonetizedUsersUpdate(true);
             io.emit('system', { type: 'info', message: `@${uniqueId} vació la cola.` });
         }
     }
@@ -1450,6 +2907,7 @@ async function getSpotifyCurrentlyPlaying() {
 
 // Background Polling Loop
 let lastTriggeredUri = null;
+let lastPollUri = null;
 let currentActiveQueueTrack = null;
 
 setInterval(async () => {
@@ -1457,6 +2915,14 @@ setInterval(async () => {
         try {
             const track = await getSpotifyCurrentlyPlaying();
             if (track) {
+                // Si empezó una nueva canción (URL cambió en comparación con el último sondeo)
+                if (track.spotifyUrl !== lastPollUri) {
+                    lastTriggeredUri = null;
+                    lastPollUri = track.spotifyUrl;
+                    spotifyVoteSkips.clear();
+                    io.emit('spotify_votes_updated', { votes: 0, limit: chatbotSettings.spotifyVoteSkipLimit });
+                }
+
                 // Si la canción está sonando y restan menos de 5 segundos
                 if (track.isPlaying && track.durationMs && track.progressMs !== undefined) {
                     const remainingTime = track.durationMs - track.progressMs;
@@ -1464,15 +2930,6 @@ setInterval(async () => {
                         console.log(`Finalización de track detectada (Restan: ${remainingTime}ms). Reproduciendo siguiente en cola...`);
                         lastTriggeredUri = track.spotifyUrl;
                         playNextInQueue();
-                    }
-                }
-                
-                // Limpiar bandera de skip si empezó una nueva canción
-                if (track.isPlaying && track.spotifyUrl !== lastTriggeredUri) {
-                    if (track.progressMs < 10000) {
-                        lastTriggeredUri = null;
-                        spotifyVoteSkips.clear();
-                        io.emit('spotify_votes_updated', { votes: 0, limit: chatbotSettings.spotifyVoteSkipLimit });
                     }
                 }
 
@@ -1535,6 +2992,28 @@ if (!fs.existsSync(UPLOADS_DIR)) {
     fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
+// Middleware to isolate host assets dynamically and prevent brand leakage
+app.use((req, res, next) => {
+    const url = req.url.toLowerCase();
+    const theme = chatbotSettings.themeName || 'neutral';
+    
+    if (url.includes('/assets/')) {
+        if (url.includes('/assets/gift')) {
+            console.warn(`[Asset Isolation] Access blocked to gifts directory: ${req.url}`);
+            return res.status(404).send('Not Found');
+        }
+        if (url.includes('naya') && theme !== 'naya') {
+            console.warn(`[Asset Isolation] Redirection blocked: client tried accessing Naya assets under active theme '${theme}'`);
+            return res.status(404).send('Not Found');
+        }
+        if (url.includes('majo') && theme !== 'majo') {
+            console.warn(`[Asset Isolation] Redirection blocked: client tried accessing Majo assets under active theme '${theme}'`);
+            return res.status(404).send('Not Found');
+        }
+    }
+    next();
+});
+
 // Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -1544,6 +3023,67 @@ app.use(express.static(writableDir));
 // Serve uploads from the writable directory
 app.use('/uploads', express.static(UPLOADS_DIR));
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Servir imágenes de regalos con coincidencia inteligente (fuzzy match)
+// Estrategia: 1) Exacto → 2) Case-insensitive → 3) Normalizado (espacio=guión)
+// Esto resuelve el mismatch entre nombres en gifts_mapping (ej. ari_radiante.png)
+// y los archivos reales en la carpeta (ej. "Ari Radiante.png")
+// ──────────────────────────────────────────────────────────────────────────────
+const GIFT_ASSETS_DIR = path.join(__dirname, 'public', 'assets', 'gift');
+let _giftFileCache = null; // Cache para evitar leer el directorio en cada request
+
+function getGiftFiles() {
+    if (!_giftFileCache) {
+        try {
+            _giftFileCache = fs.readdirSync(GIFT_ASSETS_DIR);
+        } catch (e) {
+            _giftFileCache = [];
+        }
+    }
+    return _giftFileCache;
+}
+
+// Invalidar cache cuando se agrega un nuevo archivo (si aplica)
+function invalidateGiftCache() { _giftFileCache = null; }
+
+app.get('/gift-assets/:filename', (req, res) => {
+    const requested = decodeURIComponent(req.params.filename);
+    const files = getGiftFiles();
+
+    // 1. Coincidencia exacta
+    if (files.includes(requested)) {
+        return res.sendFile(path.join(GIFT_ASSETS_DIR, requested));
+    }
+
+    // 2. Coincidencia case-insensitive
+    const lowerReq = requested.toLowerCase();
+    const ciMatch = files.find(f => f.toLowerCase() === lowerReq);
+    if (ciMatch) {
+        return res.sendFile(path.join(GIFT_ASSETS_DIR, ciMatch));
+    }
+
+    // 3. Coincidencia normalizada: espacios y guiones bajos son equivalentes
+    const normalize = str => str.toLowerCase().replace(/[\s_]+/g, '').replace(/['']/g, '');
+    const normReq = normalize(requested);
+    const normMatch = files.find(f => normalize(f.replace(/\.png$/i, '')) === normalize(requested.replace(/\.png$/i, '')));
+    if (normMatch) {
+        return res.sendFile(path.join(GIFT_ASSETS_DIR, normMatch));
+    }
+
+    // 4. No encontrado — responder 404
+    res.status(404).end();
+});
+
+// Serve streamer assets
+app.use('/streamer-assets', express.static(path.join(__dirname, 'public', 'assets', 'streamers')));
+
+// Serve app icon assets
+app.use('/app-assets', express.static(path.join(__dirname, 'public', 'assets', 'app-icons')));
+
+// Serve sound assets
+app.use('/sound-assets', express.static(path.join(__dirname, 'public', 'sounds')));
+app.use('/sound-assets', express.static(UPLOADS_DIR));
+
 // Basic route for the control panel
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -1552,6 +3092,26 @@ app.get('/', (req, res) => {
 // Route for the overlay
 app.get('/overlay', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'overlay.html'));
+});
+
+// Route for isolated recetas widget
+app.get('/recetas', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'recetas.html'));
+});
+
+// Route for isolated dinamicas widget
+app.get('/dinamicas', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'dinamicas.html'));
+});
+
+// Route for isolated animations overlay (shared for quiereme, glove, x2, levelup)
+app.get('/animations', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'animations.html'));
+});
+
+// Route for isolated social rotator widget
+app.get('/social-rotator', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'social-rotator.html'));
 });
 
 // Route for Spotify Authorization Redirect
@@ -1623,9 +3183,235 @@ app.get('/spotify-callback', async (req, res) => {
     }
 });
 
+// Middleware to close connections and prevent caching on dynamic API requests
+app.use('/api', (req, res, next) => {
+    res.setHeader('Connection', 'close');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    next();
+});
+
+// API: Get active application version
+app.get('/api/version', (req, res) => {
+    res.json({ version: packageJson.version });
+});
+
+// API: Stream YouTube audio locally to bypass CORS and rights blocks
+app.get('/api/stream-audio', (req, res) => {
+    const streamUrl = req.query.url;
+    if (!streamUrl) {
+        return res.status(400).send('Missing url parameter');
+    }
+    
+    const https = require('https');
+    const http = require('http');
+    const urlModule = require('url');
+
+    function proxyAudioStream(targetUrl, clientReq, clientRes, redirectCount = 0) {
+        if (redirectCount > 5) {
+            console.error('[Audio Proxy] Demasiados redireccionamientos para:', targetUrl);
+            return clientRes.status(500).send('Too many redirects');
+        }
+
+        try {
+            const parsedUrl = urlModule.parse(targetUrl);
+            const headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
+            };
+            
+            // Forward Range header if present
+            if (clientReq.headers['range']) {
+                headers['range'] = clientReq.headers['range'];
+            }
+
+            const options = {
+                hostname: parsedUrl.hostname,
+                port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
+                path: parsedUrl.path,
+                method: 'GET',
+                headers: headers,
+                rejectUnauthorized: false
+            };
+
+            console.log(`[Audio Proxy] Intentando conectar (intento ${redirectCount}): ${targetUrl.substring(0, 80)}...`);
+
+            const lib = parsedUrl.protocol === 'https:' ? https : http;
+            const proxyReq = lib.get(options, (proxyRes) => {
+                // Handle redirect status codes (301, 302, 303, 307, 308)
+                if (proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
+                    const redirectUrl = urlModule.resolve(targetUrl, proxyRes.headers.location);
+                    return proxyAudioStream(redirectUrl, clientReq, clientRes, redirectCount + 1);
+                }
+
+                // Copy content-related headers or force them if missing
+                let contentType = proxyRes.headers['content-type'] || 'audio/mpeg';
+                if (contentType.toLowerCase() === 'application/octet-stream') {
+                    contentType = 'audio/mpeg';
+                }
+                
+                clientRes.setHeader('Content-Type', contentType);
+                clientRes.setHeader('Access-Control-Allow-Origin', '*');
+
+                if (proxyRes.headers['content-length']) {
+                    clientRes.setHeader('Content-Length', proxyRes.headers['content-length']);
+                }
+                if (proxyRes.headers['accept-ranges']) {
+                    clientRes.setHeader('Accept-Ranges', proxyRes.headers['accept-ranges']);
+                }
+                if (proxyRes.headers['content-range']) {
+                    clientRes.setHeader('Content-Range', proxyRes.headers['content-range']);
+                }
+
+                clientRes.statusCode = proxyRes.statusCode || 200;
+                proxyRes.pipe(clientRes);
+            });
+
+            proxyReq.on('error', (err) => {
+                console.error('[Audio Proxy] Request error:', err);
+                if (!clientRes.headersSent) {
+                    clientRes.status(500).send('Error fetching stream');
+                }
+            });
+        } catch (err) {
+            console.error('[Audio Proxy] Parsing error:', err);
+            if (!clientRes.headersSent) {
+                clientRes.status(500).send('Error processing proxy request');
+            }
+        }
+    }
+
+    proxyAudioStream(streamUrl, req, res);
+});
+
 // API: Get Custom Animations
 app.get('/api/custom-animations', (req, res) => {
     res.json(chatbotSettings.customAnimations || []);
+});
+
+// API: Get Active Assets dynamically based on active theme
+app.get('/api/active-assets', (req, res) => {
+    const theme = chatbotSettings.themeName || 'neutral';
+    
+    const assets = {
+        naya: {
+            logo: `http://127.0.0.1:${PORT}/streamer-assets/naya-logo.png`,
+            shadow: '0 0 15px rgba(255, 105, 180, 0.4)',
+            accentColor: '#ff0077',
+            backgroundColor: '#fff0f5',
+            spotifyColor: '#ff69b4',
+            youtubeColor: '#ff0055'
+        },
+        majo: {
+            logo: `http://127.0.0.1:${PORT}/streamer-assets/majo-logo2.png`,
+            shadow: '0 0 15px rgba(157, 78, 221, 0.4)',
+            accentColor: '#9d4edd',
+            backgroundColor: '#1e1b29',
+            spotifyColor: '#b5179e',
+            youtubeColor: '#7209b7'
+        },
+        neutral: {
+            logo: `http://127.0.0.1:${PORT}/app-assets/neutral-logo.jpg`,
+            shadow: '0 0 15px rgba(0, 217, 255, 0.4)',
+            accentColor: '#00d9ff',
+            backgroundColor: '#0f172a',
+            spotifyColor: '#1db954',
+            youtubeColor: '#ff0000'
+        }
+    };
+    
+    res.json(assets[theme] || assets.neutral);
+});
+
+// API: Get System Sounds dynamically from public/sounds and UPLOADS_DIR (custom uploaded sounds)
+app.get('/api/system-sounds', (req, res) => {
+    const defaultSoundsDir = path.join(__dirname, 'public', 'sounds');
+    const customSoundsDir = UPLOADS_DIR;
+    
+    const allFiles = new Set();
+    const soundObjects = [];
+    
+    // 1. Scan default sounds
+    if (fs.existsSync(defaultSoundsDir)) {
+        try {
+            const files = fs.readdirSync(defaultSoundsDir);
+            files.forEach(file => {
+                if (file.endsWith('.mp3') || file.endsWith('.wav')) {
+                    allFiles.add(file.toLowerCase());
+                    let friendlyName = file.replace(/\.(mp3|wav)$/i, '').replace(/[-_]/g, ' ');
+                    friendlyName = friendlyName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                    soundObjects.push({
+                        name: friendlyName,
+                        url: `/sounds/${file}`,
+                        filename: file
+                    });
+                }
+            });
+        } catch (e) {
+            console.error('Error scanning default sounds:', e);
+        }
+    }
+    
+    // 2. Scan custom uploaded sounds
+    if (fs.existsSync(customSoundsDir)) {
+        try {
+            const files = fs.readdirSync(customSoundsDir);
+            files.forEach(file => {
+                if ((file.endsWith('.mp3') || file.endsWith('.wav')) && !allFiles.has(file.toLowerCase())) {
+                    allFiles.add(file.toLowerCase());
+                    let friendlyName = file.replace(/\.(mp3|wav)$/i, '').replace(/[-_]/g, ' ');
+                    friendlyName = friendlyName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                    soundObjects.push({
+                        name: friendlyName + ' (Custom)',
+                        url: `/uploads/${file}`,
+                        filename: file
+                    });
+                }
+            });
+        } catch (e) {
+            console.error('Error scanning custom sounds:', e);
+        }
+    }
+    
+    soundObjects.sort((a, b) => a.name.localeCompare(b.name));
+    res.json(soundObjects);
+});
+
+// API: Get gifts catalog (read-only from gifts_mapping.json / CEREBRO)
+app.get('/api/get-gifts', (req, res) => {
+    try {
+        if (fs.existsSync(GIFTS_MAPPING_FILE)) {
+            const data = JSON.parse(fs.readFileSync(GIFTS_MAPPING_FILE, 'utf8'));
+            res.json(data);
+        } else {
+            res.json({});
+        }
+    } catch (e) {
+        console.error('[API /api/get-gifts] Error reading gifts_mapping.json:', e);
+        res.json({});
+    }
+});
+
+// PUENTE DE RESPALDO: Para asegurar que el buscador de metas no falle si llama a /api/gifts
+app.get('/api/gifts', (req, res) => {
+    try {
+        if (fs.existsSync(GIFTS_MAPPING_FILE)) {
+            const data = JSON.parse(fs.readFileSync(GIFTS_MAPPING_FILE, 'utf8'));
+            res.json(data);
+        } else {
+            res.json({});
+        }
+    } catch (e) {
+        res.json({});
+    }
+});
+
+// API: Catálogo espejo de Dinámicas — picker de regalos para metas
+// Solo lectura. Siempre sincronizado con gifts_mapping.json (el cerebro).
+app.get('/api/goals-catalog', (req, res) => {
+    try {
+        res.json(goalsCatalog);
+    } catch (e) {
+        res.json({});
+    }
 });
 
 // API: Upload Custom Animation (Base64)
@@ -1648,6 +3434,12 @@ app.post('/api/custom-animations', (req, res) => {
         const safeFilename = `${Date.now()}_${filename.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
         const filePath = path.join(UPLOADS_DIR, safeFilename);
         fs.writeFileSync(filePath, buffer);
+
+        // Clear references immediately to free RAM
+        buffer = null;
+        if (req.body) {
+            delete req.body.fileData;
+        }
 
         const newAnim = {
             id: `anim_${Date.now()}`,
@@ -1731,28 +3523,18 @@ app.post('/api/upload-sound', (req, res) => {
         }
 
         const cleanName = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const safeFilename = `sound_${Date.now()}_${cleanName}`;
-        const filePath = path.join(UPLOADS_DIR, safeFilename);
+        const filePath = path.join(UPLOADS_DIR, cleanName);
         fs.writeFileSync(filePath, buffer);
 
-        const newSound = {
-            id: `sound_${Date.now()}`,
-            name: filename.replace(/\.[^/.]+$/, ""), // Name without extension
-            filename: safeFilename,
-            filepath: `/uploads/${safeFilename}`
-        };
-
-        if (!chatbotSettings.customSounds) {
-            chatbotSettings.customSounds = [];
+        // Clear references immediately to free RAM
+        buffer = null;
+        if (req.body) {
+            delete req.body.fileData;
         }
-        chatbotSettings.customSounds.push(newSound);
 
-        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
-        io.emit('chatbot_settings_updated', chatbotSettings);
-
-        res.json({ success: true, sound: newSound });
+        res.json({ success: true, sound: { filename: cleanName } });
     } catch (err) {
-        console.error('Error handling sound upload:', err);
+        console.error('Error uploading sound:', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -1828,6 +3610,12 @@ app.post('/api/master-animations/:key', (req, res) => {
         const safeFilename = `master_${key}_${Date.now()}_${filename.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
         const filePath = path.join(UPLOADS_DIR, safeFilename);
         fs.writeFileSync(filePath, buffer);
+
+        // Clear references immediately to free RAM
+        buffer = null;
+        if (req.body) {
+            delete req.body.fileData;
+        }
 
         chatbotSettings.masterAnimations[key] = {
             filename: safeFilename,
@@ -1967,6 +3755,41 @@ app.delete('/api/mvps/:username', (req, res) => {
     }
 });
 
+// API: Delete Goal
+app.delete('/api/goals/:id', (req, res) => {
+    try {
+        const goalId = req.params.id;
+        if (chatbotSettings.goals) {
+            const initialLength = chatbotSettings.goals.length;
+            chatbotSettings.goals = chatbotSettings.goals.filter(g => g && g.id && g.id !== goalId);
+            
+            if (chatbotSettings.goals.length < initialLength) {
+                fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
+                io.emit('goals_updated', chatbotSettings.goals);
+                io.emit('chatbot_settings_updated', chatbotSettings);
+                
+                // Also emit meta_goal_updated for active goal in case the active goal was deleted
+                const activeGoal = chatbotSettings.goals.find(g => g.type === 'gift' && g.enabled);
+                if (activeGoal) {
+                    io.emit('meta_goal_updated', {
+                        giftName: activeGoal.giftName,
+                        current: activeGoal.current,
+                        target: activeGoal.target
+                    });
+                } else {
+                    io.emit('meta_goal_updated', null);
+                }
+                
+                return res.json({ success: true, goals: chatbotSettings.goals });
+            }
+        }
+        res.status(404).json({ error: 'Meta no encontrada o ID inválido' });
+    } catch (err) {
+        console.error('Error deleting goal:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Route for Music Overlay Widget
 app.get('/music-widget', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'music-widget.html'));
@@ -1977,21 +3800,93 @@ app.get('/youtube-widget', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'youtube-widget.html'));
 });
 
+// Route for Banner Cocina Widget
+app.get('/banner-cocina', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'banner-cocina.html'));
+});
+
 // Rankings update and retrieval helpers
+function extractAvatarUrl(roomInfo) {
+    if (!roomInfo) return '';
+    
+    // Webcast API structure: roomInfo.data.owner
+    if (roomInfo.data && roomInfo.data.owner) {
+        const owner = roomInfo.data.owner;
+        if (owner.avatar_thumb && owner.avatar_thumb.url_list && owner.avatar_thumb.url_list[0]) {
+            return owner.avatar_thumb.url_list[0];
+        }
+        if (owner.profile_picture && owner.profile_picture.url_list && owner.profile_picture.url_list[0]) {
+            return owner.profile_picture.url_list[0];
+        }
+        if (owner.avatar_medium && owner.avatar_medium.url_list && owner.avatar_medium.url_list[0]) {
+            return owner.avatar_medium.url_list[0];
+        }
+        if (owner.avatar_large && owner.avatar_large.url_list && owner.avatar_large.url_list[0]) {
+            return owner.avatar_large.url_list[0];
+        }
+        if (owner.profilePictureUrl) {
+            return owner.profilePictureUrl;
+        }
+    }
+    
+    // HTML SIGI_STATE structure: roomInfo.liveRoomUserInfo.user
+    if (roomInfo.liveRoomUserInfo && roomInfo.liveRoomUserInfo.user) {
+        const user = roomInfo.liveRoomUserInfo.user;
+        if (user.avatarThumb && user.avatarThumb.urlList && user.avatarThumb.urlList[0]) {
+            return user.avatarThumb.urlList[0];
+        }
+        if (user.avatarMedium && user.avatarMedium.urlList && user.avatarMedium.urlList[0]) {
+            return user.avatarMedium.urlList[0];
+        }
+        if (user.avatarLarger && user.avatarLarger.urlList && user.avatarLarger.urlList[0]) {
+            return user.avatarLarger.urlList[0];
+        }
+    }
+
+    // Direct owner properties if roomInfo is top-level user details
+    if (roomInfo.owner) {
+        const owner = roomInfo.owner;
+        if (owner.profilePicture && owner.profilePicture.url && owner.profilePicture.url[0]) {
+            return owner.profilePicture.url[0];
+        }
+        if (owner.avatarThumb && owner.avatarThumb.urlList && owner.avatarThumb.urlList[0]) {
+            return owner.avatarThumb.urlList[0];
+        }
+    }
+    
+    if (roomInfo.user) {
+        const user = roomInfo.user;
+        if (user.avatarThumb && user.avatarThumb.urlList && user.avatarThumb.urlList[0]) {
+            return user.avatarThumb.urlList[0];
+        }
+    }
+
+    return '';
+}
+
 function updateMvp(username, nickname) {
     const likes = rankings.likes[username] ? rankings.likes[username].count : 0;
     const gifts = rankings.gifts[username] ? rankings.gifts[username].count : 0;
     const mvpScore = (gifts * 10) + likes;
     
+    // Get the profilePictureUrl from likes or gifts ranking if available
+    const profilePictureUrl = (rankings.gifts[username] && rankings.gifts[username].profilePictureUrl) || 
+                              (rankings.likes[username] && rankings.likes[username].profilePictureUrl) || '';
+    
     if (mvpScore > 0) {
-        rankings.mvp[username] = { nickname, count: mvpScore };
+        rankings.mvp[username] = { nickname, count: mvpScore, profilePictureUrl };
     }
 }
 
 function getTopRankings() {
     const sortCategory = (cat) => {
         return Object.entries(rankings[cat])
-            .map(([username, data]) => ({ username, nickname: data.nickname, count: data.count }))
+            .map(([username, data]) => ({ 
+                username, 
+                nickname: data.nickname, 
+                count: data.count, 
+                profilePictureUrl: data.profilePictureUrl || '' 
+            }))
             .sort((a, b) => b.count - a.count)
             .slice(0, 10);
     };
@@ -2008,12 +3903,37 @@ function broadcastRankings() {
     io.emit('rankings_updated', topRankings);
 }
 
+function broadcastSessionStats() {
+    io.emit('session_stats_updated', {
+        diamonds: totalSessionDiamonds,
+        likes: totalSessionLikes,
+        viewers: totalSessionViewers
+    });
+    // Save to file for persistence
+    try {
+        fs.writeFileSync(path.join(__dirname, 'session_stats.json'), JSON.stringify({
+            diamonds: totalSessionDiamonds,
+            likes: totalSessionLikes,
+            viewers: totalSessionViewers,
+            username: chatbotSettings.tiktokUsername,
+            roomId: currentRoomId
+        }), 'utf8');
+    } catch (e) {
+        console.error('Error saving session stats:', e);
+    }
+}
+
 // Custom TTS generator for follows, shares, likes milestone and gift events
 async function speakCustomTts(text, isGift = false) {
     if (!chatbotSettings || !chatbotSettings.active) return;
-    if (chatbotSettings.ttsEngine !== 'cloud') return;
+    if (chatbotSettings.ttsEngine !== 'cloud' && chatbotSettings.ttsEngine !== 'gemini') return;
     
-    let voiceName = chatbotSettings.cloudVoiceName || 'es-CO-SalomeNeural';
+    let voiceName = 'es-CO-SalomeNeural';
+    if (chatbotSettings.ttsEngine === 'gemini') {
+        voiceName = chatbotSettings.geminiVoiceName || 'Aoede';
+    } else {
+        voiceName = chatbotSettings.cloudVoiceName || 'es-CO-SalomeNeural';
+    }
     let volume = chatbotSettings.volume ?? 1;
     let pitch = chatbotSettings.pitch ?? 1;
     let rate = chatbotSettings.rate ?? 1;
@@ -2026,25 +3946,25 @@ async function speakCustomTts(text, isGift = false) {
     const pitchStr = pitchPercentage >= 0 ? `+${pitchPercentage}Hz` : `${pitchPercentage}Hz`;
     
     try {
-        const tts = new EdgeTTS({
-            voice: voiceName,
-            rate: rateStr,
-            pitch: pitchStr
-        });
-        
-        await tts.ttsPromise(text, tempFile);
-        
+        await synthesizeSpeech(text, voiceName, rateStr, pitchStr, tempFile);
         if (fs.existsSync(tempFile)) {
-            const audioBuffer = fs.readFileSync(tempFile);
-            const base64Audio = audioBuffer.toString('base64');
+            let audioBuffer = fs.readFileSync(tempFile);
+            let base64Audio = audioBuffer.toString('base64');
             
             io.emit('play_tts_audio', {
                 base64Audio,
-                playLocation: chatbotSettings.playLocation,
+                playLocation: 'panel',
                 isGift
             });
             
             fs.unlinkSync(tempFile);
+            
+            // Clear references immediately to free RAM
+            audioBuffer = null;
+            base64Audio = null;
+            if (global.gc) {
+                try { global.gc(); } catch (e) {}
+            }
         }
     } catch (error) {
         console.error('Error generating custom event TTS:', error);
@@ -2063,14 +3983,86 @@ function triggerSoundAlert(alert) {
 }
 
 const giftTTSAccumulator = {};
+const processedGiftMsgIds = new Set();
+const processedSocialMsgIds = new Set();
+const rankingsGiftCounts = {};
+const soundAlertGiftCounts = {};
+const dinamicaGiftCounts = {};
+const goalGiftCounts = {};
+const soundAlertCooldowns = {};
+const rawGiftCounts = {};
+const rawGiftTimeTrack = {};
+const lastProcessedGift = {}; // Strict sliding-window deduplication for gifts
 
 function processAccumulatedGift(data, repeatCount) {
+    const msgId = data.msgId || `gen_${data.uniqueId || 'unknown'}_${data.giftId || 'unknown'}_${data.createTime || Date.now()}`;
+    
+    if (processedGiftMsgIds.has(msgId)) {
+        console.info(`[Monetization] Ignorando regalo duplicado para msgId: ${msgId}`);
+        return;
+    }
+    
+    processedGiftMsgIds.add(msgId);
+    if (processedGiftMsgIds.size > 1000) {
+        const firstValue = processedGiftMsgIds.values().next().value;
+        processedGiftMsgIds.delete(firstValue);
+    }
+
     const uniqueId = (data.uniqueId || '').toLowerCase();
     const nickname = data.nickname || data.uniqueId;
     const coins = data.diamondCount || 0;
     const totalCoins = coins * repeatCount;
     
-    // 1. Grant music credits
+    // 0. Process Betting / Apuestas Game
+    if (chatbotSettings.apuestas && chatbotSettings.apuestas.enabled) {
+        const giftIdStr = String(data.giftId || '');
+        const giftNameClean = (data.giftName || '').toLowerCase().trim();
+        const activeCount = parseInt(chatbotSettings.apuestas.count) || 4;
+        
+        let voted = false;
+        
+        // Loop only through active participants
+        for (let i = 1; i <= activeCount; i++) {
+            const pKey = 'p' + i;
+            const participant = chatbotSettings.apuestas[pKey];
+            if (participant) {
+                const pGiftId = String(participant.giftId || '');
+                const pGiftName = (participant.giftName || '').toLowerCase().trim();
+                
+                // Match by ID or Name
+                if ((pGiftId && pGiftId === giftIdStr) || (pGiftName && pGiftName === giftNameClean)) {
+                    participant.votes = (participant.votes || 0) + repeatCount;
+                    
+                    // Capture voter username/nickname
+                    participant.voters = participant.voters || [];
+                    const voterIndex = participant.voters.findIndex(v => v.username.toLowerCase() === uniqueId);
+                    if (voterIndex !== -1) {
+                        participant.voters[voterIndex].count += repeatCount;
+                        // Move to end to represent latest activity
+                        const [voter] = participant.voters.splice(voterIndex, 1);
+                        participant.voters.push(voter);
+                    } else {
+                        participant.voters.push({
+                            username: data.uniqueId || uniqueId,
+                            nickname: nickname,
+                            count: repeatCount
+                        });
+                    }
+                    
+                    voted = true;
+                    console.log(`[APUESTAS] Vote registered for ${participant.name}. Added ${repeatCount} votes. Total: ${participant.votes}. Voter: @${data.uniqueId}`);
+                }
+            }
+        }
+        
+        if (voted) {
+            fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
+            io.emit('chatbot_settings_updated', chatbotSettings);
+            io.emit('apuestas_updated', chatbotSettings.apuestas);
+        }
+    }
+    
+    // 1. Grant music credits and track session coins
     if (totalCoins > 0 && (chatbotSettings.spotifyMonetizationEnabled || chatbotSettings.youtubeMonetizationEnabled)) {
         let minCoins = Infinity;
         if (chatbotSettings.spotifyMonetizationEnabled) {
@@ -2081,89 +4073,637 @@ function processAccumulatedGift(data, repeatCount) {
         }
         
         if (minCoins !== Infinity) {
+            // Track session coins for current user
+            sessionGiftCoins[uniqueId] = (sessionGiftCoins[uniqueId] || 0) + totalCoins;
+            
             const creditsEarned = Math.floor(totalCoins / minCoins);
             if (creditsEarned > 0) {
                 userMusicCredits[uniqueId] = (userMusicCredits[uniqueId] || 0) + creditsEarned;
-                console.info(`@${uniqueId} earned ${creditsEarned} music credits. Total: ${userMusicCredits[uniqueId]}`);
+                console.info(`@${uniqueId} earned ${creditsEarned} music credits. Total: ${userMusicCredits[uniqueId]}. Session coins: ${sessionGiftCoins[uniqueId]}`);
                 io.emit('system', { 
                     type: 'success', 
                     message: `@${nickname} ganó ${creditsEarned} crédito(s) de música por enviar ${totalCoins} monedas. ¡Tiene ${userMusicCredits[uniqueId]} créditos en total!` 
                 });
             }
+            
+            // Broadcast the updated premium/monetized user lists to panel clients
+            emitMonetizedUsersUpdate(true);  // Spotify
+            emitMonetizedUsersUpdate(false); // YouTube
         }
     }
 
-    // 2. Trigger Sound Alerts for Gifts (only once per accumulated gift combo)
-    if (chatbotSettings.soundAlertsEnabled && chatbotSettings.soundAlerts) {
-        chatbotSettings.soundAlerts.forEach(alert => {
-            if (alert.enabled && alert.type === 'gift') {
-                const matchesGift = alert.trigger === 'any' || (alert.trigger && giftNamesMatch(alert.trigger, data.giftName));
-                const matchesCount = repeatCount >= (alert.cantidad || 1);
-                if (matchesGift && matchesCount) {
-                    triggerSoundAlert(alert);
+    // 2. Grant AI credits
+    const themeName = chatbotSettings.themeName || 'neutral';
+    const aiProfile = themeName === 'majo' ? 'majo' : 'naya';
+    const aiConfig = (chatbotSettings.ai && chatbotSettings.ai[aiProfile]) || {};
+
+    if (totalCoins > 0 && aiConfig.ai_bot_active && aiConfig.ai_monetization_active) {
+        const aiMinCoins = aiConfig.ai_min_coins || 5;
+        const aiCreditsEarned = Math.floor(totalCoins / aiMinCoins);
+        if (aiCreditsEarned > 0) {
+            userAiCredits[uniqueId] = (userAiCredits[uniqueId] || 0) + aiCreditsEarned;
+            console.info(`@${uniqueId} earned ${aiCreditsEarned} AI credits. Total: ${userAiCredits[uniqueId]}`);
+            io.emit('system', { 
+                type: 'success', 
+                message: `@${nickname} ganó ${aiCreditsEarned} crédito(s) de IA por enviar ${totalCoins} monedas. ¡Tiene ${userAiCredits[uniqueId]} créditos de IA en total!` 
+            });
+        }
+    }
+
+
+    // Check Interactive Wheel trigger (only once per accumulated gift combo)
+    if (chatbotSettings.wheelEnabled && chatbotSettings.wheelOptions && chatbotSettings.wheelOptions.length > 0) {
+        const triggerGift = (chatbotSettings.wheelTriggerGift || 'any').toLowerCase().trim();
+        const triggerCoins = parseInt(chatbotSettings.wheelTriggerCoins || 10);
+        
+        let qualifies = false;
+        if (triggerGift !== 'any' && giftNamesMatch(triggerGift, data.giftName)) {
+            qualifies = true;
+        } else if (triggerGift === 'any' && totalCoins >= triggerCoins) {
+            qualifies = true;
+        }
+        
+        if (qualifies) {
+            const winIndex = Math.floor(Math.random() * chatbotSettings.wheelOptions.length);
+            const winText = chatbotSettings.wheelOptions[winIndex];
+            console.log(`[WHEEL] Triggered! Winner option index ${winIndex}: "${winText}"`);
+            
+            io.emit('trigger_wheel', {
+                sender: data.nickname,
+                giftName: data.giftName,
+                winningIndex: winIndex,
+                optionText: winText
+            });
+            
+            setTimeout(() => {
+                const cleanSender = stripEmojis(data.nickname || data.uniqueId);
+                const speakText = `¡Wow! ${cleanSender} activó la ruleta y tocó: ${winText}!`;
+                if (!isBannedText(uniqueId, true) && !isBannedText(cleanSender, true)) {
+                    speakCustomTts(speakText);
                 }
-            }
-        });
+            }, 7000);
+        }
     }
 
     // 3. Speak custom TTS for the gift
-    if (chatbotSettings.readGiftsEnabled) {
-        const giftName = data.giftName;
-        const displayName = stripEmojis(nickname);
-        let ttsText = "";
-        
-        const customPhrase = chatbotSettings.thankYouGiftPhrase;
-        if (customPhrase && customPhrase.trim() !== "") {
-            ttsText = formatCustomPhrase(customPhrase, 'gift', displayName, giftName, repeatCount);
-        } else {
-            const theme = chatbotSettings.themeName || 'neutral';
-            if (theme === 'naya') {
-                ttsText = `¡Wow, muchísimas gracias @${displayName} por regalar ${repeatCount} ${giftName} a Naya!`;
-            } else if (theme === 'majo') {
-                ttsText = `¡Gracias @${displayName} por enviar ${repeatCount} ${giftName} al directo de Majo!`;
+    if (chatbotSettings.readGiftsEnabled && !isBannedText(uniqueId, true) && !isBannedText(nickname, true)) {
+        const action = chatbotSettings.giftAction || 'read';
+        const soundFile = chatbotSettings.giftSound;
+
+        // Play sound if action is 'sound' or 'both'
+        if ((action === 'sound' || action === 'both') && soundFile) {
+            io.emit('play_sound_alert', { soundUrl: soundFile, volume: 100 });
+        }
+
+        // Play TTS if action is 'read' or 'both'
+        if (action === 'read' || action === 'both') {
+            const giftName = data.giftName;
+            const displayName = stripEmojis(nickname);
+            let ttsText = "";
+            
+            const customPhrase = chatbotSettings.thankYouGiftPhrase;
+            if (customPhrase && customPhrase.trim() !== "") {
+                ttsText = formatCustomPhrase(customPhrase, 'gift', displayName, giftName, repeatCount);
             } else {
-                ttsText = `¡Gracias @${displayName} por regalar ${repeatCount} ${giftName}!`;
+                const theme = chatbotSettings.themeName || 'neutral';
+                if (theme === 'naya') {
+                    ttsText = `¡Wow, muchísimas gracias @${displayName} por regalar ${repeatCount} ${giftName} a Naya!`;
+                } else if (theme === 'majo') {
+                    ttsText = `¡Gracias @${displayName} por enviar ${repeatCount} ${giftName} al directo de Majo!`;
+                } else {
+                    ttsText = `¡Gracias @${displayName} por regalar ${repeatCount} ${giftName}!`;
+                }
+            }
+            speakCustomTts(ttsText, true);
+        }
+        
+        // 3. AI Auto-Gift Response
+        const themeName = chatbotSettings?.themeName || 'neutral';
+        const aiProfile = themeName === 'majo' ? 'majo' : 'naya';
+        const aiConfig = (chatbotSettings?.ai && chatbotSettings.ai[aiProfile]) || {};
+        
+        if (aiConfig.ai_bot_active && aiConfig.ai_gift_auto) {
+            const giftMinCoins = parseInt(aiConfig.ai_gift_min_coins) || 100;
+            if (totalCoins >= giftMinCoins) {
+                aiQueueCounter++;
+                aiCommandQueue.push({
+                    id: `ai_${Date.now()}_${aiQueueCounter}`,
+                    uniqueId,
+                    nickname,
+                    prompt: `Agradécele a ${nickname} con mucha emoción por enviarte ${repeatCount} regalo(s) de ${data.giftName}.`,
+                    comment: `Regalo (${data.giftName})`,
+                    isAutoGift: true
+                });
+                console.info(`[AI Gemini] Regalo automático encolado para @${uniqueId} (Posición ${aiCommandQueue.length})`);
+                emitAiQueueUpdate();
             }
         }
-        speakCustomTts(ttsText, true);
     }
 }
 
+function processFollowEvent(data) {
+    const msgId = data.msgId || `follow_${data.uniqueId || 'unknown'}_${Date.now()}`;
+    if (processedSocialMsgIds.has(msgId)) return;
+    processedSocialMsgIds.add(msgId);
+    if (processedSocialMsgIds.size > 500) {
+        const first = processedSocialMsgIds.values().next().value;
+        processedSocialMsgIds.delete(first);
+    }
+
+    const uniqueId = (data.uniqueId || '').toLowerCase();
+    const nickname = data.nickname || data.uniqueId || 'Nuevo Seguidor';
+    
+    // Update dynamic goals progress
+    updateGoalProgress('follows', 1);
+    updateDinamicaGoalProgress('follows', 1);
+    
+    // Blacklist & Banned Username check
+    const blacklist = (chatbotSettings.ignoreUserList || []).map(u => u.toLowerCase().trim());
+    if (!blacklist.includes(uniqueId) && !isBannedText(uniqueId, true) && !isBannedText(nickname, true)) {
+        // Trigger Sound Alerts for Follows
+        if (chatbotSettings.soundAlertsEnabled && chatbotSettings.soundAlerts) {
+            chatbotSettings.soundAlerts.forEach(alert => {
+                if (alert.enabled && alert.type === 'follow') {
+                    triggerSoundAlert(alert);
+                }
+            });
+        }
+
+        if (chatbotSettings.readFollowsEnabled) {
+            const action = chatbotSettings.followAction || 'read';
+            const soundFile = chatbotSettings.followSound;
+
+            // Play sound if action is 'sound' or 'both'
+            if ((action === 'sound' || action === 'both') && soundFile) {
+                io.emit('play_sound_alert', { soundUrl: soundFile, volume: 100 });
+            }
+
+            // Play TTS if action is 'read' or 'both'
+            if (action === 'read' || action === 'both') {
+                const displayName = stripEmojis(nickname);
+                let ttsText = "";
+                const customPhrase = chatbotSettings.thankYouFollowPhrase;
+                if (customPhrase && customPhrase.trim() !== "") {
+                    ttsText = formatCustomPhrase(customPhrase, 'follow', displayName);
+                } else {
+                    const theme = chatbotSettings.themeName || 'neutral';
+                    if (theme === 'naya') {
+                        ttsText = `¡Bienvenido @${displayName} a la transmisión de Naya! Gracias por seguirme, linda.`;
+                    } else if (theme === 'majo') {
+                        ttsText = `¡Bienvenido @${displayName} a la telaraña de Majo! Gracias por unirte a nosotros.`;
+                    } else {
+                        ttsText = `¡Bienvenido @${displayName}, gracias por seguir la cuenta!`;
+                    }
+                }
+                speakCustomTts(ttsText);
+            }
+        }
+    }
+}
+
+function processShareEvent(data) {
+    const msgId = data.msgId || `share_${data.uniqueId || 'unknown'}_${Date.now()}`;
+    if (processedSocialMsgIds.has(msgId)) return;
+    processedSocialMsgIds.add(msgId);
+    if (processedSocialMsgIds.size > 500) {
+        const first = processedSocialMsgIds.values().next().value;
+        processedSocialMsgIds.delete(first);
+    }
+
+    const uniqueId = (data.uniqueId || '').toLowerCase();
+    const nickname = data.nickname || data.uniqueId || 'Espectador';
+    
+    // Update dynamic goals progress
+    updateGoalProgress('shares', 1);
+    
+    // Blacklist & Banned Username check
+    const blacklist = (chatbotSettings.ignoreUserList || []).map(u => u.toLowerCase().trim());
+    if (!blacklist.includes(uniqueId) && !isBannedText(uniqueId, true) && !isBannedText(nickname, true)) {
+        // Trigger Sound Alerts for Shares
+        if (chatbotSettings.soundAlertsEnabled && chatbotSettings.soundAlerts) {
+            chatbotSettings.soundAlerts.forEach(alert => {
+                if (alert.enabled && alert.type === 'share') {
+                    triggerSoundAlert(alert);
+                }
+            });
+        }
+
+        if (chatbotSettings.readSharesEnabled) {
+            const action = chatbotSettings.shareAction || 'read';
+            const soundFile = chatbotSettings.shareSound;
+
+            // Play sound if action is 'sound' or 'both'
+            if ((action === 'sound' || action === 'both') && soundFile) {
+                io.emit('play_sound_alert', { soundUrl: soundFile, volume: 100 });
+            }
+
+            // Play TTS if action is 'read' or 'both'
+            if (action === 'read' || action === 'both') {
+                const displayName = stripEmojis(nickname);
+                let ttsText = "";
+                const customPhrase = chatbotSettings.thankYouSharePhrase;
+                if (customPhrase && customPhrase.trim() !== "") {
+                    ttsText = formatCustomPhrase(customPhrase, 'share', displayName);
+                } else {
+                    const theme = chatbotSettings.themeName || 'neutral';
+                    if (theme === 'naya') {
+                        ttsText = `¡Muchísimas gracias @${displayName} por compartir el directo de Naya! Eres un sol.`;
+                    } else if (theme === 'majo') {
+                        ttsText = `¡Gracias @${displayName} por compartir el live de Majo! Súper genial.`;
+                    } else {
+                        ttsText = `¡Gracias @${displayName} por compartir la transmisión!`;
+                    }
+                }
+                speakCustomTts(ttsText);
+            }
+        }
+    }
+}
+
+// TTS Queue & Rate Limiter State Variables
+let ttsQueue = [];
+let isProcessingTts = false;
+let ttsMessageTimestamps = [];
+
 let tiktokLiveConnection = null;
 
-function connectToTikTok(username) {
-    if (tiktokLiveConnection) {
-        tiktokLiveConnection.disconnect();
+// In-memory progress tracker for auto-registered gift goals
+const giftMetasProgress = {};
+
+function emitDinamicasData() {
+    io.emit('initDinamicas', dinamicasConfig);
+}
+
+function updateDinamicaGoalProgress(type, amount, giftId = null) {
+    if (!dinamicasConfig || !Array.isArray(dinamicasConfig) || dinamicasConfig.length === 0) return;
+    
+    let updated = false;
+    dinamicasConfig.forEach(goal => {
+        if (!goal.enabled) return;
+        
+        let match = false;
+        if (goal.type === type) {
+            if (type === 'gift') {
+                if (goal.giftId && String(goal.giftId) === String(giftId)) {
+                    match = true;
+                }
+            } else {
+                match = true;
+            }
+        }
+        
+        if (match) {
+            goal.current = (goal.current || 0) + amount;
+            if (goal.current > goal.target) goal.current = goal.target;
+            updated = true;
+        }
+    });
+    
+    if (updated) {
+        try {
+            fs.writeFileSync(DINAMICAS_CONFIG_FILE, JSON.stringify(dinamicasConfig, null, 2), 'utf8');
+            emitDinamicasData();
+        } catch (e) {
+            console.error('Error saving updated dynamic goal progress:', e);
+        }
+    }
+}
+
+function loadProfile(username) {
+    if (!username) {
+        SETTINGS_FILE = DEFAULT_SETTINGS_FILE;
+        SOUNDS_CONFIG_FILE = DEFAULT_SOUNDS_CONFIG_FILE;
+        DINAMICAS_CONFIG_FILE = DEFAULT_DINAMICAS_CONFIG_FILE;
+        RECETAS_CONFIG_FILE = DEFAULT_RECETAS_CONFIG_FILE;
+        GOALS_CATALOG_FILE = DEFAULT_GOALS_CATALOG_FILE;
+        return;
     }
     
-    tiktokLiveConnection = new WebcastPushConnection(username);
+    const sanitized = username.trim().toLowerCase().replace('@', '');
+    if (!sanitized) return;
     
-    tiktokLiveConnection.connect().then(state => {
+    console.info(`[Profile Manager] Cargando perfil para @${sanitized}`);
+    
+    SETTINGS_FILE = path.join(writableDir, `chatbot_settings_${sanitized}.json`);
+    SOUNDS_CONFIG_FILE = path.join(writableDir, `sounds_config_${sanitized}.json`);
+    DINAMICAS_CONFIG_FILE = path.join(writableDir, `dinamicas_config_${sanitized}.json`);
+    RECETAS_CONFIG_FILE = path.join(writableDir, `recetas_config_${sanitized}.json`);
+    GOALS_CATALOG_FILE = path.join(writableDir, `goals_catalog_${sanitized}.json`);
+    
+    try {
+        if (fs.existsSync(SETTINGS_FILE)) {
+            chatbotSettings = readJsonFileSafe(SETTINGS_FILE, chatbotSettings);
+            // Sanitization checks for apuestas and allowed users
+            let needsWrite = false;
+            if (chatbotSettings.apuestas) {
+                if (chatbotSettings.apuestas.p1 && chatbotSettings.apuestas.p1.name === "Naya") {
+                    chatbotSettings.apuestas.p1.name = "Participante 1";
+                    needsWrite = true;
+                }
+                if (chatbotSettings.apuestas.p2 && chatbotSettings.apuestas.p2.name === "Majo") {
+                    chatbotSettings.apuestas.p2.name = "Participante 2";
+                    needsWrite = true;
+                }
+            }
+            if (chatbotSettings.spotifySkipAllowedUsers === undefined) {
+                chatbotSettings.spotifySkipAllowedUsers = "";
+                needsWrite = true;
+            }
+            if (chatbotSettings.youtubeSearchEngine === undefined) {
+                chatbotSettings.youtubeSearchEngine = "youtube";
+                needsWrite = true;
+            }
+
+            // Enforce theme strictly based on connected username to prevent data leakage and manual overrides
+            const lowerUsername = sanitized.toLowerCase();
+            let computedTheme = 'neutral';
+            if (lowerUsername.includes("majo")) {
+                computedTheme = "majo";
+            } else if (lowerUsername.includes("naya")) {
+                computedTheme = "naya";
+            }
+            if (chatbotSettings.themeName !== computedTheme) {
+                chatbotSettings.themeName = computedTheme;
+                needsWrite = true;
+                console.info(`[Profile Manager] Auto-assigned theme '${computedTheme}' for user @${sanitized}`);
+            }
+            if (chatbotSettings.tiktokUsername !== sanitized) {
+                chatbotSettings.tiktokUsername = sanitized;
+                needsWrite = true;
+            }
+            if (needsWrite) {
+                fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2), 'utf8');
+                console.info(`[Profile Manager] Sanitized and saved config to ${SETTINGS_FILE}`);
+            }
+        } else {
+            chatbotSettings.tiktokUsername = sanitized;
+            // Enforce theme strictly based on connected username for new profiles
+            const lowerUsername = sanitized.toLowerCase();
+            if (lowerUsername.includes("majo")) {
+                chatbotSettings.themeName = "majo";
+            } else if (lowerUsername.includes("naya")) {
+                chatbotSettings.themeName = "naya";
+            } else {
+                chatbotSettings.themeName = "neutral";
+            }
+            fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2), 'utf8');
+            console.info(`[Profile Manager] Creado nuevo archivo de chatbot_settings para @${sanitized}`);
+        }
+        
+        if (fs.existsSync(SOUNDS_CONFIG_FILE)) {
+            soundsConfig = readJsonFileSafe(SOUNDS_CONFIG_FILE, {});
+        } else {
+            soundsConfig = {};
+            fs.writeFileSync(SOUNDS_CONFIG_FILE, JSON.stringify(soundsConfig, null, 2), 'utf8');
+            console.info(`[Profile Manager] Creado nuevo archivo de sounds_config para @${sanitized}`);
+        }
+        
+        if (fs.existsSync(DINAMICAS_CONFIG_FILE)) {
+            dinamicasConfig = readJsonFileSafe(DINAMICAS_CONFIG_FILE, []);
+        } else {
+            dinamicasConfig = [];
+            fs.writeFileSync(DINAMICAS_CONFIG_FILE, JSON.stringify(dinamicasConfig, null, 2), 'utf8');
+            console.info(`[Profile Manager] Creado nuevo archivo de dinamicas_config para @${sanitized}`);
+        }
+        
+        if (fs.existsSync(RECETAS_CONFIG_FILE)) {
+            recetasConfig = readJsonFileSafe(RECETAS_CONFIG_FILE, recetasConfig);
+        } else {
+            fs.writeFileSync(RECETAS_CONFIG_FILE, JSON.stringify(recetasConfig, null, 2), 'utf8');
+            console.info(`[Profile Manager] Creado nuevo archivo de recetas_config para @${sanitized}`);
+        }
+        
+        if (fs.existsSync(GOALS_CATALOG_FILE)) {
+            goalsCatalog = readJsonFileSafe(GOALS_CATALOG_FILE, {});
+        } else {
+            goalsCatalog = {};
+            const brainData = readJsonFileSafe(GIFTS_MAPPING_FILE, {});
+            Object.entries(brainData).forEach(([gid, gdata]) => {
+                goalsCatalog[gid] = { name: gdata.name, coins: gdata.coins, image: gdata.image };
+            });
+            fs.writeFileSync(GOALS_CATALOG_FILE, JSON.stringify(goalsCatalog, null, 2), 'utf8');
+            console.info(`[Profile Manager] Creado nuevo archivo de goals_catalog para @${sanitized}`);
+        }
+        
+        try {
+            const globalSettings = readJsonFileSafe(DEFAULT_SETTINGS_FILE, {});
+            globalSettings.tiktokUsername = sanitized;
+            fs.writeFileSync(DEFAULT_SETTINGS_FILE, JSON.stringify(globalSettings, null, 2), 'utf8');
+        } catch (err) {
+            console.error('[Profile Manager] Error al actualizar puntero global:', err);
+        }
+        
+        io.emit('chatbot_settings_updated', chatbotSettings);
+        io.emit('initSoundsConfig', soundsConfig);
+        io.emit('initDinamicas', dinamicasConfig);
+        io.emit('initReceta', recetasConfig);
+        io.emit('initGoalsCatalog', goalsCatalog);
+        io.emit('goals_updated', chatbotSettings.goals);
+        
+    } catch (e) {
+        console.error(`[Profile Manager] Error cargando el perfil de @${sanitized}:`, e);
+    }
+}
+
+function connectToTikTok(username) {
+    if (username) {
+        loadProfile(username);
+    }
+    if (tiktokLiveConnection) {
+        try {
+            tiktokLiveConnection.removeAllListeners();
+            tiktokLiveConnection.disconnect();
+        } catch (e) {
+            console.error('Error disconnecting old connection:', e);
+        }
+        tiktokLiveConnection = null;
+    }
+    
+    const connectionRef = new WebcastPushConnection(username);
+    tiktokLiveConnection = connectionRef;
+
+    // Register auto-cleanup listeners
+    connectionRef.on('disconnected', () => {
+        console.info('[TikTok Connector] Conexión perdida/cerrada.');
+        if (tiktokLiveConnection === connectionRef) {
+            tiktokLiveConnection = null;
+        }
+        currentCreatorAvatar = '';
+        io.emit('system', { type: 'error', message: 'CONEXIÓN PERDIDA' });
+        io.emit('tiktok_disconnected');
+    });
+
+    connectionRef.on('streamEnd', () => {
+        console.info('[TikTok Connector] Transmisión terminada.');
+        if (tiktokLiveConnection === connectionRef) {
+            tiktokLiveConnection = null;
+        }
+        currentCreatorAvatar = '';
+        io.emit('system', { type: 'error', message: 'TRANSMISIÓN FINALIZADA' });
+        io.emit('tiktok_disconnected');
+    });
+    
+    connectionRef.connect().then(state => {
         console.info(`Connected to roomId ${state.roomId}`);
-        // Reset session rankings
+        currentRoomId = state.roomId || '';
+        // Reset session rankings and music credits
         rankings = { likes: {}, gifts: {}, mvp: {} };
         userMusicCredits = {};
+        userAiCredits = {};
+        sessionGiftCoins = {};
+        
+        let avatarUrl = '';
+        if (state.roomInfo) {
+            avatarUrl = extractAvatarUrl(state.roomInfo);
+        } else if (connectionRef.roomInfo) {
+            avatarUrl = extractAvatarUrl(connectionRef.roomInfo);
+        }
+        currentCreatorAvatar = avatarUrl;
+
+        // Initialize or restore session stats
+        let diamonds = 0;
+        let likes = 0;
+        let viewers = 0;
+        
+        if (state.roomInfo && state.roomInfo.data && state.roomInfo.data.stats) {
+            const stats = state.roomInfo.data.stats;
+            diamonds = parseInt(stats.fan_ticket) || 0;
+            likes = parseInt(stats.like_count) || 0;
+            viewers = parseInt(stats.total_user) || 0;
+        } else if (connectionRef.roomInfo && connectionRef.roomInfo.data && connectionRef.roomInfo.data.stats) {
+            const stats = connectionRef.roomInfo.data.stats;
+            diamonds = parseInt(stats.fan_ticket) || 0;
+            likes = parseInt(stats.like_count) || 0;
+            viewers = parseInt(stats.total_user) || 0;
+        }
+        
+        try {
+            const statsFile = path.join(__dirname, 'session_stats.json');
+            if (fs.existsSync(statsFile)) {
+                const saved = JSON.parse(fs.readFileSync(statsFile, 'utf8'));
+                if (saved.username === username && saved.roomId === state.roomId) {
+                    diamonds = Math.max(diamonds, saved.diamonds || 0);
+                    likes = Math.max(likes, saved.likes || 0);
+                    viewers = Math.max(viewers, saved.viewers || 0);
+                }
+            }
+        } catch (e) {
+            console.error('Error loading saved session stats:', e);
+        }
+
+        totalSessionDiamonds = diamonds;
+        totalSessionLikes = likes;
+        totalSessionViewers = viewers;
+        
+        io.emit('tiktok_connected', { username, avatarUrl });
+        broadcastSessionStats();
         broadcastRankings();
         io.emit('system', { type: 'connected', message: `Conectado a @${username}` });
     }).catch(err => {
-        console.error('Failed to connect', err);
+        console.log('Failed to connect', err);
+        if (tiktokLiveConnection === connectionRef) {
+            tiktokLiveConnection = null; // Clean up truthy object on failure
+        }
+        currentCreatorAvatar = '';
         io.emit('system', { type: 'error', message: `Fallo al conectar: ${err.message}` });
+        io.emit('tiktok_disconnected');
     });
     
     const eventsToListen = [
-        'gift', 'chat', 'like', 'member', 'roomUserSeq', 'social', 
+        'gift', 'chat', 'like', 'member', 'roomUserSeq', 'roomUser', 'social', 
         'envelope', 'questionNew', 'linkMicBattle', 'linkMicArmies', 
         'liveIntro', 'emote', 'envelope', 'follow', 'share'
     ];
 
     eventsToListen.forEach(eventType => {
-        tiktokLiveConnection.on(eventType, data => {
+        connectionRef.on(eventType, data => {
+            if (eventType === 'gift' && data) {
+                const uniqueId = (data.uniqueId || '').toLowerCase().trim();
+                const giftId = String(data.giftId);
+                const repeatCount = parseInt(data.repeatCount) || 1;
+                const msgId = data.msgId;
+                const now = Date.now();
+                
+                // Filtro estricto de ventana de tiempo deslizante por combo (5 segundos por usuario y ID de regalo)
+                if (!lastProcessedGift[uniqueId]) {
+                    lastProcessedGift[uniqueId] = {};
+                }
+                const last = lastProcessedGift[uniqueId][giftId];
+                if (last) {
+                    const timeDiff = now - last.timestamp;
+                    if (timeDiff < 5000) {
+                        if (repeatCount <= last.repeatCount) {
+                            console.log(`[Deduplicación Regalo] Ignorando duplicado estricto para @${uniqueId} (Clave: ${giftId}, diferencia: ${timeDiff}ms, Count: ${repeatCount} <= ${last.repeatCount})`);
+                            return;
+                        }
+                    }
+                }
+                lastProcessedGift[uniqueId][giftId] = { repeatCount, timestamp: now };
+                
+                // 1. Deduplicación por msgId
+                if (msgId) {
+                    const prevMax = rawGiftCounts[msgId] || 0;
+                    if (repeatCount <= prevMax) {
+                        return;
+                    }
+                    rawGiftCounts[msgId] = repeatCount;
+                }
+                
+                // 2. Deduplicación por ventana de tiempo (2.5 segundos para la misma cantidad)
+                const timeKey = `${uniqueId}_${giftId}_${repeatCount}`;
+                const lastTime = rawGiftTimeTrack[timeKey] || 0;
+                
+                if (now - lastTime <= 2500) {
+                    console.log(`[Deduplicación Regalo] Ignorando duplicado de tiempo para clave: ${timeKey} (diferencia: ${now - lastTime}ms)`);
+                    return;
+                }
+                rawGiftTimeTrack[timeKey] = now;
+                
+                if (Object.keys(rawGiftCounts).length > 2000) {
+                    const keys = Object.keys(rawGiftCounts);
+                    delete rawGiftCounts[keys[0]];
+                }
+                
+                const keys = Object.keys(rawGiftTimeTrack);
+                if (keys.length > 2000) {
+                    for (const k of keys) {
+                        if (now - rawGiftTimeTrack[k] > 10000) {
+                            delete rawGiftTimeTrack[k];
+                        }
+                    }
+                }
+            }
+            
             io.emit('tiktok_event_raw', { eventType, data });
+
+            // Accumulate/update live statistics
+            if (eventType === 'gift' && data) {
+                const count = parseInt(data.repeatCount) || 1;
+                const coins = parseInt(data.diamondCount) || 0;
+                totalSessionDiamonds += (count * coins);
+                broadcastSessionStats();
+            } else if (eventType === 'like' && data) {
+                const count = parseInt(data.likeCount) || 1;
+                if (data.totalLikeCount !== undefined) {
+                    totalSessionLikes = Math.max(totalSessionLikes, parseInt(data.totalLikeCount) || 0);
+                } else {
+                    totalSessionLikes += count;
+                }
+                broadcastSessionStats();
+            } else if ((eventType === 'roomUserSeq' || eventType === 'roomUser') && data) {
+                if (data.totalUser !== undefined) {
+                    totalSessionViewers = Math.max(totalSessionViewers, parseInt(data.totalUser) || 0);
+                } else if (data.viewerCount !== undefined) {
+                    totalSessionViewers = Math.max(totalSessionViewers, parseInt(data.viewerCount) || 0);
+                }
+                broadcastSessionStats();
+            }
             
             if (eventType === 'chat') {
                 handleCloudTTS(data);
                 handleSpotifyChatCommand(data);
                 handleYoutubeChatCommand(data);
+                handleAiChatCommand(data);
             }
 
             if (eventType === 'member') {
@@ -2195,6 +4735,91 @@ function connectToTikTok(username) {
             }
 
             if (eventType === 'gift') {
+                const uniqueId = (data.uniqueId || '').toLowerCase();
+                const nickname = data.nickname || data.uniqueId;
+                const coins = data.diamondCount || 0;
+                const msgId = data.msgId || `gen_${uniqueId}_${data.giftId}_${data.createTime || Date.now()}`;
+                const repeatCount = data.repeatCount || 1;
+
+                // Banned Username check for gift TTS/processing
+                const usernameIsBanned = isBannedText(uniqueId, true) || isBannedText(nickname, true);
+
+                // Add to Quiéreme list if valid "Heart Me" / "Quiéreme" gift is sent
+                if (!usernameIsBanned && (String(data.giftId) === '7934' || (data.giftName && (data.giftName.toLowerCase().includes('heart me') || data.giftName.toLowerCase().includes('quiereme') || data.giftName.toLowerCase().includes('quiéreme'))))) {
+                    quieremeAllowedUsers.add(uniqueId);
+                    console.info(`[Quiereme] Usuario @${uniqueId} ha enviado un Heart Me/Quiéreme. Autorizado para TTS por hoy.`);
+                }
+
+                // Trigger sound alert immediately on count increment with deduplication and combo limits
+                const soundPrevMax = soundAlertGiftCounts[msgId] || 0;
+                if (repeatCount > soundPrevMax) {
+                    soundAlertGiftCounts[msgId] = repeatCount;
+                    if (Object.keys(soundAlertGiftCounts).length > 1000) {
+                        const keys = Object.keys(soundAlertGiftCounts);
+                        delete soundAlertGiftCounts[keys[0]];
+                    }
+
+                    // Deduplicate identical events (same user, gift, and count) within 1.5s
+                    const dupKey = `${uniqueId}_${data.giftId}_${repeatCount}`;
+                    const now = Date.now();
+                    const lastPlayTime = soundAlertCooldowns[dupKey] || 0;
+                    
+                    if (now - lastPlayTime > 1500) {
+                        soundAlertCooldowns[dupKey] = now;
+                        
+                        // Clear old keys from soundAlertCooldowns periodically
+                        if (Object.keys(soundAlertCooldowns).length > 1000) {
+                            const keys = Object.keys(soundAlertCooldowns);
+                            for (const k of keys) {
+                                if (now - soundAlertCooldowns[k] > 10000) {
+                                    delete soundAlertCooldowns[k];
+                                }
+                            }
+                        }
+
+                        // Apply the combo repetition rules:
+                        // "El sonido solo sera repetitivo si supera mas de las 3 veces, cosa contraria sonara 1 vez en caso que lo envien por combo"
+                        let shouldPlaySound = false;
+                        if (repeatCount === 1) {
+                            shouldPlaySound = true;
+                        } else if (repeatCount > 3) {
+                            shouldPlaySound = true;
+                        }
+
+                        if (shouldPlaySound && chatbotSettings.soundAlertsEnabled) {
+                            try {
+                                if (fs.existsSync(SOUNDS_CONFIG_FILE)) {
+                                    const configData = JSON.parse(fs.readFileSync(SOUNDS_CONFIG_FILE, 'utf8'));
+                                    const alert = configData[String(data.giftId)];
+                                    if (alert && alert.sound) {
+                                        const soundUrl = `http://127.0.0.1:${PORT}/sound-assets/${alert.sound}`;
+                                        console.log(`[SoundAlert] Triggering immediate gift sound: ${alert.sound} for msgId ${msgId} (combo x${repeatCount})`);
+                                        io.emit('play_sound_alert', { soundUrl, volume: 100 });
+                                    }
+                                }
+                            } catch (e) {
+                                console.error("Error triggering immediate gift sound:", e);
+                            }
+                        }
+                    }
+                }
+
+                if (data.repeatEnd == 1 || !data.repeatable) {
+                    const giftIdStr = String(data.giftId);
+                    const prevMax = dinamicaGiftCounts[msgId] || 0;
+                    if (repeatCount > prevMax) {
+                        const increment = repeatCount - prevMax;
+                        // Actualiza estrictamente el widget de dinámicas independiente sin tocar recetas
+                        updateDinamicaGoalProgress('gift', increment, giftIdStr);
+                        dinamicaGiftCounts[msgId] = repeatCount;
+                        
+                        if (Object.keys(dinamicaGiftCounts).length > 1000) {
+                            const keys = Object.keys(dinamicaGiftCounts);
+                            delete dinamicaGiftCounts[keys[0]];
+                        }
+                    }
+                }
+
                 io.emit('overlay_trigger', {
                     type: 'gift',
                     giftId: data.giftId,
@@ -2205,54 +4830,28 @@ function connectToTikTok(username) {
                     extendedGiftInfo: data.extendedGiftInfo
                 });
 
-                // Update dynamic goals progress
-                updateGoalProgress('gift', 1, data.giftName);
-
-                // Check Interactive Wheel trigger
-                if (chatbotSettings.wheelEnabled && chatbotSettings.wheelOptions && chatbotSettings.wheelOptions.length > 0) {
-                    const totalCoins = (data.diamondCount || 0) * (data.repeatCount || 1);
-                    const triggerGift = (chatbotSettings.wheelTriggerGift || 'any').toLowerCase().trim();
-                    const triggerCoins = parseInt(chatbotSettings.wheelTriggerCoins || 10);
-                    
-                    let qualifies = false;
-                    if (triggerGift !== 'any' && giftNamesMatch(triggerGift, data.giftName)) {
-                        qualifies = true;
-                    } else if (triggerGift === 'any' && totalCoins >= triggerCoins) {
-                        qualifies = true;
-                    }
-                    
-                    if (qualifies) {
-                        const winIndex = Math.floor(Math.random() * chatbotSettings.wheelOptions.length);
-                        const winText = chatbotSettings.wheelOptions[winIndex];
-                        console.log(`[WHEEL] Triggered! Winner option index ${winIndex}: "${winText}"`);
-                        
-                        io.emit('trigger_wheel', {
-                            sender: data.nickname,
-                            giftName: data.giftName,
-                            winningIndex: winIndex,
-                            optionText: winText
-                        });
-                        
-                        setTimeout(() => {
-                            const cleanSender = stripEmojis(data.nickname || data.uniqueId);
-                            const speakText = `¡Wow! ${cleanSender} activó la ruleta y tocó: ${winText}!`;
-                            speakCustomTts(speakText);
-                        }, 7000);
-                    }
-                }
-
-                const uniqueId = (data.uniqueId || '').toLowerCase();
-                const nickname = data.nickname || data.uniqueId;
-                const coins = data.diamondCount || 0;
-                
                 if (uniqueId && coins > 0) {
-                    if (!rankings.gifts[uniqueId]) {
-                        rankings.gifts[uniqueId] = { nickname, count: 0 };
+                    const prevMax = rankingsGiftCounts[msgId] || 0;
+                    if (repeatCount > prevMax) {
+                        const increment = repeatCount - prevMax;
+                        if (!rankings.gifts[uniqueId]) {
+                            rankings.gifts[uniqueId] = { nickname, count: 0, profilePictureUrl: data.profilePictureUrl || '' };
+                        } else {
+                            if (data.profilePictureUrl) {
+                                rankings.gifts[uniqueId].profilePictureUrl = data.profilePictureUrl;
+                            }
+                        }
+                        rankings.gifts[uniqueId].count += (increment * coins);
+                        rankingsGiftCounts[msgId] = repeatCount;
+                        
+                        if (Object.keys(rankingsGiftCounts).length > 1000) {
+                            const keys = Object.keys(rankingsGiftCounts);
+                            delete rankingsGiftCounts[keys[0]];
+                        }
+                        
+                        updateMvp(uniqueId, nickname);
+                        broadcastRankings();
                     }
-                    rankings.gifts[uniqueId].count += coins;
-                    
-                    updateMvp(uniqueId, nickname);
-                    broadcastRankings();
                 }
 
                 // Cache gift metadata for the selector modal
@@ -2283,11 +4882,53 @@ function connectToTikTok(username) {
                     }
                 }
 
+                // Auto-registro de nuevo regalo en gifts_mapping.json si no existe
+                if (data.giftId) {
+                    const mappingFilePath = GIFTS_MAPPING_FILE;
+                    try {
+                        let mapping = {};
+                        let readSuccess = true;
+                        if (fs.existsSync(mappingFilePath)) {
+                            const raw = fs.readFileSync(mappingFilePath, 'utf8').trim();
+                            if (raw) {
+                                try {
+                                    mapping = JSON.parse(raw);
+                                } catch (parseErr) {
+                                    console.error('[Auto-Registro Regalo] Error parsing gifts_mapping.json:', parseErr);
+                                    readSuccess = false;
+                                }
+                            }
+                        }
+                        if (readSuccess) {
+                            const giftIdStr = String(data.giftId);
+                            if (!mapping[giftIdStr]) {
+                                const giftImage = data.giftName ? `${data.giftName.toLowerCase().replace(/\s+/g, '_')}.png` : `${giftIdStr}.png`;
+                                mapping[giftIdStr] = {
+                                    name: data.giftName || `Gift ${giftIdStr}`,
+                                    coins: data.diamondCount || 1,
+                                    image: giftImage
+                                };
+                                fs.writeFileSync(mappingFilePath, JSON.stringify(mapping, null, 2), 'utf8');
+                                console.info(`[Auto-Registro Regalo] Nuevo regalo registrado: ${data.giftName} (ID: ${giftIdStr})`);
+                                // Propagar a catálogo espejo de Dinámicas
+                                syncMirrorCatalogs(giftIdStr, mapping[giftIdStr]);
+                                // Notificar a los clientes: cerebro actualizado
+                                io.emit('initMetas', mapping);
+                                // Notificar a los clientes: espejo de metas actualizado
+                                io.emit('initGoalsCatalog', goalsCatalog);
+                            }
+                        }
+                    } catch (err) {
+                        console.error('Error auto-registrando regalo en gifts_mapping.json:', err);
+                    }
+                }
+
                 // Blacklist check
                 const blacklist = (chatbotSettings.ignoreUserList || []).map(u => u.toLowerCase().trim());
                 if (!blacklist.includes(uniqueId)) {
-                    // Debounce / Accumulate gifts to prevent repeat audio spam and create a combo sentence
                     const giftKey = `${uniqueId}_${(data.giftName || '').toLowerCase().trim()}`;
+                    
+                    let prevCount = 0;
                     if (!giftTTSAccumulator[giftKey]) {
                         console.log(`[TTS-Debounce] Starting new gift accumulator for key: ${giftKey}`);
                         giftTTSAccumulator[giftKey] = {
@@ -2295,24 +4936,56 @@ function connectToTikTok(username) {
                             maxCount: 0,
                             timer: null
                         };
+                    } else {
+                        prevCount = giftTTSAccumulator[giftKey].maxCount;
                     }
                     
-                    // Math.max because repeatCount in Webcast is cumulative (e.g. 1, 2, 3...)
-                    giftTTSAccumulator[giftKey].maxCount = Math.max(giftTTSAccumulator[giftKey].maxCount, data.repeatCount || 1);
-                    console.log(`[TTS-Debounce] Accumulating key: ${giftKey}, current count: ${giftTTSAccumulator[giftKey].maxCount}`);
+                    const currentCount = Math.max(data.repeatCount || 1, prevCount);
+                    giftTTSAccumulator[giftKey].maxCount = currentCount;
+                    giftTTSAccumulator[giftKey].data = data;
+                    
+                    const increment = currentCount - prevCount;
+                    if (increment > 0) {
+                        const prevMax = goalGiftCounts[msgId] || 0;
+                        if (currentCount > prevMax) {
+                            const actualIncrement = currentCount - prevMax;
+                            const giftValue = getGiftCoinValue(data);
+                            const coinIncrement = actualIncrement * giftValue;
+                            updateGoalProgress('gift', coinIncrement, data.giftName);
+                            goalGiftCounts[msgId] = currentCount;
+                            
+                            if (Object.keys(goalGiftCounts).length > 1000) {
+                                const keys = Object.keys(goalGiftCounts);
+                                delete goalGiftCounts[keys[0]];
+                            }
+                        }
+                    }
                     
                     if (giftTTSAccumulator[giftKey].timer) {
                         clearTimeout(giftTTSAccumulator[giftKey].timer);
+                        giftTTSAccumulator[giftKey].timer = null;
                     }
                     
-                    giftTTSAccumulator[giftKey].timer = setTimeout(() => {
+                    const isRepeatEnd = data.repeatEnd === true || data.repeatEnd === 1 || data.repeatEnd === '1';
+                    
+                    if (isRepeatEnd) {
                         const finalGift = giftTTSAccumulator[giftKey];
                         delete giftTTSAccumulator[giftKey];
                         if (finalGift) {
-                            console.log(`[TTS-Debounce] Debounce window closed for key: ${giftKey}. Processing final count: ${finalGift.maxCount}`);
+                            console.log(`[TTS-Debounce] repeatEnd detected for key: ${giftKey}. Processing final count: ${finalGift.maxCount}`);
                             processAccumulatedGift(finalGift.data, finalGift.maxCount);
                         }
-                    }, 1200);
+                    } else {
+                        console.log(`[TTS-Debounce] Intermediate count for key: ${giftKey} (${currentCount}), waiting for repeatEnd...`);
+                        giftTTSAccumulator[giftKey].timer = setTimeout(() => {
+                            const finalGift = giftTTSAccumulator[giftKey];
+                            delete giftTTSAccumulator[giftKey];
+                            if (finalGift) {
+                                console.log(`[TTS-Debounce] Fallback timeout reached for key: ${giftKey}. Processing final count: ${finalGift.maxCount}`);
+                                processAccumulatedGift(finalGift.data, finalGift.maxCount);
+                            }
+                        }, 2000); // 2 seconds fallback
+                    }
                 }
             }
 
@@ -2323,10 +4996,15 @@ function connectToTikTok(username) {
                 
                 // Update dynamic goals progress
                 updateGoalProgress('likes', count);
+                updateDinamicaGoalProgress('likes', count);
                 
                 if (uniqueId) {
                     if (!rankings.likes[uniqueId]) {
-                        rankings.likes[uniqueId] = { nickname, count: 0 };
+                        rankings.likes[uniqueId] = { nickname, count: 0, profilePictureUrl: data.profilePictureUrl || '' };
+                    } else {
+                        if (data.profilePictureUrl) {
+                            rankings.likes[uniqueId].profilePictureUrl = data.profilePictureUrl;
+                        }
                     }
                     rankings.likes[uniqueId].count += count;
                     
@@ -2334,9 +5012,9 @@ function connectToTikTok(username) {
                     broadcastRankings();
                 }
 
-                // Blacklist check
+                // Blacklist & Banned Username check
                 const blacklist = (chatbotSettings.ignoreUserList || []).map(u => u.toLowerCase().trim());
-                if (!blacklist.includes(uniqueId)) {
+                if (!blacklist.includes(uniqueId) && !isBannedText(uniqueId, true) && !isBannedText(nickname, true)) {
                     // Trigger Sound Alerts for Likes
                     if (chatbotSettings.soundAlertsEnabled && chatbotSettings.soundAlerts) {
                         chatbotSettings.soundAlerts.forEach(alert => {
@@ -2352,98 +5030,62 @@ function connectToTikTok(username) {
                     }
 
                     // Cloud TTS milestone check
-                    if (chatbotSettings.readLikesMilestoneEnabled && count >= (chatbotSettings.likesMilestoneValue || 100)) {
-                        let ttsText = "";
-                        const theme = chatbotSettings.themeName || 'neutral';
-                        if (theme === 'naya') {
-                            ttsText = `¡Muchísimas gracias @${nickname} por esos ${count} corazones en la pantalla de Naya!`;
-                        } else if (theme === 'majo') {
-                            ttsText = `¡Gracias por esos ${count} likes a la telaraña de Majo, @${nickname}!`;
-                        } else {
-                            ttsText = `¡Gracias @${nickname} por enviar ${count} likes a la transmisión!`;
+                    if (chatbotSettings.readLikesMilestoneEnabled) {
+                        const milestone = chatbotSettings.likesMilestoneValue || 100;
+                        const userLikes = rankings.likes[uniqueId] ? rankings.likes[uniqueId].count : 0;
+                        const previousLikes = userLikes - count;
+                        if (milestone > 0 && Math.floor(userLikes / milestone) > Math.floor(previousLikes / milestone)) {
+                            const action = chatbotSettings.likeAction || 'read';
+                            const soundFile = chatbotSettings.likeSound;
+
+                            // Play sound if action is 'sound' or 'both'
+                            if ((action === 'sound' || action === 'both') && soundFile) {
+                                io.emit('play_sound_alert', { soundUrl: soundFile, volume: 100 });
+                            }
+
+                            // Play TTS if action is 'read' or 'both'
+                            if (action === 'read' || action === 'both') {
+                                let ttsText = "";
+                                const customPhrase = chatbotSettings.thankYouLikePhrase;
+                                if (customPhrase && customPhrase.trim() !== "") {
+                                    const displayName = stripEmojis(nickname);
+                                    ttsText = formatCustomPhrase(customPhrase, 'like', displayName, '', milestone);
+                                } else {
+                                    const theme = chatbotSettings.themeName || 'neutral';
+                                    if (theme === 'naya') {
+                                        ttsText = `¡Muchísimas gracias @${nickname} por esos ${milestone} corazones en la pantalla de Naya!`;
+                                    } else if (theme === 'majo') {
+                                        ttsText = `¡Gracias por esos ${milestone} likes a la telaraña de Majo, @${nickname}!`;
+                                    } else {
+                                        ttsText = `¡Gracias @${nickname} por enviar ${milestone} likes a la transmisión!`;
+                                    }
+                                }
+                                speakCustomTts(ttsText);
+                            }
                         }
-                        speakCustomTts(ttsText);
                     }
                 }
             }
 
             if (eventType === 'follow') {
-                const uniqueId = (data.uniqueId || '').toLowerCase();
-                const nickname = data.nickname || data.uniqueId || 'Nuevo Seguidor';
-                
-                // Update dynamic goals progress
-                updateGoalProgress('follows', 1);
-                
-                // Blacklist check
-                const blacklist = (chatbotSettings.ignoreUserList || []).map(u => u.toLowerCase().trim());
-                if (!blacklist.includes(uniqueId)) {
-                    // Trigger Sound Alerts for Follows
-                    if (chatbotSettings.soundAlertsEnabled && chatbotSettings.soundAlerts) {
-                        chatbotSettings.soundAlerts.forEach(alert => {
-                            if (alert.enabled && alert.type === 'follow') {
-                                triggerSoundAlert(alert);
-                            }
-                        });
-                    }
-
-                    if (chatbotSettings.readFollowsEnabled) {
-                        const displayName = stripEmojis(nickname);
-                        let ttsText = "";
-                        const customPhrase = chatbotSettings.thankYouFollowPhrase;
-                        if (customPhrase && customPhrase.trim() !== "") {
-                            ttsText = formatCustomPhrase(customPhrase, 'follow', displayName);
-                        } else {
-                            const theme = chatbotSettings.themeName || 'neutral';
-                            if (theme === 'naya') {
-                                ttsText = `¡Bienvenido @${displayName} a la transmisión de Naya! Gracias por seguirme, linda.`;
-                            } else if (theme === 'majo') {
-                                ttsText = `¡Bienvenido @${displayName} a la telaraña de Majo! Gracias por unirte a nosotros.`;
-                            } else {
-                                ttsText = `¡Bienvenido @${displayName}, gracias por seguir la cuenta!`;
-                            }
-                        }
-                        speakCustomTts(ttsText);
-                    }
-                }
+                processFollowEvent(data);
             }
 
             if (eventType === 'share') {
-                const uniqueId = (data.uniqueId || '').toLowerCase();
-                const nickname = data.nickname || data.uniqueId || 'Espectador';
-                
-                // Update dynamic goals progress
-                updateGoalProgress('shares', 1);
-                
-                // Blacklist check
-                const blacklist = (chatbotSettings.ignoreUserList || []).map(u => u.toLowerCase().trim());
-                if (!blacklist.includes(uniqueId)) {
-                    // Trigger Sound Alerts for Shares
-                    if (chatbotSettings.soundAlertsEnabled && chatbotSettings.soundAlerts) {
-                        chatbotSettings.soundAlerts.forEach(alert => {
-                            if (alert.enabled && alert.type === 'share') {
-                                triggerSoundAlert(alert);
-                            }
-                        });
-                    }
+                processShareEvent(data);
+            }
 
-                    if (chatbotSettings.readSharesEnabled) {
-                        const displayName = stripEmojis(nickname);
-                        let ttsText = "";
-                        const customPhrase = chatbotSettings.thankYouSharePhrase;
-                        if (customPhrase && customPhrase.trim() !== "") {
-                            ttsText = formatCustomPhrase(customPhrase, 'share', displayName);
-                        } else {
-                            const theme = chatbotSettings.themeName || 'neutral';
-                            if (theme === 'naya') {
-                                ttsText = `¡Muchísimas gracias @${displayName} por compartir el directo de Naya! Eres un sol.`;
-                            } else if (theme === 'majo') {
-                                ttsText = `¡Gracias @${displayName} por compartir el live de Majo! Súper genial.`;
-                            } else {
-                                ttsText = `¡Gracias @${displayName} por compartir la transmisión!`;
-                            }
-                        }
-                        speakCustomTts(ttsText);
-                    }
+            if (eventType === 'social') {
+                const displayType = (data.displayType || '').toLowerCase();
+                const actionCode = parseInt(data.action) || 0;
+                
+                const isFollow = displayType.includes('follow') || actionCode === 1;
+                const isShare = displayType.includes('share') || actionCode === 3 || actionCode === 4;
+
+                if (isFollow) {
+                    processFollowEvent(data);
+                } else if (isShare) {
+                    processShareEvent(data);
                 }
             }
             
@@ -2469,10 +5111,86 @@ if (chatbotSettings.autoConnect !== false && chatbotSettings.tiktokUsername) {
 io.on('connection', (socket) => {
     console.log('Un cliente se ha conectado (Panel u Overlay)');
     
+    socket.on('ping_latency', (callback) => {
+        if (typeof callback === 'function') callback();
+    });
+    
+    // Send initial gift goals from mapping file and in-memory progress
+    const mappingFilePath = GIFTS_MAPPING_FILE;
+    let mappingData = {};
+    try {
+        if (fs.existsSync(mappingFilePath)) {
+            const raw = fs.readFileSync(mappingFilePath, 'utf8');
+            mappingData = JSON.parse(raw);
+        }
+    } catch (e) {
+        mappingData = {};
+    }
+    for (const giftId in mappingData) {
+        if (!giftMetasProgress[giftId]) {
+            const coins = mappingData[giftId].coins || 1;
+            let target = 100;
+            if (coins >= 1000) target = 1;
+            else if (coins >= 100) target = 5;
+            else if (coins >= 10) target = 10;
+            else if (coins >= 5) target = 20;
+
+            giftMetasProgress[giftId] = {
+                current: 0,
+                target: target
+            };
+        }
+        mappingData[giftId].current = giftMetasProgress[giftId].current;
+        mappingData[giftId].target = giftMetasProgress[giftId].target;
+    }
+    socket.emit('initMetas', mappingData);
+    socket.emit('initSoundsConfig', soundsConfig);
+    // Enviar catálogo espejo de Dinámicas al cliente
+    socket.emit('initGoalsCatalog', goalsCatalog);
+
+    // Send initial dynamic goals for dinamicas widget
+    socket.emit('initDinamicas', dinamicasConfig);
+
+    // Send initial recetasConfig on connection
+    socket.emit('initReceta', recetasConfig);
+
+    // Send current TikTok connection state on connection
+    if (tiktokLiveConnection) {
+        socket.emit('system', { type: 'connected', message: `Conectado a @${chatbotSettings.tiktokUsername}` });
+        socket.emit('tiktok_connected', { username: chatbotSettings.tiktokUsername, avatarUrl: currentCreatorAvatar });
+    } else {
+        socket.emit('system', { type: 'error', message: 'DESCONECTADO' });
+        socket.emit('tiktok_disconnected');
+    }
+    
     // Send current chatbot settings on connection
     socket.emit('chatbot_settings_updated', chatbotSettings);
+    socket.emit('initGlobalWidgetStyles', chatbotSettings.globalWidgetStyles || {
+        fontFamily: "Outfit",
+        borderThickness: 2,
+        borderColor: "#ff0077",
+        bgColor: "#0f0514",
+        bgOpacity: 60,
+        textScale: 100
+    });
+    
+    // Send active goal for meta-widget on connection
+    const activeGoal = (chatbotSettings.goals || []).find(g => g.type === 'gift' && g.enabled);
+    if (activeGoal) {
+        socket.emit('meta_goal_updated', {
+            giftName: activeGoal.giftName,
+            current: activeGoal.current,
+            target: activeGoal.target
+        });
+    }
+    
     socket.emit('app_version', packageJson.version);
     socket.emit('rankings_updated', getTopRankings());
+    socket.emit('session_stats_updated', {
+        diamonds: totalSessionDiamonds,
+        likes: totalSessionLikes,
+        viewers: totalSessionViewers
+    });
 
     // Send local IPs on connection
     socket.emit('local_ips', getLocalIPs());
@@ -2480,10 +5198,12 @@ io.on('connection', (socket) => {
     // Send Spotify queue and votes on connection
     socket.emit('spotify_queue_updated', spotifyQueue);
     socket.emit('spotify_votes_updated', { votes: spotifyVoteSkips.size, limit: chatbotSettings.spotifyVoteSkipLimit });
+    socket.emit('spotify_monetized_users_updated', getMonetizedUsersData(true));
 
     // Send YouTube queue and votes on connection
     socket.emit('youtube_queue_updated', youtubeQueue);
     socket.emit('youtube_votes_updated', { votes: youtubeVoteSkips.size, limit: chatbotSettings.youtubeVoteSkipLimit });
+    socket.emit('youtube_monetized_users_updated', getMonetizedUsersData(false));
     socket.emit('youtube_track', currentYoutubeTrack);
     socket.emit('remote_config_updated', remoteConfig);
 
@@ -2499,13 +5219,228 @@ io.on('connection', (socket) => {
 
     // Relay manual control commands from the panel to the overlay
     socket.on('manual_control', (data) => {
+        if (data) {
+            if (data.action === 'vs_update') {
+                recetasConfig.title = data.title;
+                recetasConfig.items = data.items;
+                try {
+                    fs.writeFileSync(RECETAS_CONFIG_FILE, JSON.stringify(recetasConfig, null, 2), 'utf8');
+                } catch (err) {
+                    console.error('Error saving recetas_config.json:', err);
+                }
+                io.emit('initReceta', recetasConfig);
+            } else if (data.action === 'vs_show') {
+                recetasConfig.visible = true;
+                try {
+                    fs.writeFileSync(RECETAS_CONFIG_FILE, JSON.stringify(recetasConfig, null, 2), 'utf8');
+                } catch (err) {
+                    console.error('Error saving recetas_config.json:', err);
+                }
+                io.emit('initReceta', recetasConfig);
+            } else if (data.action === 'vs_hide') {
+                recetasConfig.visible = false;
+                try {
+                    fs.writeFileSync(RECETAS_CONFIG_FILE, JSON.stringify(recetasConfig, null, 2), 'utf8');
+                } catch (err) {
+                    console.error('Error saving recetas_config.json:', err);
+                }
+                io.emit('initReceta', recetasConfig);
+            } else if (data.action === 'vs_reset') {
+                recetasConfig = {
+                    title: "RECETA DEL DÍA: PASTEL DE FRESAS",
+                    items: [
+                        { name: "Fresas Frescas 10 tazas" },
+                        { name: "Harina de Trigo 300g" },
+                        { name: "Azúcar Morena 150g" },
+                        { name: "Esencia de Vainilla 2 cdas" }
+                    ],
+                    visible: true
+                };
+                try {
+                    fs.writeFileSync(RECETAS_CONFIG_FILE, JSON.stringify(recetasConfig, null, 2), 'utf8');
+                } catch (err) {
+                    console.error('Error saving recetas_config.json:', err);
+                }
+                io.emit('initReceta', recetasConfig);
+            }
+        }
         io.emit('overlay_command', data);
     });
 
-        // Handle chatbot settings updates
+    // Toggle active state of widgets (Spotify / YouTube)
+    socket.on('toggle_widget', (data) => {
+        const { widget, active } = data;
+        if (widget && chatbotSettings.widgets && chatbotSettings.widgets[widget]) {
+            chatbotSettings.widgets[widget].active = !!active;
+            
+            try {
+                fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
+                io.emit('widget_status_changed', { widget, active: chatbotSettings.widgets[widget].active });
+                console.info(`[Widget Control] Widget '${widget}' active state changed to: ${active}`);
+            } catch (err) {
+                console.error('Error saving settings during toggle_widget:', err);
+            }
+        }
+    });
+
+    // Update coordinates (relative positioning) of widgets
+    socket.on('update_widget_position', (data) => {
+        const { widget, x, y, width, height } = data;
+        if (widget && chatbotSettings.widgets && chatbotSettings.widgets[widget]) {
+            chatbotSettings.widgets[widget].x = Number(x);
+            chatbotSettings.widgets[widget].y = Number(y);
+            if (width !== undefined) chatbotSettings.widgets[widget].width = Number(width);
+            if (height !== undefined) chatbotSettings.widgets[widget].height = Number(height);
+            
+            try {
+                fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
+                io.emit('widget_position_changed', { 
+                    widget, 
+                    x: chatbotSettings.widgets[widget].x, 
+                    y: chatbotSettings.widgets[widget].y,
+                    width: chatbotSettings.widgets[widget].width,
+                    height: chatbotSettings.widgets[widget].height
+                });
+                console.info(`[Widget Control] Widget '${widget}' layout updated to: X=${x}%, Y=${y}%, W=${width}%, H=${height}%`);
+            } catch (err) {
+                console.error('Error saving settings during update_widget_position:', err);
+            }
+        }
+    });
+
+    // Add custom sound alert - SÓLO MULTIMEDIA
+    socket.on('add_sound_alert', (data) => {
+        const { giftId, name, coins, image } = data;
+        try {
+            soundsConfig[giftId] = {
+                id: giftId,
+                name: name,
+                coins: coins,
+                image: image,
+                sound: ""
+            };
+            fs.writeFileSync(SOUNDS_CONFIG_FILE, JSON.stringify(soundsConfig, null, 2), 'utf8');
+            io.emit('initSoundsConfig', soundsConfig); // Alerta exclusiva a la tabla multimedia
+            console.info(`[Multimedia] Alerta de sonido creada para el regalo: ${name} (ID: ${giftId})`);
+        } catch (e) {
+            console.error("Error adding sound alert to sounds_config.json:", e);
+        }
+    });
+
+    // Update gift sound assignment inside sounds_config.json
+    socket.on('update_gift_sound', (data) => {
+        const { giftId, sound } = data;
+        try {
+            if (soundsConfig[giftId]) {
+                soundsConfig[giftId].sound = sound || "";
+                fs.writeFileSync(SOUNDS_CONFIG_FILE, JSON.stringify(soundsConfig, null, 2), 'utf8');
+                console.info(`[Update Gift Sound] Updated gift ${giftId} sound to: ${sound}`);
+                io.emit('initSoundsConfig', soundsConfig);
+            }
+        } catch (e) {
+            console.error("Error updating gift sound in sounds_config.json:", e);
+        }
+    });
+
+    // Remove sound alert
+    socket.on('remove_sound_alert', (data) => {
+        const { giftId } = data;
+        try {
+            if (soundsConfig[giftId]) {
+                delete soundsConfig[giftId];
+                fs.writeFileSync(SOUNDS_CONFIG_FILE, JSON.stringify(soundsConfig, null, 2), 'utf8');
+                console.info(`[Remove Sound Alert] Removed sound alert for gift ${giftId}`);
+                io.emit('initSoundsConfig', soundsConfig);
+            }
+        } catch (e) {
+            console.error("Error removing sound alert from sounds_config.json:", e);
+        }
+    });
+
+    // Add custom dynamic goal
+    socket.on('add_dynamic_goal', (data) => {
+        const { type, giftId, giftName, title, target } = data;
+        try {
+            const goalId = 'goal_' + Date.now();
+            let newGoal = {
+                id: goalId,
+                type: type,
+                title: title,
+                target: Number(target) || 100,
+                current: 0,
+                enabled: true
+            };
+            if (type === 'gift') {
+                newGoal.giftId = giftId;
+                newGoal.giftName = giftName;
+                
+                // Get image and coins from gifts_mapping.json (CEREBRO) if available
+                if (fs.existsSync(GIFTS_MAPPING_FILE)) {
+                    const mapping = JSON.parse(fs.readFileSync(GIFTS_MAPPING_FILE, 'utf8'));
+                    if (mapping[giftId] && mapping[giftId].image) {
+                        newGoal.image = mapping[giftId].image;
+                        newGoal.coins = mapping[giftId].coins;
+                    }
+                }
+                if (!newGoal.image) {
+                    newGoal.image = `${(giftName || '').toLowerCase().replace(/\s+/g, '_')}.png`;
+                }
+            }
+            dinamicasConfig.push(newGoal);
+            fs.writeFileSync(DINAMICAS_CONFIG_FILE, JSON.stringify(dinamicasConfig, null, 2), 'utf8');
+            emitDinamicasData();
+            console.info(`[Add Dynamic Goal] Added goal: ${title} (${type})`);
+        } catch (e) {
+            console.error("Error adding dynamic goal:", e);
+        }
+    });
+
+    // Remove custom dynamic goal
+    socket.on('remove_dynamic_goal', (data) => {
+        const { goalId } = data;
+        try {
+            dinamicasConfig = dinamicasConfig.filter(g => g.id !== goalId);
+            fs.writeFileSync(DINAMICAS_CONFIG_FILE, JSON.stringify(dinamicasConfig, null, 2), 'utf8');
+            emitDinamicasData();
+            console.info(`[Remove Dynamic Goal] Removed goal: ${goalId}`);
+        } catch (e) {
+            console.error("Error removing dynamic goal:", e);
+        }
+    });
+
+    // Reset progress of all dynamic goals
+    socket.on('reset_dynamic_goals', () => {
+        try {
+            dinamicasConfig.forEach(g => {
+                g.current = 0;
+            });
+            fs.writeFileSync(DINAMICAS_CONFIG_FILE, JSON.stringify(dinamicasConfig, null, 2), 'utf8');
+            emitDinamicasData();
+            console.info(`[Reset Dynamic Goals] Progress reset for all goals`);
+        } catch (e) {
+            console.error("Error resetting dynamic goals:", e);
+        }
+    });
+
+    // Handle chatbot settings updates
     socket.on('update_chatbot_settings', (newSettings) => {
         const oldVolume = chatbotSettings.spotifyVolume;
+        
+        // Handle AI nested structure merge safely
+        const incomingAi = newSettings.ai;
+        delete newSettings.ai;
+        
         chatbotSettings = { ...chatbotSettings, ...newSettings };
+        
+        if (incomingAi) {
+            chatbotSettings.ai = chatbotSettings.ai || {};
+            if (incomingAi.naya) {
+                chatbotSettings.ai.naya = { ...chatbotSettings.ai.naya, ...incomingAi.naya };
+            }
+            if (incomingAi.majo) {
+                chatbotSettings.ai.majo = { ...chatbotSettings.ai.majo, ...incomingAi.majo };
+            }
+        }
         
         if (newSettings.spotifyVolume !== undefined && newSettings.spotifyVolume !== oldVolume) {
             setSpotifyVolume(chatbotSettings.spotifyVolume);
@@ -2514,8 +5449,126 @@ io.on('connection', (socket) => {
         try {
             fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
             io.emit('chatbot_settings_updated', chatbotSettings);
+            io.emit('goals_updated', chatbotSettings.goals);
+            
+            // Also emit meta_goal_updated for active goal in case it was reset or updated
+            const activeGoal = (chatbotSettings.goals || []).find(g => g.type === 'gift' && g.enabled);
+            if (activeGoal) {
+                io.emit('meta_goal_updated', {
+                    giftName: activeGoal.giftName,
+                    current: activeGoal.current,
+                    target: activeGoal.target
+                });
+            } else {
+                io.emit('meta_goal_updated', null);
+            }
         } catch (err) {
             console.error('Error saving chatbot settings:', err);
+        }
+    });
+
+    // Handle update globalWidgetStyles
+    socket.on('updateGlobalWidgetStyles', (styles) => {
+        chatbotSettings.globalWidgetStyles = { ...chatbotSettings.globalWidgetStyles, ...styles };
+        try {
+            fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
+            io.emit('globalWidgetStylesChanged', chatbotSettings.globalWidgetStyles);
+            console.info('[Settings] globalWidgetStyles updated and broadcasted:', chatbotSettings.globalWidgetStyles);
+        } catch (err) {
+            console.error('Error saving globalWidgetStyles:', err);
+        }
+    });
+
+    // Handle Factory Reset / Clear Cache
+    socket.on('clear_cache', () => {
+        console.info('[Clear Cache] Petición de limpieza de caché recibida.');
+        
+        // 1. Desconectar de TikTok Live si está activo
+        if (tiktokLiveConnection) {
+            try {
+                tiktokLiveConnection.removeAllListeners();
+                tiktokLiveConnection.disconnect();
+            } catch (e) {
+                console.error('[Clear Cache] Error desconectando TikTok:', e);
+            }
+            tiktokLiveConnection = null;
+        }
+
+        try {
+            // 2. Borrar todos los archivos de configuración (.json y .bak) en el directorio writableDir,
+            // excluyendo expresamente la base de datos de regalos (gifts_mapping.json) y sus copias de seguridad.
+            const files = fs.readdirSync(writableDir);
+            files.forEach(file => {
+                const filePath = path.join(writableDir, file);
+                try {
+                    const stat = fs.statSync(filePath);
+                    if (stat.isFile()) {
+                        if (file.endsWith('.json') || file.endsWith('.bak') || file.endsWith('.mp3')) {
+                            if (file !== 'gifts_mapping.json' && !file.includes('gifts_mapping.json')) {
+                                fs.unlinkSync(filePath);
+                                console.info(`[Clear Cache] Eliminado archivo de configuración: ${file}`);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error(`[Clear Cache] Error al procesar archivo ${file}:`, e);
+                }
+            });
+
+            // 3. Reiniciar los punteros de configuración a valores predeterminados
+            SETTINGS_FILE = DEFAULT_SETTINGS_FILE;
+            SOUNDS_CONFIG_FILE = DEFAULT_SOUNDS_CONFIG_FILE;
+            DINAMICAS_CONFIG_FILE = DEFAULT_DINAMICAS_CONFIG_FILE;
+            RECETAS_CONFIG_FILE = DEFAULT_RECETAS_CONFIG_FILE;
+            GOALS_CATALOG_FILE = DEFAULT_GOALS_CATALOG_FILE;
+
+            // 5. Recargar y regenerar configs de fábrica desde el template
+            const templatePath = path.join(__dirname, 'chatbot_settings.json');
+            const templateSettings = readJsonFileSafe(templatePath, {});
+            chatbotSettings = { ...templateSettings };
+            
+            // Forzar guardado del archivo default de fábrica
+            fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2), 'utf8');
+
+            soundsConfig = {};
+            fs.writeFileSync(SOUNDS_CONFIG_FILE, JSON.stringify(soundsConfig, null, 2), 'utf8');
+
+            dinamicasConfig = [];
+            fs.writeFileSync(DINAMICAS_CONFIG_FILE, JSON.stringify(dinamicasConfig, null, 2), 'utf8');
+
+            const templateRecetasPath = path.join(__dirname, 'recetas_config.json');
+            recetasConfig = readJsonFileSafe(templateRecetasPath, {});
+            fs.writeFileSync(RECETAS_CONFIG_FILE, JSON.stringify(recetasConfig, null, 2), 'utf8');
+
+            goalsCatalog = {};
+            const brainData = readJsonFileSafe(GIFTS_MAPPING_FILE, {});
+            Object.entries(brainData).forEach(([gid, gdata]) => {
+                goalsCatalog[gid] = { name: gdata.name, coins: gdata.coins, image: gdata.image };
+            });
+            fs.writeFileSync(GOALS_CATALOG_FILE, JSON.stringify(goalsCatalog, null, 2), 'utf8');
+
+            // Resetear estadísticas de sesión en memoria y disco
+            sessionStats = {
+                viewers: 0,
+                likes: 0,
+                diamonds: 0,
+                uptime: "00:00:00",
+                startedAt: null,
+                roomId: ""
+            };
+            const sessionStatsFile = path.join(__dirname, 'session_stats.json');
+            if (fs.existsSync(sessionStatsFile)) {
+                fs.unlinkSync(sessionStatsFile);
+            }
+
+            console.info('[Clear Cache] Caché borrada y configuración reiniciada con éxito.');
+
+            // 6. Notificar al cliente que la limpieza ha finalizado para que se recargue
+            socket.emit('cache_cleared', { success: true });
+
+        } catch (err) {
+            console.error('[Clear Cache] Error durante el proceso de limpieza:', err);
+            socket.emit('cache_cleared', { success: false, error: err.message });
         }
     });
 
@@ -2530,36 +5583,61 @@ io.on('connection', (socket) => {
         const pitchStr = pitchPercentage >= 0 ? `+${pitchPercentage}Hz` : `${pitchPercentage}Hz`;
         
         try {
-            const tts = new EdgeTTS({
-                voice: voiceName || 'es-CO-SalomeNeural',
-                rate: rateStr,
-                pitch: pitchStr
-            });
-            
-            await tts.ttsPromise(text, tempFile);
-            
+            await synthesizeSpeech(text, voiceName || 'es-CO-SalomeNeural', rateStr, pitchStr, tempFile);
             if (fs.existsSync(tempFile)) {
-                const audioBuffer = fs.readFileSync(tempFile);
-                const base64Audio = audioBuffer.toString('base64');
+                let audioBuffer = fs.readFileSync(tempFile);
+                let base64Audio = audioBuffer.toString('base64');
                 socket.emit('play_tts_audio', { base64Audio, playLocation: 'panel' });
                 fs.unlinkSync(tempFile);
+                
+                // Clear references immediately to free RAM
+                audioBuffer = null;
+                base64Audio = null;
+                if (global.gc) {
+                    try { global.gc(); } catch (e) {}
+                }
             }
         } catch (error) {
-            console.error('Error testing Edge TTS:', error);
+            console.error('Error testing Edge/Gemini TTS:', error);
+            socket.emit('test_tts_error', { message: error.message });
             if (fs.existsSync(tempFile)) {
                 try { fs.unlinkSync(tempFile); } catch(e) {}
             }
         }
     });
 
+    socket.on('get_chatbot_settings', () => {
+        socket.emit('chatbot_settings_updated', chatbotSettings);
+    });
+
     // Handle disconnect tiktok request
     socket.on('disconnect_tiktok', () => {
+        console.log('Desconectando de TikTok...');
         if (tiktokLiveConnection) {
-            console.log('Desconectando de TikTok...');
-            tiktokLiveConnection.disconnect();
+            try {
+                tiktokLiveConnection.removeAllListeners();
+                tiktokLiveConnection.disconnect();
+            } catch (e) {
+                console.error('Error disconnecting tiktok webcast:', e);
+            }
             tiktokLiveConnection = null;
-            io.emit('system', { type: 'error', message: 'DESCONECTADO' });
         }
+        
+        // Reset and clear persisted session stats
+        totalSessionDiamonds = 0;
+        totalSessionLikes = 0;
+        totalSessionViewers = 0;
+        currentRoomId = '';
+        try {
+            const statsFile = path.join(__dirname, 'session_stats.json');
+            if (fs.existsSync(statsFile)) {
+                fs.unlinkSync(statsFile);
+            }
+        } catch (e) {}
+        broadcastSessionStats();
+
+        io.emit('system', { type: 'error', message: 'DESCONECTADO' });
+        io.emit('tiktok_disconnected');
     });
 
     // Handle disconnect spotify request
@@ -2585,25 +5663,13 @@ io.on('connection', (socket) => {
         const { username } = data;
         if (username) {
             console.log(`Cambiando conexión a @${username}`);
-            
-            // Auto-detect theme based on TikTok username
-            chatbotSettings.tiktokUsername = username;
-            const usernameLower = username.toLowerCase();
-            if (usernameLower.includes('majo')) {
-                chatbotSettings.themeName = 'majo';
-            } else if (usernameLower.includes('naya')) {
-                chatbotSettings.themeName = 'naya';
-            }
-            
-            try {
-                fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
-                io.emit('chatbot_settings_updated', chatbotSettings);
-            } catch (err) {
-                console.error('Error saving settings during change_user:', err);
-            }
-            
             io.emit('system', { type: 'system', message: `Desconectando y cambiando a @${username}...` });
-            connectToTikTok(username);
+            try {
+                connectToTikTok(username);
+            } catch (err) {
+                console.error('Error during connectToTikTok within change_user:', err);
+                io.emit('system', { type: 'error', message: `Fallo al cambiar de usuario: ${err.message}` });
+            }
         }
     });
 
@@ -2630,7 +5696,6 @@ io.on('connection', (socket) => {
             
             currentActiveQueueTrack = track;
             await playSpotifyTrack(track.uri);
-            
             setTimeout(async () => {
                 const trackData = await getSpotifyCurrentlyPlaying();
                 if (trackData) {
@@ -2653,6 +5718,19 @@ io.on('connection', (socket) => {
         console.info('Cola vaciada desde el panel.');
         spotifyQueue = [];
         io.emit('spotify_queue_updated', spotifyQueue);
+    });
+
+    socket.on('clear_ai_queue', () => {
+        console.info('[AI Gemini] Cola de IA vaciada desde el panel.');
+        aiCommandQueue = [];
+        aiQueueCounter = 0;
+        emitAiQueueUpdate();
+    });
+
+    socket.on('remove_ai_queue_item', (id) => {
+        console.info(`[AI Gemini] Removiendo petición de IA de la cola: ${id}`);
+        aiCommandQueue = aiCommandQueue.filter(item => item.id !== id);
+        emitAiQueueUpdate();
     });
 
     socket.on('spotify_toggle_play', async () => {
@@ -2737,12 +5815,35 @@ io.on('connection', (socket) => {
         io.emit('youtube_queue_updated', youtubeQueue);
     });
 
+    socket.on('clear_monetized_users', () => {
+        console.info('Limpieza manual de usuarios premium solicitada.');
+        sessionGiftCoins = {};
+        emitMonetizedUsersUpdate(true);  // spotify
+        emitMonetizedUsersUpdate(false); // youtube
+        io.emit('system', { type: 'info', message: 'Se han limpiado los créditos y monedas acumulados de la sesión.' });
+    });
+
+    socket.on('reset_session_rankings', () => {
+        console.info('Reinicio manual de rankings de sesión solicitado.');
+        rankings = { likes: {}, gifts: {}, mvp: {} };
+        broadcastRankings();
+        io.emit('system', { type: 'info', message: 'Se han reiniciado los rankings de la sesión.' });
+    });
+
     socket.on('youtube_toggle_play', (playingState) => {
         console.info(`YouTube Play/Pause solicitado desde el panel: ${playingState}`);
-        if (currentYoutubeTrack) {
+        if (currentYoutubeTrack && currentYoutubeTrack.id) {
             currentYoutubeTrack.isPlaying = playingState;
             io.emit('youtube_track', currentYoutubeTrack);
+        } else if (playingState) {
+            // Si queremos reproducir pero no hay track actual cargado, intentamos reproducir la siguiente canción de la cola
+            playNextYoutubeInQueue();
         }
+    });
+
+    socket.on('youtube_player_error', (data) => {
+        console.warn(`YouTube Player Error for video ${data.id || 'unknown'}: ${data.message || 'unknown error'}`);
+        io.emit('system', { type: 'warning', message: `⚠️ YouTube: No se pudo reproducir el video. ${data.message || 'Error de reproducción.'}` });
     });
 
     socket.on('youtube_volume_change', (volume) => {
@@ -2768,9 +5869,219 @@ io.on('connection', (socket) => {
             io.emit('youtube_track_progress', status);
         }
     });
+
+    // Simulated TikTok events handler for testing
+    socket.on('simulate_tiktok_event', (data) => {
+        const { eventType, eventData } = data;
+        console.log(`[Simulador] Recibido evento simulado: ${eventType}`, eventData);
+        
+        if (eventType === 'gift' && eventData) {
+            const uniqueId = (eventData.uniqueId || '').toLowerCase().trim();
+            const giftId = String(eventData.giftId);
+            const repeatCount = parseInt(eventData.repeatCount) || 1;
+            const now = Date.now();
+
+            if (!lastProcessedGift[uniqueId]) {
+                lastProcessedGift[uniqueId] = {};
+            }
+            const last = lastProcessedGift[uniqueId][giftId];
+            if (last) {
+                const timeDiff = now - last.timestamp;
+                if (timeDiff < 5000) {
+                    if (repeatCount <= last.repeatCount) {
+                        console.log(`[Deduplicación Simulador] Ignorando duplicado estricto para @${uniqueId} (Clave: ${giftId}, diferencia: ${timeDiff}ms, Count: ${repeatCount} <= ${last.repeatCount})`);
+                        return;
+                    }
+                }
+            }
+            lastProcessedGift[uniqueId][giftId] = { repeatCount, timestamp: now };
+        }
+        
+        // Broadcast raw event to overlay/panel
+        io.emit('tiktok_event_raw', { eventType, data: eventData });
+
+        if (eventType === 'chat') {
+            handleCloudTTS(eventData);
+            handleSpotifyChatCommand(eventData);
+            handleYoutubeChatCommand(eventData);
+            handleAiChatCommand(eventData);
+        } else if (eventType === 'gift') {
+            const uniqueId = (eventData.uniqueId || '').toLowerCase();
+            const nickname = eventData.nickname || eventData.uniqueId;
+            const coins = eventData.diamondCount || 0;
+            const repeatCount = eventData.repeatCount || 1;
+            const totalCoins = coins * repeatCount;
+
+            // Update Dynamic Goal Progress
+            updateDinamicaGoalProgress('gift', repeatCount, String(eventData.giftId));
+            updateGoalProgress('gift', totalCoins, eventData.giftName);
+
+            // Update rankings
+            if (uniqueId && coins > 0) {
+                if (!rankings.gifts[uniqueId]) {
+                    rankings.gifts[uniqueId] = { nickname, count: 0 };
+                }
+                rankings.gifts[uniqueId].count += totalCoins;
+                updateMvp(uniqueId, nickname);
+                broadcastRankings();
+            }
+
+            // Emit to overlay
+            io.emit('overlay_trigger', {
+                type: 'gift',
+                giftId: eventData.giftId,
+                giftName: eventData.giftName,
+                sender: nickname,
+                repeatCount: repeatCount,
+                diamondCount: coins,
+                extendedGiftInfo: eventData.extendedGiftInfo
+            });
+
+            // Process monetization credits
+            processAccumulatedGift(eventData, repeatCount);
+        }
+    });
+
+    socket.on('test_social_rotator', (data) => {
+        console.log('[Rotador] Emitiendo evento de prueba de red social:', data);
+        io.emit('test_social_rotator', data);
+    });
 });
 
+async function synthesizeSpeech(text, voice, rateStr, pitchStr, tempFile, customStyle = null) {
+    const geminiVoices = ["Aoede", "Charon", "Fenrir", "Kore", "Puck", "Achernar"];
+    const isGeminiVoice = geminiVoices.includes(voice) || (chatbotSettings.ttsEngine === "gemini" && !voice.includes("-"));
+
+    if (isGeminiVoice) {
+        let model = chatbotSettings.geminiModel || "gemini-3.1-flash-tts-preview";
+        if (model === "gemini-3.1-flash-tts") model = "gemini-3.1-flash-tts-preview";
+        if (model === "gemini-2.5-flash-tts") model = "gemini-2.5-flash-preview-tts";
+        if (model === "gemini-2.5-pro-tts") model = "gemini-2.5-pro-preview-tts";
+        if (model === "gemini-2.5-flash-lite-tts") model = "gemini-2.5-flash-preview-tts";
+        const voiceName = geminiVoices.includes(voice) ? voice : (chatbotSettings.geminiVoiceName || "Aoede");
+        // customStyle overrides global style if provided (user rule or AI config)
+        const style = (customStyle && customStyle.trim()) ? customStyle.trim() : (chatbotSettings.geminiStyleInstructions || "Read aloud in a warm, welcoming tone.");
+        const lang = chatbotSettings.geminiLanguage || "es-MX";
+        const apiKey = chatbotSettings.geminiApiKey;
+        
+        if (!apiKey) {
+            throw new Error("No Gemini API key provided. Please configure it in settings.");
+        }
+        
+        const langMap = {
+            "es-MX": "Spanish (Mexico)",
+            "es-CO": "Spanish (Colombia)",
+            "es-ES": "Spanish (Spain)",
+            "es-AR": "Spanish (Argentina)",
+            "es-CL": "Spanish (Chile)",
+            "es-PE": "Spanish (Peru)",
+            "es-VE": "Spanish (Venezuela)",
+            "es-US": "Spanish (United States)",
+            "en-US": "English (United States)",
+            "en-GB": "English (United Kingdom)"
+        };
+        const friendlyLanguage = langMap[lang] || lang;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        
+        // Wrap in narration framing to avoid Gemini's internal impersonation/PROHIBITED_CONTENT filter
+        // Direct style commands like "habla coqueta" can trigger blocks; narration framing avoids this
+        const promptText = `Read the following text aloud as a voice narrator. Narration style: ${style}. Language: ${friendlyLanguage}. Text to read: "${text}"`;
+        
+        const requestBody = {
+            contents: [
+                { role: "user", parts: [{ text: promptText }] }
+            ],
+            generationConfig: {
+                responseModalities: ["AUDIO"],
+                speechConfig: {
+                    voiceConfig: {
+                        prebuiltVoiceConfig: {
+                            voiceName: voiceName
+                        }
+                    }
+                }
+            },
+            safetySettings: [
+                { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+            ]
+        };
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
+        
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Gemini API HTTP ${response.status}: ${errText}`);
+        }
+        
+        const resData = await response.json();
+        if (resData.error) {
+            throw new Error(`Gemini API Error: ${resData.error.message || JSON.stringify(resData.error)}`);
+        }
+        
+        if (resData.promptFeedback && resData.promptFeedback.blockReason) {
+            // Log but don't throw — skip silently so the queue continues
+            console.warn(`[Gemini TTS] Solicitud bloqueada en promptFeedback (${resData.promptFeedback.blockReason}). Texto: "${text.substring(0, 60)}"`);
+            return; // Skip this message, don't crash the queue
+        }
+        
+        const candidate = resData.candidates && resData.candidates[0];
+        
+        // If candidate was blocked at generation level (PROHIBITED_CONTENT, SAFETY, etc), skip silently
+        if (!candidate || candidate.finishReason === 'PROHIBITED_CONTENT' || candidate.finishReason === 'SAFETY' || candidate.finishReason === 'RECITATION') {
+            console.warn(`[Gemini TTS] Candidato bloqueado (finishReason: ${candidate ? candidate.finishReason : 'sin candidato'}). Texto: "${text.substring(0, 60)}". Saltando...`);
+            return; // Skip silently
+        }
+        
+        const parts = candidate && candidate.content && candidate.content.parts;
+        const audioPart = parts && parts.find(p => p.inlineData);
+        
+        if (audioPart && audioPart.inlineData && audioPart.inlineData.data) {
+            let pcmBuffer = Buffer.from(audioPart.inlineData.data, 'base64');
+            
+            // Prepend standard WAV header for 24kHz 16-bit Mono PCM so browser can play it
+            const wavHeader = Buffer.alloc(44);
+            wavHeader.write('RIFF', 0);
+            wavHeader.writeUInt32LE(36 + pcmBuffer.length, 4);
+            wavHeader.write('WAVE', 8);
+            wavHeader.write('fmt ', 12);
+            wavHeader.writeUInt32LE(16, 16);
+            wavHeader.writeUInt16LE(1, 20); // PCM format = 1
+            wavHeader.writeUInt16LE(1, 22); // 1 channel (mono)
+            wavHeader.writeUInt32LE(24000, 24); // 24kHz sample rate
+            wavHeader.writeUInt32LE(24000 * 1 * 2, 28); // byte rate
+            wavHeader.writeUInt16LE(1 * 2, 32); // block align
+            wavHeader.writeUInt16LE(16, 34); // 16 bits per sample
+            wavHeader.write('data', 36);
+            wavHeader.writeUInt32LE(pcmBuffer.length, 40);
+            
+            fs.writeFileSync(tempFile, Buffer.concat([wavHeader, pcmBuffer]));
+            pcmBuffer = null;
+        } else {
+            // No audio returned — Gemini silently skipped (can happen with certain text patterns)
+            console.warn(`[Gemini TTS] Sin datos de audio en la respuesta. Texto: "${text.substring(0, 60)}". Saltando...`);
+            return; // Don't throw — just skip this message
+        }
+    } else {
+        const tts = new EdgeTTS({
+            voice: voice || 'es-CO-SalomeNeural',
+            rate: rateStr,
+            pitch: pitchStr
+        });
+        await tts.ttsPromise(text, tempFile);
+    }
+}
+
 server.listen(PORT, () => {
-    console.log(`🚀 Servidor ejecutándose en http://localhost:${PORT}`);
+    console.log(`🚀 Servidor ejecutándose en http://127.0.0.1:${PORT}`);
     loadRemoteConfig();
+    updateCobaltApis();
+    // Update Cobalt APIs list every 30 minutes
+    setInterval(updateCobaltApis, 30 * 60 * 1000);
 });

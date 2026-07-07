@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Widget de Dinámicas</title>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@500;700;900&display=swap" rel="stylesheet">
+    
+    <script>
+        if (window.self !== window.top) {
+            document.documentElement.classList.add('is-iframe');
+        }
+    </script>
+    <style>
+        /* Base reset */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', 'Inter', sans-serif;
+            background: transparent;
+            color: #ffffff;
+            overflow: hidden;
+            user-select: none;
+            padding: 10px;
+        }
+
+        /* Container grid for classic goals */
+        .goals-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 12px;
+            width: 100%;
+            height: 100vh;
+            align-content: start;
+        }
+
+        html.is-iframe body {
+            width: 100% !important;
+            height: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            display: block !important;
+        }
+
+        html.is-iframe .goals-container,
+        html.is-iframe .apuestas-container {
+            width: 100% !important;
+            height: 100% !important;
+            left: 0 !important;
+            top: 0 !important;
+            position: relative !important;
+        }
+
+        /* Single flat goal card */
+        .goal-card {
+            background: rgba(15, 23, 42, 0.85); /* Smooth flat slate background */
+            border-radius: 8px;
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: transform 0.2s ease;
+        }
+
+        /* Header information */
+        .goal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+        }
+
+        .goal-info-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .goal-icon {
+            width: 28px;
+            height: 28px;
+            object-fit: contain;
+            border-radius: 4px;
+        }
+
+        .goal-name {
+            font-size: 14px;
+            font-weight: 700;
+            color: #f1f5f9;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .goal-info-right {
+            text-align: right;
+        }
+
+        .goal-progress-text {
+            font-size: 13px;
+            font-weight: 800;
+            color: #38bdf8; /* Vibrant light blue */
+            font-family: 'Outfit', sans-serif;
+        }
+
+        .goal-percentage {
+            font-size: 10px;
+            font-weight: 600;
+            color: #94a3b8;
+            margin-top: 1px;
+        }
+
+        /* Flat progress bar container */
+        .progress-bar-bg {
+            background: rgba(255, 255, 255, 0.1);
+            height: 8px;
+            border-radius: 4px;
+            width: 100%;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar-fill {
+            background: #00ffcc; /* Solid flat teal accent */
+            height: 100%;
+            border-radius: 4px;
+            width: 100%;
+            transform: scaleX(0);
+            transform-origin: left;
+            will-change: transform;
+            transition: transform 0.6s cubic-bezier(0.1, 0.8, 0.25, 1);
+        }
+
+        /* Hide elements if no gifts registered */
+        .no-goals-message {
+            display: none;
+            grid-column: 1 / -1;
+            text-align: center;
+            font-size: 14px;
+            color: #94a3b8;
+            padding: 30px;
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 8px;
+            border: 1px dashed rgba(255, 255, 255, 0.1);
+        }
+
+        /* ===================================================================== */
+        /* 🏆 Glassmorphic Apuestas CSS */
+        /* ===================================================================== */
+        .apuestas-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+            width: 100%;
+            height: 100vh;
+            align-content: start;
+        }
+
+        .apuestas-title-bar {
+            grid-column: 1 / -1;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .apuestas-title-bar h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 24px;
+            font-weight: 900;
+            color: #ffffff;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: linear-gradient(135deg, #ffffff 0%, #ffc4f4 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px rgba(255, 0, 255, 0.3);
+        }
+
+        .apuestas-card {
+            background: rgba(15, 12, 28, 0.65);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 16px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Border glow colors for participants */
+        .apuestas-card.p1 {
+            border-color: rgba(255, 0, 127, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(255, 0, 127, 0.05);
+        }
+        .apuestas-card.p2 {
+            border-color: rgba(157, 78, 221, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(157, 78, 221, 0.05);
+        }
+        .apuestas-card.p3 {
+            border-color: rgba(0, 240, 255, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(0, 240, 255, 0.05);
+        }
+        .apuestas-card.p4 {
+            border-color: rgba(255, 215, 0, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(255, 215, 0, 0.05);
+        }
+
+        .apuestas-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+        }
+
+        .apuestas-participant-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .apuestas-gift-icon {
+            width: 36px;
+            height: 36px;
+            object-fit: contain;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .apuestas-name {
+            font-family: 'Outfit', sans-serif;
+            font-size: 16px;
+            font-weight: 800;
+            color: #ffffff;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            letter-spacing: 0.5px;
+        }
+
+        .apuestas-votes-box {
+            text-align: right;
+        }
+
+        .apuestas-votes-count {
+            font-family: 'Outfit', sans-serif;
+            font-size: 20px;
+            font-weight: 900;
+            color: #ffffff;
+            display: block;
+        }
+
+        .apuestas-card.p1 .apuestas-votes-count { color: #ff007f; text-shadow: 0 0 8px rgba(255, 0, 127, 0.4); }
+        .apuestas-card.p2 .apuestas-votes-count { color: #9d4edd; text-shadow: 0 0 8px rgba(157, 78, 221, 0.4); }
+        .apuestas-card.p3 .apuestas-votes-count { color: #00f0ff; text-shadow: 0 0 8px rgba(0, 240, 255, 0.4); }
+        .apuestas-card.p4 .apuestas-votes-count { color: #ffd700; text-shadow: 0 0 8px rgba(255, 215, 0, 0.4); }
+
+        .apuestas-percent {
+            font-size: 10px;
+            font-weight: 700;
+            color: #94a3b8;
+            margin-top: 1px;
+        }
+
+        .apuestas-bar-bg {
+            background: rgba(255, 255, 255, 0.04);
+            height: 10px;
+            border-radius: 5px;
+            width: 100%;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            position: relative;
+        }
+
+        .apuestas-bar-fill {
+            height: 100%;
+            border-radius: 5px;
+            width: 100%;
+            transform: scaleX(0);
+            transform-origin: left;
+            will-change: transform;
+            transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        .apuestas-card.p1 .apuestas-bar-fill { background: linear-gradient(90deg, #ff007f, #ff60ad); box-shadow: 0 0 10px rgba(255,0,127,0.5); }
+        .apuestas-card.p2 .apuestas-bar-fill { background: linear-gradient(90deg, #9d4edd, #c77dff); box-shadow: 0 0 10px rgba(157,78,221,0.5); }
+        .apuestas-card.p3 .apuestas-bar-fill { background: linear-gradient(90deg, #00f0ff, #70e6ff); box-shadow: 0 0 10px rgba(0,240,255,0.5); }
+        .apuestas-card.p4 .apuestas-bar-fill { background: linear-gradient(90deg, #ffd700, #ffeb60); box-shadow: 0 0 10px rgba(255,215,0,0.5); }
+
+        .apuestas-instruction {
+            font-size: 10px;
+            color: #94a3b8;
+            font-weight: 600;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.02);
+            padding: 4px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.02);
+        }
+
+        /* Voters ticker section */
+        .apuestas-voters-list {
+            margin-top: 4px;
+            padding-top: 6px;
+            border-top: 1px dashed rgba(255, 255, 255, 0.06);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            max-height: 48px;
+            overflow-y: auto;
+        }
+
+        .apuestas-voter-badge {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            padding: 1px 5px;
+            font-size: 9px;
+            color: #e2e8f0;
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            animation: fadeInApuesta 0.3s ease-out;
+        }
+
+        @keyframes fadeInApuesta {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 💀 Loading Skeletons CSS */
+        .skeleton-card {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .skeleton-circle, .skeleton-line, .skeleton-bar {
+            background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s infinite linear;
+            border-radius: 4px;
+        }
+
+        .skeleton-circle {
+            width: 28px;
+            height: 28px;
+            border-radius: 4px;
+        }
+
+        .skeleton-line {
+            height: 12px;
+            display: inline-block;
+        }
+        .skeleton-line.short { width: 80px; }
+        .skeleton-line.long { width: 100%; height: 8px; }
+
+        .skeleton-bar {
+            height: 8px;
+            width: 100%;
+            border-radius: 4px;
+            margin-top: 8px;
+        }
+
+        @keyframes skeleton-loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="goals-container" id="goals-list">
+        <!-- Skeletons renderizados inicialmente -->
+        <div class="goal-card skeleton-card">
+            <div class="goal-header">
+                <div class="goal-info-left">
+                    <div class="skeleton-circle"></div>
+                    <div class="skeleton-line short"></div>
+                </div>
+                <div class="goal-info-right">
+                    <div class="skeleton-line short" style="width: 40px;"></div>
+                </div>
+            </div>
+            <div class="skeleton-bar"></div>
+        </div>
+        <div class="goal-card skeleton-card">
+            <div class="goal-header">
+                <div class="goal-info-left">
+                    <div class="skeleton-circle"></div>
+                    <div class="skeleton-line short"></div>
+                </div>
+                <div class="goal-info-right">
+                    <div class="skeleton-line short" style="width: 40px;"></div>
+                </div>
+            </div>
+            <div class="skeleton-bar"></div>
+        </div>
+        <div class="no-goals-message" id="no-goals" style="display: none;">Esperando registro de metas de regalos...</div>
+    </div>
+
+    <!-- Socket.io connection -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const goalsList = document.getElementById('goals-list');
+        const noGoalsMessage = document.getElementById('no-goals');
+        const serverPort = window.location.port || '3000';
+
+        // Local cache of goals
+        let goalsData = [];
+        let activeConfig = null;
+
+        function renderGoals() {
+            // Check if betting game is active
+            if (activeConfig && activeConfig.apuestas && activeConfig.apuestas.enabled) {
+                renderApuestas();
+                return;
+            }
+
+            // Restore normal container style
+            goalsList.className = 'goals-container';
+
+            // Remove existing cards
+            const cards = goalsList.querySelectorAll('.goal-card');
+            cards.forEach(card => card.remove());
+
+            // Remove title bar if any
+            const titleBar = goalsList.querySelector('.apuestas-title-bar');
+            if (titleBar) titleBar.remove();
+
+            if (!goalsData || goalsData.length === 0) {
+                noGoalsMessage.style.display = 'block';
+                return;
+            }
+
+            noGoalsMessage.style.display = 'none';
+
+            goalsData.forEach(goal => {
+                const card = document.createElement('div');
+                card.className = 'goal-card';
+                card.id = `goal-card-${goal.id}`;
+
+                const current = goal.current || 0;
+                const target = goal.target || 100;
+                const percent = Math.min(Math.round((current / target) * 100), 100);
+                
+                let typeText = '';
+                let iconSrc = '';
+                
+                if (goal.type === 'likes') {
+                    typeText = 'Meta de Likes';
+                    iconSrc = `${window.location.origin}/app-assets/neutral-logo.jpg`;
+                } else if (goal.type === 'follows') {
+                    typeText = 'Meta de Seguidores';
+                    iconSrc = `${window.location.origin}/app-assets/neutral-logo.jpg`;
+                } else if (goal.type === 'gift') {
+                    typeText = goal.giftName || 'Regalo';
+                    const giftImage = goal.image || `${(goal.giftName || '').toLowerCase().replace(/\s+/g, '_')}.png`;
+                    iconSrc = `${window.location.origin}/assets/gift/${giftImage}`;
+                }
+
+                const labelText = goal.title || typeText;
+
+                card.innerHTML = `
+                    <div class="goal-header">
+                        <div class="goal-info-left">
+                            <img class="goal-icon" src="${iconSrc}" alt="${typeText}" onerror="this.src='${window.location.origin}/app-assets/neutral-logo.jpg'">
+                            <span class="goal-name">${labelText}</span>
+                        </div>
+                        <div class="goal-info-right">
+                            <span class="goal-progress-text">${current} / ${target}</span>
+                            <div class="goal-percentage">${percent}%</div>
+                        </div>
+                    </div>
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" style="transform: scaleX(${percent / 100});"></div>
+                    </div>
+                `;
+
+                goalsList.appendChild(card);
+            });
+        }
+
+        function renderApuestas() {
+            // Remove existing elements (cards, title bar)
+            goalsList.innerHTML = '';
+            noGoalsMessage.style.display = 'none';
+
+            // Apply betting container style
+            goalsList.className = 'apuestas-container';
+            
+            const apuestas = activeConfig.apuestas;
+            const count = parseInt(apuestas.count) || 4;
+            
+            // Create title bar
+            const titleBar = document.createElement('div');
+            titleBar.className = 'apuestas-title-bar';
+            titleBar.innerHTML = `<h2>${apuestas.title || '¿Quién ganará la batalla?'}</h2>`;
+            goalsList.appendChild(titleBar);
+            
+            // Calculate total votes for percentage calculation
+            let totalVotes = 0;
+            for (let i = 1; i <= count; i++) {
+                const pKey = 'p' + i;
+                if (apuestas[pKey]) {
+                    totalVotes += apuestas[pKey].votes || 0;
+                }
+            }
+            
+            // Render active participants
+            for (let i = 1; i <= count; i++) {
+                const pKey = 'p' + i;
+                const participant = apuestas[pKey];
+                if (participant) {
+                    const votes = participant.votes || 0;
+                    const percent = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : (100 / count); // equal shares if 0 votes
+                    const percentDisplay = totalVotes > 0 ? `${percent}%` : '0%';
+                    
+                    const card = document.createElement('div');
+                    card.className = `apuestas-card p${i}`;
+                    
+                    const giftImage = `${(participant.giftName || '').toLowerCase().replace(/\s+/g, '_')}.png`;
+                    const iconSrc = `${window.location.origin}/assets/gift/${giftImage}`;
+                    
+                    // Backers/Voters list HTML
+                    const voters = participant.voters || [];
+                    let votersHtml = '';
+                    if (voters.length > 0) {
+                        // Show up to the last 5 unique voters (since voters list is appended to, the last ones are at the end)
+                        const latestVoters = voters.slice(-5).reverse();
+                        latestVoters.forEach(v => {
+                            votersHtml += `<span class="apuestas-voter-badge">@${v.nickname} <span style="color:#ff00ff; font-weight:bold;">+${v.count}</span></span>`;
+                        });
+                    }
+                    
+                    card.innerHTML = `
+                        <div class="apuestas-header">
+                            <div class="apuestas-participant-info">
+                                <img class="apuestas-gift-icon" src="${iconSrc}" alt="${participant.giftName}" onerror="this.src='${window.location.origin}/app-assets/neutral-logo.jpg'">
+                                <span class="apuestas-name">${participant.name}</span>
+                            </div>
+                            <div class="apuestas-votes-box">
+                                <span class="apuestas-votes-count">${votes}</span>
+                                <div class="apuestas-percent">${percentDisplay}</div>
+                            </div>
+                        </div>
+                        <div class="apuestas-bar-bg">
+                            <div class="apuestas-bar-fill" style="transform: scaleX(${totalVotes > 0 ? (percent / 100) : 0});"></div>
+                        </div>
+                        <div class="apuestas-instruction">Envía <strong>${participant.giftName}</strong> para votar</div>
+                        <div class="apuestas-voters-list">
+                            ${votersHtml || '<span style="color:#94a3b8; font-size:9px; text-align:center; width:100%;">Esperando votos...</span>'}
+                        </div>
+                    `;
+                    
+                    goalsList.appendChild(card);
+                }
+            }
+        }
+
+        const isIframe = window.self !== window.top;
+
+        // Websocket Event Listeners
+        socket.on('initDinamicas', (data) => {
+            console.log('Received initDinamicas:', data);
+            goalsData = data || [];
+            renderGoals();
+        });
+
+        socket.on('chatbot_settings_updated', (config) => {
+            console.log('Received chatbot_settings_updated:', config);
+            activeConfig = config;
+            if (config && config.goals) {
+                goalsData = config.goals || [];
+            }
+            renderGoals();
+            if (config && config.widgets && config.widgets.dinamicas) {
+                applyWidgetState(config.widgets.dinamicas);
+            }
+        });
+
+        socket.on('apuestas_updated', (data) => {
+            console.log('Received apuestas_updated:', data);
+            if (activeConfig) {
+                activeConfig.apuestas = data;
+                renderGoals();
+            }
+        });
+
+        socket.on('widget_position_changed', (data) => {
+            if (data && data.widget === 'dinamicas') {
+                if (!isIframe) {
+                    const container = document.getElementById('goals-list');
+                    if (container) {
+                        container.style.position = 'absolute';
+                        container.style.left = data.x + '%';
+                        container.style.top  = data.y + '%';
+                        if (data.width !== undefined) container.style.width = data.width + '%';
+                        if (data.height !== undefined) container.style.height = data.height + '%';
+                    }
+                }
+            }
+        });
+
+        socket.on('widget_status_changed', (data) => {
+            if (data && data.widget === 'dinamicas') {
+                document.body.style.display = data.active ? '' : 'none';
+            }
+        });
+
+        function applyWidgetState(cfg) {
+            if (!cfg) return;
+            if (isIframe) {
+                document.body.style.display = cfg.active ? '' : 'none';
+            } else {
+                const container = document.getElementById('goals-list');
+                if (!container) return;
+                container.style.position = 'absolute';
+                container.style.left = cfg.x + '%';
+                container.style.top  = cfg.y + '%';
+                if (cfg.width) container.style.width = cfg.width + '%';
+                if (cfg.height) container.style.height = cfg.height + '%';
+                document.body.style.display = 'block';
+                document.body.style.position = 'relative';
+                document.body.style.display = cfg.active ? '' : 'none';
+            }
+        }
+
+        socket.on('goals_updated', (goals) => {
+            console.log('Received goals_updated:', goals);
+            goalsData = goals || [];
+            renderGoals();
+        });
+    </script>
+</body>
+</html>

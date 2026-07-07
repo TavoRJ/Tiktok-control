@@ -9,6 +9,19 @@
     <link rel="stylesheet" href="css/music-widget.css">
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        if (window.self !== window.top) {
+            document.documentElement.classList.add('is-iframe');
+        }
+    </script>
+    <style>
+        html.is-iframe body {
+            width: 100% !important;
+            height: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+    </style>
 </head>
 <body>
     <div class="widget-wrapper">

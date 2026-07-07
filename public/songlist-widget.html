@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GRLive - Song Queue Overlay</title>
+    <!-- Google Fonts: Outfit and Playfair Display -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Playfair+Display:ital,wght@1,600&display=swap" rel="stylesheet">
+    <script>
+        if (window.self !== window.top) {
+            document.documentElement.classList.add('is-iframe');
+        }
+    </script>
+    <style>
+        :root {
+            --coquette-pink-light: #fff0f3;
+            --coquette-pink-mid: #ffccd5;
+            --coquette-pink-accent: #ff85a1;
+            --coquette-pink-dark: #ff477e;
+            --coquette-text: #800e26;
+            --coquette-brown: #4a2c2a;
+            --coquette-rose-viejo: #b76e79;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: transparent !important;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            width: 320px; /* Ancho típico para la barra de widget */
+            height: auto;
+            position: absolute;
+            left: 0;
+            top: 0;
+        }
+
+        html.is-iframe body {
+            width: 100% !important;
+            height: 100% !important;
+            padding: 10px !important;
+            margin: 0 !important;
+            position: relative !important;
+        }
+
+        .songlist-container {
+            width: 100%;
+            background: linear-gradient(135deg, rgba(255, 240, 243, 0.95), rgba(255, 227, 232, 0.9));
+            border: 3px double var(--coquette-pink-accent);
+            border-radius: 20px;
+            box-shadow: 0 8px 24px rgba(255, 133, 161, 0.15), inset 0 0 10px rgba(255, 255, 255, 0.6);
+            padding: 15px;
+            backdrop-filter: blur(8px);
+            position: relative;
+        }
+
+        /* Ribbon Bow Decoration */
+        .songlist-header {
+            text-align: center;
+            margin-bottom: 12px;
+            border-bottom: 2px dashed var(--coquette-pink-mid);
+            padding-bottom: 8px;
+            position: relative;
+        }
+
+        .songlist-title {
+            color: var(--coquette-text);
+            font-size: 15px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .songlist-title em {
+            font-family: 'Playfair Display', serif;
+            font-style: italic;
+            color: var(--coquette-rose-viejo);
+            text-transform: lowercase;
+            font-size: 16px;
+        }
+
+        .song-list-items {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .song-item {
+            display: flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.65);
+            border: 1.5px solid rgba(255, 204, 213, 0.5);
+            border-radius: 10px;
+            padding: 6px 10px;
+            gap: 8px;
+            transition: all 0.3s ease;
+            animation: slideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        @keyframes slideIn {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .song-item:hover {
+            background: rgba(255, 255, 255, 0.95);
+            border-color: var(--coquette-pink-accent);
+            transform: scale(1.02);
+        }
+
+        .song-index {
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--coquette-rose-viejo);
+            min-width: 14px;
+            text-align: center;
+        }
+
+        .song-cover {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            object-fit: cover;
+            border: 1px solid var(--coquette-pink-mid);
+        }
+
+        .song-details {
+            flex-grow: 1;
+            min-width: 0;
+        }
+
+        .song-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--coquette-text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .song-artist {
+            font-size: 10px;
+            color: var(--coquette-rose-viejo);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .song-requester {
+            font-size: 9px;
+            background: var(--coquette-pink-light);
+            color: var(--coquette-text);
+            border: 1px solid var(--coquette-pink-mid);
+            border-radius: 12px;
+            padding: 2px 6px;
+            font-weight: 600;
+            max-width: 80px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .empty-state {
+            text-align: center;
+            font-size: 11px;
+            color: var(--coquette-rose-viejo);
+            padding: 20px 10px;
+            line-height: 1.5;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="songlist-container">
+        <div class="songlist-header">
+            <div class="songlist-title">
+                🎀 Próximos <em>pedidos</em> 🎵
+            </div>
+        </div>
+        <div class="song-list-items" id="song-list-items">
+            <div class="empty-state">
+                Cargando cola de reproducción...
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let activeQueue = [];
+
+        function updateQueueUI(queue) {
+            activeQueue = queue || [];
+            const listEl = document.getElementById('song-list-items');
+            if (!listEl) return;
+            listEl.innerHTML = '';
+            
+            const displayQueue = activeQueue.slice(0, 5);
+            
+            if (displayQueue.length === 0) {
+                listEl.innerHTML = `
+                    <div class="empty-state">
+                        La cola está vacía.<br>¡Pide tu canción usando <strong>!song</strong>! 🌸
+                    </div>
+                `;
+                return;
+            }
+
+            displayQueue.forEach((item, index) => {
+                const row = document.createElement('div');
+                row.className = 'song-item';
+                row.style.animationDelay = `${index * 0.08}s`;
+                
+                const art = item.albumArt || 'data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2232%22%20height%3D%2232%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%2523ffccd5%22%2F%3E%3C%2Fsvg%3E';
+                const requesterName = item.requester || 'Anonimo';
+                
+                row.innerHTML = `
+                    <span class="song-index">${index + 1}</span>
+                    <img src="${art}" class="song-cover" alt="Cover">
+                    <div class="song-details">
+                        <div class="song-title">${escapeHtml(item.title || 'Sin Título')}</div>
+                        <div class="song-artist">${escapeHtml(item.artist || 'Artista Desconocido')}</div>
+                    </div>
+                    <span class="song-requester">@${escapeHtml(requesterName)}</span>
+                `;
+                listEl.appendChild(row);
+            });
+        }
+
+        socket.on('spotify_queue_updated', (queue) => {
+            updateQueueUI(queue);
+        });
+
+        socket.on('queue_updated', (queue) => {
+            updateQueueUI(queue);
+        });
+
+        const isIframe = window.self !== window.top;
+
+        // Widget coordinate shifts from Scene canvas
+        socket.on('chatbot_settings_updated', (config) => {
+            if (config) {
+                if (config.widgets && config.widgets.songlist) {
+                    applyWidgetState(config.widgets.songlist);
+                }
+                if (config.spotifyQueue) {
+                    updateQueueUI(config.spotifyQueue);
+                }
+            }
+        });
+
+        socket.on('widget_position_changed', (data) => {
+            if (data && data.widget === 'songlist') {
+                if (!isIframe) {
+                    document.body.style.left = data.x + '%';
+                    document.body.style.top  = data.y + '%';
+                    if (data.width !== undefined) document.body.style.width = data.width + '%';
+                    if (data.height !== undefined) document.body.style.height = data.height + '%';
+                }
+            }
+        });
+
+        socket.on('widget_status_changed', (data) => {
+            if (data && data.widget === 'songlist') {
+                document.body.style.display = data.active ? '' : 'none';
+            }
+        });
+
+        function applyWidgetState(cfg) {
+            if (!cfg) return;
+            if (isIframe) {
+                document.body.style.position = 'relative';
+                document.body.style.left = '0';
+                document.body.style.top = '0';
+                document.body.style.width = '100%';
+                document.body.style.height = '100%';
+                document.body.style.margin = '0';
+                document.body.style.display = cfg.active ? '' : 'none';
+            } else {
+                document.body.style.position = 'absolute';
+                document.body.style.left = cfg.x + '%';
+                document.body.style.top  = cfg.y + '%';
+                if (cfg.width) document.body.style.width = cfg.width + '%';
+                if (cfg.height) document.body.style.height = cfg.height + '%';
+                document.body.style.display = cfg.active ? '' : 'none';
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.toString()
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>

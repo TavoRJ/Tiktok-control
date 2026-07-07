@@ -7,7 +7,18 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/music-widget.css">
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        if (window.self !== window.top) {
+            document.documentElement.classList.add('is-iframe');
+        }
+    </script>
     <style>
+        html.is-iframe body {
+            width: 100% !important;
+            height: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
         /* Specific overrides for YouTube theme */
         .vinyl-record {
             animation: spin 10s linear infinite;
@@ -33,6 +44,7 @@
     <div id="yt-player-container">
         <div id="yt-player"></div>
     </div>
+    <audio id="local-audio" style="display: none;"></audio>
 
     <div class="widget-wrapper color-youtube" id="youtube-widget-wrapper">
         <!-- Letrero de Neón -->
@@ -98,6 +110,7 @@
         const albumArt = document.getElementById('album-art');
         const songRequester = document.getElementById('song-requester');
         const progressFill = document.getElementById('progress-fill');
+        const saavnAudio = document.getElementById('local-audio');
 
         // Dynamically load YouTube IFrame Player API
         const tag = document.createElement('script');
@@ -127,10 +140,17 @@
             });
         }
 
+        let pendingTrackToPlay = null;
+
         function onPlayerReady(event) {
             isPlayerReady = true;
             player.setVolume(activeVolume);
             console.log('YouTube Player IFrame API Listo');
+
+            if (pendingTrackToPlay) {
+                processYoutubeTrack(pendingTrackToPlay);
+                pendingTrackToPlay = null;
+            }
 
             // Setup sync progress check loop
             setInterval(() => {
@@ -149,6 +169,12 @@
                     if (progressFill && durationMs) {
                         progressFill.style.width = `${(progressMs / durationMs) * 100}%`;
                     }
+
+                    // Safety skip: if video is at the very end but ENDED didn't fire
+                    if (durationMs > 0 && progressMs >= durationMs - 1000) {
+                        console.log('Safety skip: Video reached the end. Skip.');
+                        socket.emit('youtube_player_ended');
+                    }
                 }
             }, 500);
         }
@@ -162,61 +188,135 @@
 
         function onPlayerError(event) {
             console.error('Error de reproducción en YouTube:', event.data);
+            let errMsg = 'Error desconocido en YouTube.';
+            if (event.data === 2) errMsg = 'ID de video no válido.';
+            if (event.data === 5) errMsg = 'El video no se puede reproducir en el reproductor HTML5.';
+            if (event.data === 100) errMsg = 'Video no encontrado o privado.';
+            if (event.data === 101 || event.data === 150) {
+                errMsg = 'El propietario del video no permite reproducirlo fuera de YouTube (Restricción de inserción).';
+            }
+            socket.emit('youtube_player_error', { id: currentTrack ? currentTrack.id : '', message: errMsg });
             socket.emit('youtube_player_ended'); // Skip to next to prevent getting stuck
+        }
+
+        function syncVinylDesign() {
+            if (!vinyl) return;
+            const wrapper = document.getElementById('youtube-widget-wrapper');
+            const isFullArt = wrapper && wrapper.classList.contains('design-full-art');
+            if (isFullArt) {
+                const artUrl = currentTrack && currentTrack.albumArt ? currentTrack.albumArt : 'data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231a1a1a%22%2F%3E%3Ccircle%20cx%3D%22100%22%20cy%3D%22100%22%20r%3D%2230%22%20fill%3D%22%23ff0000%22%2F%3E%3Cpolygon%20points%3D%2295%2C90%2095%2C110%20112%2C100%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E';
+                vinyl.style.backgroundImage = `url('${artUrl}')`;
+            } else {
+                vinyl.style.backgroundImage = '';
+            }
         }
 
         function setVisualState(playing) {
             if (playing) {
-                if (tonearm) tonearm.style.transform = 'rotate(28deg)';
-                if (vinyl) vinyl.style.animationPlayState = 'running';
+                if (tonearm) tonearm.classList.add('active');
+                if (vinyl) vinyl.classList.add('spinning');
             } else {
-                if (tonearm) tonearm.style.transform = 'rotate(0deg)';
-                if (vinyl) vinyl.style.animationPlayState = 'paused';
+                if (tonearm) tonearm.classList.remove('active');
+                if (vinyl) vinyl.classList.remove('spinning');
             }
         }
 
-        // Sync settings / Theme colors
+        const isIframe = window.self !== window.top;
+
+        // Handle settings & goals sockets
         socket.on('chatbot_settings_updated', (config) => {
             if (config) {
                 activeVolume = config.youtubeVolume !== undefined ? config.youtubeVolume : 80;
                 if (isPlayerReady && player) {
                     player.setVolume(activeVolume);
                 }
+                if (saavnAudio) {
+                    saavnAudio.volume = activeVolume / 100;
+                }
                 
-                // Theme management: defaults to YouTube red, but can adapt dynamically
                 const wrapper = document.getElementById('youtube-widget-wrapper');
                 if (wrapper) {
-                    if (config.themeName === 'naya') {
-                        document.body.className = 'color-pink';
-                        wrapper.className = 'widget-wrapper color-pink';
-                    } else if (config.themeName === 'majo') {
-                        document.body.className = 'color-purple';
-                        wrapper.className = 'widget-wrapper color-purple';
-                    } else {
-                        document.body.className = 'color-youtube';
-                        wrapper.className = 'widget-wrapper color-youtube';
-                    }
+                    wrapper.className = 'widget-wrapper';
+                    
+                    const theme = config.youtubeTheme || 'apple-music';
+                    const color = config.youtubeNeonColor || 'red';
+                    const design = config.youtubeVinylDesign || 'classic';
+                    const speed = config.youtubeVinylSpeed || 'normal';
+                    
+                    wrapper.classList.add(`theme-${theme}`);
+                    wrapper.classList.add(`color-${color}`);
+                    wrapper.classList.add(`design-${design}`);
+                    wrapper.classList.add(`speed-${speed}`);
                     
                     // Add horizontal layout if requested via URL param
                     const urlParams = new URLSearchParams(window.location.search);
                     if (urlParams.get('layout') === 'horizontal' || urlParams.get('horizontal') === 'true') {
                         wrapper.classList.add('layout-horizontal');
                     }
+
+                    // Update glowing neon text dynamically based on the streamer theme profile
+                    const glowingText = wrapper.querySelector('.glowing-text');
+                    if (glowingText) {
+                        if (config.themeName === 'majo') {
+                            glowingText.textContent = 'YouTube de Majo';
+                        } else if (config.themeName === 'naya') {
+                            glowingText.textContent = 'YouTube de Naya';
+                        } else {
+                            glowingText.textContent = 'YouTube Radio';
+                        }
+                    }
+
+                    // Apply dynamic coordinates/visibility from the scene layout control
+                    if (config.widgets && config.widgets.youtube) {
+                        const yt = config.widgets.youtube;
+                        if (isIframe) {
+                            wrapper.style.display = yt.active ? 'flex' : 'none';
+                        } else {
+                            wrapper.style.position = 'absolute';
+                            wrapper.style.left = `${yt.x}%`;
+                            wrapper.style.top = `${yt.y}%`;
+                            wrapper.style.margin = '0';
+                            wrapper.style.display = yt.active ? 'flex' : 'none';
+                        }
+                    }
                 }
+                
+                syncVinylDesign();
             }
         });
 
-        // Listen for YouTube tracks from the queue
-        socket.on('youtube_track', (track) => {
-            if (!isPlayerReady || !player) return;
+        // Real-time position control from the scene designer
+        socket.on('widget_position_changed', (data) => {
+            if (!data || data.widget !== 'youtube') return;
+            if (isIframe) return;
+            const wrapper = document.getElementById('youtube-widget-wrapper');
+            if (wrapper) {
+                wrapper.style.position = 'absolute';
+                wrapper.style.left     = data.x + '%';
+                wrapper.style.top      = data.y + '%';
+                if (data.width !== undefined) wrapper.style.width = data.width + '%';
+                if (data.height !== undefined) wrapper.style.height = data.height + '%';
+                wrapper.style.margin   = '0';
+            }
+        });
 
+        // Real-time visibility control from the scene designer
+        socket.on('widget_status_changed', (data) => {
+            if (!data || data.widget !== 'youtube') return;
+            const wrapper = document.getElementById('youtube-widget-wrapper');
+            if (wrapper) {
+                wrapper.style.display = data.active ? 'flex' : 'none';
+            }
+        });
+
+        function processYoutubeTrack(track) {
             if (track && track.id) {
                 const isNewTrack = !currentTrack || currentTrack.id !== track.id;
                 currentTrack = track;
 
                 // Sync track details
                 if (songTitle) songTitle.textContent = track.title;
-                if (songArtist) songArtist.textContent = track.artist || 'YouTube';
+                if (songArtist) songArtist.textContent = track.artist || (track.source === 'soundcloud' ? 'SoundCloud' : 'YouTube');
                 if (albumArt && track.albumArt) albumArt.src = track.albumArt;
 
                 if (songRequester) {
@@ -228,27 +328,89 @@
                     }
                 }
 
-                if (isNewTrack) {
-                    player.loadVideoById(track.id);
-                }
+                if (track.source === 'soundcloud' || track.source === 'youtube_audio') {
+                    // Stop YouTube player if playing
+                    try {
+                        if (player && player.stopVideo) player.stopVideo();
+                    } catch (e) {}
 
-                if (track.isPlaying) {
-                    player.playVideo();
-                    setVisualState(true);
+                    if (isNewTrack && saavnAudio) {
+                        let audioUrl = track.mediaUrl || '';
+                        if (audioUrl.startsWith('/')) {
+                            audioUrl = window.location.origin + audioUrl;
+                        }
+                        saavnAudio.src = audioUrl;
+                        saavnAudio.volume = activeVolume / 100;
+                    }
+
+                    if (track.isPlaying) {
+                        if (saavnAudio) saavnAudio.play().catch(e => console.error("Error playing audio stream:", e));
+                        setVisualState(true);
+                    } else {
+                        if (saavnAudio) saavnAudio.pause();
+                        setVisualState(false);
+                    }
                 } else {
-                    player.pauseVideo();
-                    setVisualState(false);
+                    // Stop audio stream if playing
+                    if (saavnAudio) {
+                        saavnAudio.pause();
+                        saavnAudio.src = '';
+                    }
+
+                    if (isNewTrack) {
+                        try {
+                            player.loadVideoById(track.id);
+                        } catch (e) {
+                            console.error('Error in loadVideoById:', e);
+                        }
+                    }
+
+                    if (track.isPlaying) {
+                        try {
+                            player.playVideo();
+                        } catch (e) {
+                            console.error('Error in playVideo:', e);
+                        }
+                        setVisualState(true);
+                    } else {
+                        try {
+                            player.pauseVideo();
+                        } catch (e) {
+                            console.error('Error in pauseVideo:', e);
+                        }
+                        setVisualState(false);
+                    }
                 }
+                
+                syncVinylDesign();
             } else {
                 currentTrack = null;
-                player.stopVideo();
+                try {
+                    player.stopVideo();
+                } catch (e) {
+                    console.error('Error in stopVideo:', e);
+                }
+                if (saavnAudio) {
+                    saavnAudio.pause();
+                    saavnAudio.src = '';
+                }
                 if (songTitle) songTitle.textContent = 'Sin música sonando';
                 if (songArtist) songArtist.textContent = 'Esperando peticiones (!yt)';
                 if (albumArt) albumArt.src = 'data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231a1a1a%22%2F%3E%3Ccircle%20cx%3D%22100%22%20cy%3D%22100%22%20r%3D%2230%22%20fill%3D%22%23ff0000%22%2F%3E%3Cpolygon%20points%3D%2295%2C90%2095%2C110%20112%2C100%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E';
                 if (songRequester) songRequester.style.display = 'none';
                 if (progressFill) progressFill.style.width = '0%';
                 setVisualState(false);
+                syncVinylDesign();
             }
+        }
+
+        // Listen for YouTube tracks from the queue
+        socket.on('youtube_track', (track) => {
+            if (!isPlayerReady || !player) {
+                pendingTrackToPlay = track;
+                return;
+            }
+            processYoutubeTrack(track);
         });
 
         socket.on('youtube_volume_updated', (volume) => {
@@ -256,7 +418,51 @@
             if (isPlayerReady && player) {
                 player.setVolume(activeVolume);
             }
+            if (saavnAudio) {
+                saavnAudio.volume = activeVolume / 100;
+            }
         });
+
+        // Sync progress and ended status for audio tracks (JioSaavn / YouTube Audio)
+        if (saavnAudio) {
+            saavnAudio.addEventListener('timeupdate', () => {
+                const isAudioTrack = currentTrack && (currentTrack.source === 'soundcloud' || currentTrack.source === 'youtube_audio');
+                if (isAudioTrack && currentTrack.isPlaying) {
+                    const progressMs = Math.round(saavnAudio.currentTime * 1000);
+                    const durationMs = Math.round(saavnAudio.duration * 1000) || currentTrack.durationMs || 0;
+                    
+                    socket.emit('youtube_player_status', {
+                        progressMs,
+                        durationMs,
+                        isPlaying: !saavnAudio.paused
+                    });
+                    
+                    if (progressFill && durationMs) {
+                        progressFill.style.width = `${(progressMs / durationMs) * 100}%`;
+                    }
+                }
+            });
+            
+            saavnAudio.addEventListener('ended', () => {
+                const isAudioTrack = currentTrack && (currentTrack.source === 'soundcloud' || currentTrack.source === 'youtube_audio');
+                if (isAudioTrack) {
+                    console.log('Audio finalizado. Reportando al servidor...');
+                    socket.emit('youtube_player_ended');
+                }
+            });
+            
+            saavnAudio.addEventListener('error', (e) => {
+                const isAudioTrack = currentTrack && (currentTrack.source === 'soundcloud' || currentTrack.source === 'youtube_audio');
+                if (isAudioTrack) {
+                    console.error('Error cargando stream de audio:', saavnAudio.error);
+                    socket.emit('youtube_player_error', {
+                        id: currentTrack ? currentTrack.id : '',
+                        message: 'Error al cargar o decodificar el flujo de audio directo.'
+                    });
+                    socket.emit('youtube_player_ended'); // saltar/avanzar cola ante error
+                }
+            });
+        }
 
         // Check horizontal layout on load
         const urlParams = new URLSearchParams(window.location.search);

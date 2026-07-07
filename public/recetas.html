@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Receta del Día - Widget</title>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
+    
+    <script>
+        if (window.self !== window.top) {
+            document.documentElement.classList.add('is-iframe');
+        }
+    </script>
+    <style>
+        :root {
+            --coquette-pink-light: #fff0f3;
+            --coquette-pink-mid: #ffccd5;
+            --coquette-pink-accent: #ff0077;
+            --coquette-pink-dark: #ff0077;
+            --coquette-text: #ffffff;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: transparent;
+            color: var(--coquette-text);
+            overflow: hidden;
+            user-select: none;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* Coquette design card */
+        .versus-container {
+            display: flex;
+            flex-direction: column;
+            background: rgba(20, 10, 15, 0.45);
+            border: 2px solid var(--coquette-pink-accent);
+            border-radius: 20px;
+            padding: 18px 25px;
+            box-shadow: none;
+            transition: opacity 0.5s ease, transform 0.5s ease;
+            width: 380px;
+            backdrop-filter: blur(8px);
+        }
+
+        .versus-container.hidden {
+            opacity: 0;
+            transform: translateY(-20px);
+            pointer-events: none;
+        }
+
+        .versus-header {
+            font-family: 'Playfair Display', serif;
+            font-size: 19px;
+            font-weight: 800;
+            font-style: italic;
+            color: var(--coquette-pink-dark);
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+            border-bottom: 2px dashed var(--coquette-pink-mid);
+            padding-bottom: 8px;
+        }
+
+        .versus-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .versus-item {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(255, 240, 243, 0.08);
+            padding: 10px 18px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 0, 119, 0.35);
+            color: var(--coquette-text);
+            font-weight: 600;
+            font-size: 15px;
+            box-shadow: none;
+            text-align: center;
+        }
+
+        html.is-iframe body {
+            width: 100% !important;
+            height: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            display: block !important;
+        }
+
+        html.is-iframe .versus-container {
+            width: 100% !important;
+            height: 100% !important;
+            left: 0 !important;
+            top: 0 !important;
+            position: relative !important;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="versus-container" class="versus-container hidden">
+        <div class="versus-header" id="versus-header">RECETA DEL DÍA</div>
+        <div class="versus-list" id="versus-list">
+            <!-- Populated dynamically -->
+        </div>
+    </div>
+
+    <!-- Socket.io connection -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const container = document.getElementById('versus-container');
+        const header = document.getElementById('versus-header');
+        const list = document.getElementById('versus-list');
+
+        function updateUI(config) {
+            if (!config) return;
+            
+            // Set title
+            header.textContent = config.title || "RECETA DEL DÍA";
+            
+            // Set items
+            list.innerHTML = '';
+            const items = config.items || [];
+            items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'versus-item';
+                div.textContent = item.name;
+                list.appendChild(div);
+            });
+
+            // Visibility
+            if (config.visible !== false) {
+                container.classList.remove('hidden');
+            } else {
+                container.classList.add('hidden');
+            }
+        }
+
+        // Socket listeners
+        socket.on('initReceta', (config) => {
+            updateUI(config);
+        });
+
+        const isIframe = window.self !== window.top;
+
+        // Widget Layout & Position Control
+        socket.on('chatbot_settings_updated', (config) => {
+            if (config && config.widgets && config.widgets.recetas) {
+                applyWidgetState(config.widgets.recetas);
+            }
+        });
+
+        socket.on('widget_position_changed', (data) => {
+            if (data && data.widget === 'recetas') {
+                if (!isIframe) {
+                    const container = document.querySelector('.versus-container');
+                    if (container) {
+                        container.style.position = 'absolute';
+                        container.style.left = data.x + '%';
+                        container.style.top  = data.y + '%';
+                        if (data.width !== undefined) container.style.width = data.width + '%';
+                        if (data.height !== undefined) container.style.height = data.height + '%';
+                    }
+                }
+            }
+        });
+
+        socket.on('widget_status_changed', (data) => {
+            if (data && data.widget === 'recetas') {
+                document.body.style.display = data.active ? '' : 'none';
+            }
+        });
+
+        function applyWidgetState(cfg) {
+            if (!cfg) return;
+            if (isIframe) {
+                document.body.style.display = cfg.active ? '' : 'none';
+            } else {
+                const container = document.querySelector('.versus-container');
+                if (!container) return;
+                container.style.position = 'absolute';
+                container.style.left = cfg.x + '%';
+                container.style.top  = cfg.y + '%';
+                container.style.margin = '0';
+                if (cfg.width) container.style.width = cfg.width + '%';
+                if (cfg.height) container.style.height = cfg.height + '%';
+                document.body.style.display = 'block';
+                document.body.style.position = 'relative';
+                document.body.style.display = cfg.active ? '' : 'none';
+            }
+        }
+
+        // Fallback or manual command listener
+        socket.on('overlay_command', (data) => {
+            if (!data) return;
+            if (data.action === 'vs_show') {
+                container.classList.remove('hidden');
+            } else if (data.action === 'vs_hide') {
+                container.classList.add('hidden');
+            } else if (data.action === 'vs_reset') {
+                header.textContent = "RECETA DEL DÍA: PASTEL DE FRESAS";
+                list.innerHTML = '';
+                const defaultNames = ["Fresas Frescas 10 tazas", "Harina de Trigo 300g", "Azúcar Morena 150g", "Esencia de Vainilla 2 cdas"];
+                defaultNames.forEach(name => {
+                    const div = document.createElement('div');
+                    div.className = 'versus-item';
+                    div.textContent = name;
+                    list.appendChild(div);
+                });
+                container.classList.remove('hidden');
+            } else if (data.action === 'vs_update') {
+                header.textContent = data.title || "RECETA DEL DÍA";
+                list.innerHTML = '';
+                (data.items || []).forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'versus-item';
+                    div.textContent = item.name;
+                    list.appendChild(div);
+                });
+                container.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>

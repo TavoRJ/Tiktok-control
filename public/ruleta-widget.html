@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ruleta de Desafíos</title>
+    <link rel="stylesheet" href="css/overlay.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@900&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body, html {
+            background: transparent;
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        #overlay-wheel-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="overlay-wheel-container" class="hidden">
+        <div class="wheel-box">
+            <h2 id="wheel-title">Ruleta de Desafíos</h2>
+            <div class="wheel-spinner-container">
+                <div class="wheel-pointer"></div>
+                <canvas id="wheel-canvas" width="400" height="400"></canvas>
+            </div>
+            <div id="wheel-winner-banner" class="hidden">
+                <div class="winner-title">¡Desafío seleccionado!</div>
+                <div class="winner-text" id="wheel-winner-text">Cantar</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let chatbotConfig = null;
+        let isWheelSpinning = false;
+
+        function varColor(varName, fallback) {
+            return getComputedStyle(document.body).getPropertyValue(varName).trim() || fallback;
+        }
+
+        function drawWheel(canvas, options, currentAngle) {
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            const center = width / 2;
+            const radius = center - 10;
+            
+            ctx.clearRect(0, 0, width, height);
+
+            if (!options || options.length === 0) return;
+
+            const numSlices = options.length;
+            const sliceAngle = (2 * Math.PI) / numSlices;
+            const colors = ['#d900ff', '#8800cc', '#ff0055', '#c30040', '#00d2ff', '#0088cc', '#ffd700', '#ccaa00'];
+
+            for (let i = 0; i < numSlices; i++) {
+                const startAngle = currentAngle + i * sliceAngle;
+                const endAngle = startAngle + sliceAngle;
+
+                ctx.beginPath();
+                ctx.moveTo(center, center);
+                ctx.arc(center, center, radius, startAngle, endAngle);
+                ctx.closePath();
+                ctx.fillStyle = colors[i % colors.length];
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                ctx.save();
+                ctx.translate(center, center);
+                ctx.rotate(startAngle + sliceAngle / 2);
+                ctx.textAlign = 'right';
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 12px Inter, sans-serif';
+                ctx.shadowColor = 'rgba(0,0,0,0.8)';
+                ctx.shadowBlur = 4;
+                
+                const text = options[i];
+                const maxTextLen = 18;
+                const truncatedText = text.length > maxTextLen ? text.substring(0, maxTextLen) + '...' : text;
+                ctx.fillText(truncatedText, radius - 20, 5);
+                ctx.restore();
+            }
+
+            ctx.beginPath();
+            ctx.arc(center, center, 20, 0, 2 * Math.PI);
+            ctx.fillStyle = '#ffffff';
+            ctx.shadowColor = 'rgba(0,0,0,0.5)';
+            ctx.shadowBlur = 8;
+            ctx.fill();
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = varColor('--accent-color', '#d900ff');
+            ctx.stroke();
+        }
+
+        function spinWheel(canvas, options, winningIndex, onComplete) {
+            if (isWheelSpinning) return;
+            isWheelSpinning = true;
+
+            const numSlices = options.length;
+            const sliceAngle = (2 * Math.PI) / numSlices;
+            const duration = 6000;
+            const start = Date.now();
+            const baseAngle = 0; 
+            const targetSliceAngle = (winningIndex * sliceAngle) + (sliceAngle / 2);
+            const extraRotations = 6 * 2 * Math.PI;
+            const finalAngle = extraRotations + (2.5 * Math.PI - targetSliceAngle);
+
+            function animate() {
+                const elapsed = Date.now() - start;
+                const t = Math.min(1, elapsed / duration);
+                const ease = 1 - Math.pow(1 - t, 4);
+                const currentAngle = baseAngle + ease * (finalAngle - baseAngle);
+
+                drawWheel(canvas, options, currentAngle);
+
+                if (t < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    isWheelSpinning = false;
+                    if (onComplete) onComplete();
+                }
+            }
+
+            animate();
+        }
+
+        socket.on('chatbot_settings_updated', (config) => {
+            chatbotConfig = config;
+            
+            // Set theme variables
+            const theme = config.themeName || 'neutral';
+            document.body.className = `theme-${theme}`;
+
+            const wheelTitleEl = document.getElementById('wheel-title');
+            if (wheelTitleEl) {
+                if (theme === 'majo') {
+                    wheelTitleEl.innerText = 'Desafío para Majo 🕸';
+                } else if (theme === 'naya') {
+                    wheelTitleEl.innerText = 'Reto para Naya ✨';
+                } else {
+                    wheelTitleEl.innerText = 'Ruleta de Desafíos';
+                }
+            }
+        });
+
+        socket.on('trigger_wheel', (data) => {
+            const { sender, giftName, winningIndex, optionText } = data;
+            const options = (chatbotConfig && chatbotConfig.wheelOptions) || [];
+            if (options.length === 0) return;
+
+            const modal = document.getElementById('overlay-wheel-container');
+            const winnerBanner = document.getElementById('wheel-winner-banner');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.offsetHeight;
+                modal.classList.add('show');
+            }
+            if (winnerBanner) {
+                winnerBanner.classList.add('hidden');
+            }
+
+            const canvas = document.getElementById('wheel-canvas');
+            if (!canvas) return;
+
+            drawWheel(canvas, options, 0);
+
+            spinWheel(canvas, options, winningIndex, () => {
+                const winnerTextEl = document.getElementById('wheel-winner-text');
+                if (winnerTextEl) {
+                    winnerTextEl.innerText = optionText;
+                }
+                if (winnerBanner) {
+                    winnerBanner.classList.remove('hidden');
+                }
+
+                setTimeout(() => {
+                    if (modal) {
+                        modal.classList.remove('show');
+                        setTimeout(() => {
+                            modal.classList.add('hidden');
+                        }, 500);
+                    }
+                }, 6000);
+            });
+        });
+    </script>
+</body>
+</html>

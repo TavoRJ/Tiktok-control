@@ -17,10 +17,13 @@ const defaultCover = "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%
 
 function getFallbackCover() {
     if (currentSettings && currentSettings.themeName === 'naya') {
-        return 'assets/naya-logo.png';
+        const serverPort = window.location.port || '3000';
+        return `http://127.0.0.1:${serverPort}/streamer-assets/naya-logo.png`;
     }
     return defaultCover;
 }
+
+const isIframe = window.self !== window.top;
 
 // Listen to Spotify settings updates
 socket.on('chatbot_settings_updated', (config) => {
@@ -32,10 +35,10 @@ socket.on('chatbot_settings_updated', (config) => {
         // Clear and rebuild class list
         wrapper.className = 'widget-wrapper';
         
-        const theme = config.spotifyTheme || 'apple-music';
-        const color = config.spotifyNeonColor || 'pink';
+        const theme  = config.spotifyTheme      || 'apple-music';
+        const color  = config.spotifyNeonColor  || 'pink';
         const design = config.spotifyVinylDesign || 'classic';
-        const speed = config.spotifyVinylSpeed || 'normal';
+        const speed  = config.spotifyVinylSpeed  || 'normal';
         
         wrapper.classList.add(`theme-${theme}`);
         wrapper.classList.add(`color-${color}`);
@@ -59,6 +62,22 @@ socket.on('chatbot_settings_updated', (config) => {
                 glowingText.textContent = 'Música en Vivo';
             }
         }
+
+        // Apply dynamic coordinates/visibility from the scene layout control
+        if (config.widgets && config.widgets.spotify) {
+            const spot = config.widgets.spotify;
+            if (isIframe) {
+                wrapper.style.display = spot.active ? 'flex' : 'none';
+            } else {
+                wrapper.style.position = 'absolute';
+                wrapper.style.left     = `${spot.x}%`;
+                wrapper.style.top      = `${spot.y}%`;
+                if (spot.width) wrapper.style.width = `${spot.width}%`;
+                if (spot.height) wrapper.style.height = `${spot.height}%`;
+                wrapper.style.margin   = '0';
+                wrapper.style.display  = spot.active ? 'flex' : 'none';
+            }
+        }
     }
     
     // Sync vinyl surface (e.g. Picture Disc)
@@ -67,6 +86,30 @@ socket.on('chatbot_settings_updated', (config) => {
     // If offline, update the default cover to match the active theme fallback
     if (!currentTrack || !currentTrack.title) {
         albumArt.src = getFallbackCover();
+    }
+});
+
+// Real-time position control from the scene designer
+socket.on('widget_position_changed', (data) => {
+    if (!data || data.widget !== 'spotify') return;
+    if (isIframe) return;
+    const wrapper = document.querySelector('.widget-wrapper');
+    if (wrapper) {
+        wrapper.style.position = 'absolute';
+        wrapper.style.left     = data.x + '%';
+        wrapper.style.top      = data.y + '%';
+        if (data.width !== undefined) wrapper.style.width = data.width + '%';
+        if (data.height !== undefined) wrapper.style.height = data.height + '%';
+        wrapper.style.margin   = '0';
+    }
+});
+
+// Real-time visibility control from the scene designer
+socket.on('widget_status_changed', (data) => {
+    if (!data || data.widget !== 'spotify') return;
+    const wrapper = document.querySelector('.widget-wrapper');
+    if (wrapper) {
+        wrapper.style.display = data.active ? 'flex' : 'none';
     }
 });
 

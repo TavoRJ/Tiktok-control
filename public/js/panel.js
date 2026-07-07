@@ -1,3 +1,8 @@
+import { SocketClient } from './modules/socket-client.js';
+import { UIManager } from './modules/ui-manager.js';
+import { ThemesManager } from './modules/themes.js';
+import { CanvasEditorManager } from './modules/canvas-editor.js';
+
 // Close Spotify auth popup if loaded inside one
 if (window.opener && window.location.search.includes('spotify=')) {
     const params = new URLSearchParams(window.location.search);
@@ -91,8 +96,9 @@ window.confirm = function(msg) {
     return result;
 };
 
-const socket = io();
+const socket = SocketClient.init();
 let latestRemoteConfig = {};
+let canvasEditor = null;
 
 // DOM Elements
 const statusText = document.getElementById('connection-status');
@@ -105,7 +111,7 @@ const filterGiftsCheckbox = document.getElementById('filter-gifts');
 function updateFloatingSaveButtonVisibility(targetId) {
     const floatingSaveBtn = document.getElementById('floating-save-btn');
     if (!floatingSaveBtn) return;
-    const configViews = ['music-view', 'youtube-view', 'multimedia-view', 'chatbot-view', 'setup-view'];
+    const configViews = ['music-view', 'youtube-view', 'chatbot-view', 'setup-view', 'dynamics-view', 'ai-view'];
     if (configViews.includes(targetId)) {
         floatingSaveBtn.classList.add('visible');
     } else {
@@ -113,44 +119,129 @@ function updateFloatingSaveButtonVisibility(targetId) {
     }
 }
 
+let isDeveloperAuthenticated = false;
+let pendingNavigationTarget = null;
+
+function switchToTab(item, targetId) {
+    // Remove active class from all
+    document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v => v.style.display = 'none');
+
+    // Add active to current
+    item.classList.add('active');
+    if (targetId) {
+        const targetEl = document.getElementById(targetId);
+        if (targetEl) targetEl.style.display = 'block';
+    }
+
+    // Update header title dynamically
+    const title = item.getAttribute('title') || 'Dashboard';
+    const headerTitleEl = document.getElementById('header-view-title');
+    if (headerTitleEl) headerTitleEl.textContent = title;
+
+    // Update floating save button
+    updateFloatingSaveButtonVisibility(targetId);
+
+    // Show/Hide controls footer (only in Overlays view)
+    const footer = document.querySelector('.controls-footer');
+    if (footer) {
+        footer.style.display = (targetId === 'overlays-view') ? 'flex' : 'none';
+    }
+}
+
 document.querySelectorAll('.menu-item').forEach(item => {
     item.addEventListener('click', (e) => {
         e.preventDefault();
-
-        // Remove active class from all
-        document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
-        document.querySelectorAll('.view').forEach(v => v.style.display = 'none');
-
-        // Add active to current
-        item.classList.add('active');
         const targetId = item.getAttribute('data-target');
-        if (targetId) {
-            document.getElementById(targetId).style.display = 'block';
-        }
 
-        // Update floating save button
-        updateFloatingSaveButtonVisibility(targetId);
+        // Access check removed for AI View (Requested by User)
 
-        // Show/Hide controls footer (only in Overlays view)
-        const footer = document.querySelector('.controls-footer');
-        if (footer) {
-            footer.style.display = (targetId === 'overlays-view') ? 'flex' : 'none';
-        }
+        switchToTab(item, targetId);
     });
 });
 
 // Initialize footer state on load
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize theme switching module
+    ThemesManager.init();
+
+    // Initialize unified OBS designer canvas editor
+    canvasEditor = new CanvasEditorManager(SocketClient);
+
     const activeItem = document.querySelector('.menu-item.active');
     const footer = document.querySelector('.controls-footer');
     const targetId = activeItem ? activeItem.getAttribute('data-target') : '';
     if (footer) {
         footer.style.display = (targetId === 'overlays-view') ? 'flex' : 'none';
     }
+    // Fetch dynamic version on load
+    fetch('/api/version')
+        .then(res => res.json())
+        .then(data => {
+            const versionLabel = document.getElementById('app-version-label');
+            if (versionLabel) {
+                versionLabel.textContent = `v${data.version}`;
+            }
+        })
+        .catch(err => console.error('Error fetching version:', err));
+
     updateFloatingSaveButtonVisibility(targetId);
+
+    // Listen to theme changed event
+    window.addEventListener('theme:changed', (e) => {
+        const theme = e.detail.theme;
+        if (chatbotConfig) {
+            chatbotConfig.themeName = theme;
+            updateAiUI(chatbotConfig);
+            sendUpdatedSettings();
+        }
+    });
+
+    // Listen to save AI config button click
+    const saveAiConfigBtn = document.getElementById('btn-save-ai-config');
+    if (saveAiConfigBtn) {
+        saveAiConfigBtn.addEventListener('click', () => {
+            sendUpdatedSettings();
+            showToast('¡Configuración de IA guardada con éxito!', 'success');
+        });
+    }
 });
 
 // Socket.io Events
+let latencyInterval = null;
+
+// Initial state if socket connected on load
+if (socket.connected) {
+    const localPillar = document.getElementById('status-pillar-local');
+    if (localPillar) localPillar.className = 'status-pill status--connected';
+}
+
+socket.on('connect', () => {
+    const localPillar = document.getElementById('status-pillar-local');
+    if (localPillar) localPillar.className = 'status-pill status--connected';
+    
+    if (latencyInterval) clearInterval(latencyInterval);
+    latencyInterval = setInterval(() => {
+        const startTime = Date.now();
+        socket.emit('ping_latency', () => {
+            const latency = Date.now() - startTime;
+            const latencyEl = document.getElementById('latency-val');
+            if (latencyEl) latencyEl.textContent = latency + ' ms';
+        });
+    }, 5000);
+});
+
+socket.on('disconnect', () => {
+    const localPillar = document.getElementById('status-pillar-local');
+    if (localPillar) localPillar.className = 'status-pill status--disconnected';
+    const latencyEl = document.getElementById('latency-val');
+    if (latencyEl) latencyEl.textContent = '-- ms';
+    if (latencyInterval) {
+        clearInterval(latencyInterval);
+        latencyInterval = null;
+    }
+});
+
 socket.on('app_version', (version) => {
     const versionLabel = document.getElementById('app-version-label');
     if (versionLabel) {
@@ -183,25 +274,275 @@ socket.on('remote_config_updated', (config) => {
     }
 });
 
+let isTiktokConnected = false;
+
 socket.on('system', (data) => {
-    if (data.type === 'connected') {
-        statusText.textContent = data.message;
-        statusIndicator.classList.remove('error');
-    } else if (data.type === 'error') {
-        statusText.textContent = data.message;
-        statusIndicator.classList.add('error');
-    }
+    // Append to raw log
     appendLog('system', data.message);
+    
+    // Map system event type to toast type
+    let toastType = 'info';
+    if (data.type === 'connected' || data.type === 'success') {
+        toastType = 'success';
+    } else if (data.type === 'error') {
+        toastType = 'error';
+    } else if (data.type === 'warning') {
+        toastType = 'warning';
+    }
+    
+    // Show toast for all system events, except simple connection toggles which already have UI badges
+    const isRedundantConnectionMsg = data.message.startsWith('Conectado a @') || 
+                                     data.message === 'DESCONECTADO' || 
+                                     data.message.startsWith('Desconectando y cambiando a @');
+                                     
+    if (!isRedundantConnectionMsg && data.message) {
+        showToast(data.message, toastType);
+    }
+});
+
+// Metrics Tracking & Uptime Counter
+let connectionStartTime = null;
+let uptimeInterval = null;
+let accumulatedDiamonds = 0;
+
+function formatUptime(ms) {
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+    const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+    const seconds = String(totalSeconds % 60).padStart(2, '0');
+    return `${hours}:${minutes}:${seconds}`;
+}
+
+function startUptimeCounter() {
+    if (uptimeInterval) clearInterval(uptimeInterval);
+    connectionStartTime = Date.now();
+    const uptimeEl = document.getElementById('metrics-uptime-timestamp');
+    if (uptimeEl) uptimeEl.textContent = '00:00:00';
+    const sessionUptimeEl = document.getElementById('session-uptime');
+    if (sessionUptimeEl) sessionUptimeEl.textContent = 'Started 00:00:00 ago';
+    
+    uptimeInterval = setInterval(() => {
+        if (connectionStartTime) {
+            const elapsed = Date.now() - connectionStartTime;
+            const timeStr = formatUptime(elapsed);
+            if (uptimeEl) uptimeEl.textContent = timeStr;
+            if (sessionUptimeEl) sessionUptimeEl.textContent = `Started ${timeStr} ago`;
+        }
+    }, 1000);
+}
+
+function stopUptimeCounter() {
+    if (uptimeInterval) {
+        clearInterval(uptimeInterval);
+        uptimeInterval = null;
+    }
+    const uptimeEl = document.getElementById('metrics-uptime-timestamp');
+    if (uptimeEl) uptimeEl.textContent = '00:00:00';
+    const sessionUptimeEl = document.getElementById('session-uptime');
+    if (sessionUptimeEl) sessionUptimeEl.textContent = 'Not connected';
+}
+
+let connectionLockTimeout = null;
+
+function setConnectingState(isConnecting) {
+    const tiktokToggleBtn = document.getElementById('tiktok-toggle-btn');
+    if (!tiktokToggleBtn) return;
+    
+    if (isConnecting) {
+        tiktokToggleBtn.disabled = true;
+        tiktokToggleBtn.textContent = 'Conectando...';
+        tiktokToggleBtn.style.opacity = '0.7';
+        tiktokToggleBtn.style.cursor = 'not-allowed';
+        
+        if (connectionLockTimeout) {
+            clearTimeout(connectionLockTimeout);
+        }
+        
+        // Timeout de seguridad: re-habilitar tras 8 segundos por si falla la red silenciosamente
+        connectionLockTimeout = setTimeout(() => {
+            setConnectingState(false);
+        }, 8000);
+    } else {
+        tiktokToggleBtn.disabled = false;
+        tiktokToggleBtn.textContent = 'Conectar';
+        tiktokToggleBtn.style.opacity = '';
+        tiktokToggleBtn.style.cursor = '';
+        if (connectionLockTimeout) {
+            clearTimeout(connectionLockTimeout);
+            connectionLockTimeout = null;
+        }
+    }
+}
+
+function updateConnectionStateUI(connected, username = '', avatarUrl = '') {
+    setConnectingState(false);
+    const statusText = document.getElementById('connection-status');
+    const subBadge = document.getElementById('connection-sub-badge');
+    const sessionUsernameEl = document.getElementById('session-username');
+    const headerUsernameEl = document.getElementById('header-username-display');
+    const headerStatusBadge = document.getElementById('header-status-badge');
+    const sessionUptimeEl = document.getElementById('session-uptime');
+    const healthCard = document.querySelector('.dashboard-health-card');
+    
+    // Status pillars elements (v1.3.7)
+    const tiktokPillar = document.getElementById('status-pillar-tiktok');
+    const tiktokUserVal = document.getElementById('tiktok-user-val');
+
+    // Creator avatar elements inside pulsar
+    const creatorImg = document.getElementById('creator-avatar-img');
+    const creatorFallback = document.getElementById('creator-avatar-fallback');
+    
+    if (connected) {
+        isTiktokConnected = true;
+        
+        if (statusText) statusText.textContent = 'Optimal';
+        if (subBadge) subBadge.textContent = 'All systems nominal';
+        if (sessionUsernameEl) sessionUsernameEl.textContent = '@' + username;
+        if (headerUsernameEl) headerUsernameEl.textContent = '@' + username;
+        if (headerStatusBadge) headerStatusBadge.style.display = 'flex';
+        
+        if (tiktokPillar) {
+            tiktokPillar.className = 'status-pill status--connected';
+        }
+        if (tiktokUserVal) {
+            tiktokUserVal.textContent = '@' + username;
+        }
+        
+        if (healthCard) {
+            healthCard.classList.add('is-connected');
+            healthCard.classList.remove('is-disconnected');
+        }
+
+        // Set input value if different and not currently editing
+        const input = document.getElementById('username-input');
+        if (input && !input.matches(':focus') && !input.value) {
+            input.value = '@' + username;
+        }
+
+        // Handle creator avatar display inside pulsar
+        if (avatarUrl && avatarUrl.trim().length > 0) {
+            if (creatorImg) {
+                creatorImg.src = avatarUrl;
+                creatorImg.style.display = 'block';
+            }
+            if (creatorFallback) {
+                creatorFallback.style.display = 'none';
+            }
+        } else {
+            if (creatorImg) {
+                creatorImg.style.display = 'none';
+                creatorImg.removeAttribute('src');
+            }
+            if (creatorFallback) {
+                creatorFallback.style.display = 'flex';
+                creatorFallback.textContent = username ? username.substring(0, 2).toUpperCase() : 'LIVE';
+            }
+        }
+    } else {
+        isTiktokConnected = false;
+        
+        if (statusText) statusText.textContent = 'Offline';
+        if (subBadge) subBadge.textContent = 'Connection offline';
+        if (sessionUsernameEl) sessionUsernameEl.textContent = '@offline';
+        if (headerStatusBadge) headerStatusBadge.style.display = 'none';
+        if (sessionUptimeEl) sessionUptimeEl.textContent = 'Not connected';
+        
+        if (tiktokPillar) {
+            tiktokPillar.className = 'status-pill status--disconnected';
+        }
+        if (tiktokUserVal) {
+            tiktokUserVal.textContent = 'DESCONECTADO';
+        }
+        
+        if (healthCard) {
+            healthCard.classList.add('is-disconnected');
+            healthCard.classList.remove('is-connected');
+        }
+
+        // Reset creator avatar inside pulsar
+        if (creatorImg) {
+            creatorImg.style.display = 'none';
+            creatorImg.removeAttribute('src');
+        }
+        if (creatorFallback) {
+            creatorFallback.style.display = 'none';
+        }
+    }
+}
+
+socket.on('tiktok_connected', (data) => {
+    updateConnectionStateUI(true, data.username, data.avatarUrl);
+    
+    startUptimeCounter();
+});
+
+socket.on('tiktok_disconnected', () => {
+    updateConnectionStateUI(false);
+
+    stopUptimeCounter();
+    accumulatedDiamonds = 0;
+    const diamondsEl = document.getElementById('metrics-diamonds-count');
+    if (diamondsEl) diamondsEl.textContent = '0';
+    const viewersEl = document.getElementById('metrics-viewers-count');
+    if (viewersEl) viewersEl.textContent = '0';
+    const likesEl = document.getElementById('metrics-likes-count');
+    if (likesEl) likesEl.textContent = '0';
+});
+
+socket.on('session_stats_updated', (data) => {
+    const viewersEl = document.getElementById('metrics-viewers-count');
+    const likesEl = document.getElementById('metrics-likes-count');
+    const diamondsEl = document.getElementById('metrics-diamonds-count');
+    
+    if (viewersEl && data.viewers !== undefined) viewersEl.textContent = data.viewers;
+    if (likesEl && data.likes !== undefined) likesEl.textContent = data.likes;
+    if (diamondsEl && data.diamonds !== undefined) {
+        diamondsEl.textContent = data.diamonds;
+        accumulatedDiamonds = data.diamonds;
+    }
 });
 
 // Raw Events for Scanner
 socket.on('tiktok_event_raw', (payload) => {
     const { eventType, data } = payload;
 
+    // Update live metrics on dashboard
+    if (eventType === 'roomUserSeq' || eventType === 'roomUser') {
+        const viewersEl = document.getElementById('metrics-viewers-count');
+        if (viewersEl && data) {
+            if (typeof data.totalUser !== 'undefined') {
+                viewersEl.textContent = data.totalUser;
+            } else if (typeof data.viewerCount !== 'undefined') {
+                const currentVal = parseInt(viewersEl.textContent) || 0;
+                if (data.viewerCount > currentVal) {
+                    viewersEl.textContent = data.viewerCount;
+                }
+            }
+        }
+    } else if (eventType === 'like') {
+        const likesEl = document.getElementById('metrics-likes-count');
+        if (likesEl && data) {
+            if (typeof data.totalLikeCount !== 'undefined') {
+                likesEl.textContent = data.totalLikeCount;
+            } else if (data.likeCount) {
+                const currentLikes = parseInt(likesEl.textContent) || 0;
+                likesEl.textContent = currentLikes + data.likeCount;
+            }
+        }
+    } else if (eventType === 'gift') {
+        const diamondsEl = document.getElementById('metrics-diamonds-count');
+        if (diamondsEl && data) {
+            const count = data.repeatCount || 1;
+            const diamonds = data.diamondCount || 0;
+            accumulatedDiamonds += diamonds * count;
+            diamondsEl.textContent = accumulatedDiamonds;
+        }
+    }
+
     // Filtering logic
     if (filterGiftsCheckbox.checked) {
         // Incluimos envelope y social ya que los guantes y cofres suelen llegar por ahí
-        if (!['gift', 'linkMicBattle', 'linkMicArmies', 'envelope', 'social'].includes(eventType)) {
+        if (!['gift', 'linkMicBattle', 'linkMicArmies', 'envelope', 'social', 'ai_response'].includes(eventType)) {
             return;
         }
     }
@@ -215,6 +556,8 @@ socket.on('tiktok_event_raw', (payload) => {
     } else if (eventType === 'chat') {
         cssClass = 'chat';
         logMessage = `[CHAT] ${data.nickname}: ${data.comment}`;
+        // Speak comment in Panel if enabled
+        processAndSpeak(data);
     } else if (eventType === 'linkMicBattle') {
         cssClass = 'battle';
         logMessage = `[BATALLA] Status actualizado (Battle Event)`;
@@ -224,6 +567,9 @@ socket.on('tiktok_event_raw', (payload) => {
     } else if (eventType === 'social') {
         cssClass = 'system';
         logMessage = `[SOCIAL] Acción: ${data.label || 'Interacción'} por ${data.nickname}`;
+    } else if (eventType === 'ai_response') {
+        cssClass = 'system';
+        logMessage = `<span style="color: #ffeb3b; font-weight: bold; background: rgba(255,235,59,0.1); padding: 3px 6px; border-radius: 4px;">[IA RESPONSE] ${data.nickname}: ${data.comment}</span>`;
     } else {
         logMessage = `[${eventType.toUpperCase()}] ${JSON.stringify(data)}`;
     }
@@ -269,35 +615,64 @@ document.getElementById('btn-stop-back').addEventListener('click', () => {
 });
 
 // User connection
-document.getElementById('btn-connect').addEventListener('click', () => {
-    const input = document.getElementById('username-input');
-    const username = input.value.trim().replace('@', '');
-    if (username) {
-        socket.emit('change_user', { username });
-    }
-});
+const tiktokToggleBtn = document.getElementById('tiktok-toggle-btn');
+if (tiktokToggleBtn) {
+    tiktokToggleBtn.addEventListener('click', () => {
+        const input = document.getElementById('username-input');
+        const username = input.value.trim().replace('@', '');
+        if (username) {
+            setConnectingState(true);
+            socket.emit('change_user', { username });
+        }
+    });
+}
 
-document.getElementById('btn-disconnect').addEventListener('click', () => {
-    socket.emit('disconnect_tiktok');
-});
+const btnDisconnectSession = document.getElementById('btn-disconnect-session');
+if (btnDisconnectSession) {
+    btnDisconnectSession.addEventListener('click', () => {
+        socket.emit('disconnect_tiktok');
+    });
+}
+
+const btnRestartEngine = document.getElementById('btn-restart-engine');
+if (btnRestartEngine) {
+    btnRestartEngine.addEventListener('click', () => {
+        socket.emit('disconnect_tiktok');
+        setConnectingState(true);
+        setTimeout(() => {
+            const input = document.getElementById('username-input');
+            let username = input ? input.value.trim().replace('@', '') : '';
+            if (!username && chatbotConfig && chatbotConfig.tiktokUsername) {
+                username = chatbotConfig.tiktokUsername;
+            }
+            if (username) {
+                socket.emit('change_user', { username });
+            } else {
+                setConnectingState(false);
+                showToast('No hay un usuario de TikTok configurado para conectar.', 'error');
+            }
+        }, 1000);
+    });
+}
 
 // Sidebar Toggle
 document.getElementById('btn-toggle-sidebar').addEventListener('click', () => {
     document.querySelector('.sidebar').classList.toggle('collapsed');
 });
 
-// Versus Table Controls
-document.getElementById('btn-vs-show').addEventListener('click', () => {
-    socket.emit('manual_control', { action: 'vs_show' });
+// Versus / Receta Table Controls
+window.addEventListener('ui:recipeAction', (e) => {
+    socket.emit('manual_control', { action: e.detail.action });
 });
 
-document.getElementById('btn-vs-hide').addEventListener('click', () => {
-    socket.emit('manual_control', { action: 'vs_hide' });
+window.addEventListener('ui:recipeUpdate', (e) => {
+    socket.emit('manual_control', {
+        action: 'vs_update',
+        title: e.detail.title,
+        items: e.detail.items
+    });
 });
 
-document.getElementById('btn-vs-reset').addEventListener('click', () => {
-    socket.emit('manual_control', { action: 'vs_reset' });
-});
 
 // Card clicks (Manual trigger for testing)
 document.querySelectorAll('.card').forEach(card => {
@@ -320,6 +695,7 @@ lucide.createIcons();
 // CHATBOT TTS LOGIC
 // ==========================================
 let chatbotConfig = null;
+let giftsMapping = {};
 let systemVoices = [];
 
 // Populate voice dropdowns
@@ -361,6 +737,25 @@ function populateVoices() {
         cloudGroup.appendChild(opt);
     });
     ruleVoiceSelect.appendChild(cloudGroup);
+    
+    // Set Gemini voices in rule selection
+    const geminiVoiceOptions = [
+        { name: 'Aoede', label: 'Aoede (Gemini - Femenino - Suave)' },
+        { name: 'Charon', label: 'Charon (Gemini - Masculino - Maduro)' },
+        { name: 'Fenrir', label: 'Fenrir (Gemini - Masculino - Grueso)' },
+        { name: 'Kore', label: 'Kore (Gemini - Femenino - Fuerte)' },
+        { name: 'Puck', label: 'Puck (Gemini - Masculino - Alegre)' },
+        { name: 'Achernar', label: 'Achernar (Gemini - Masculino - Neutral)' }
+    ];
+    const geminiGroup = document.createElement('optgroup');
+    geminiGroup.label = 'Voces de Google Gemini TTS';
+    geminiVoiceOptions.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v.name;
+        opt.textContent = v.label;
+        geminiGroup.appendChild(opt);
+    });
+    ruleVoiceSelect.appendChild(geminiGroup);
     
     // Sort local voices: Colombia (es-CO) first, then other Spanish (es), then the rest alphabetically
     systemVoices.sort((a, b) => {
@@ -417,14 +812,237 @@ if (window.speechSynthesis) {
 }
 
 // Receive updated settings from server
+let uiManagerInitialized = false;
 socket.on('chatbot_settings_updated', (config) => {
     chatbotConfig = config;
-    if (!config.active) {
+    if (!config?.active) {
         stopAllTTS();
     }
     updateUIWithConfig(config);
     updateMasterAnimationsUI(config);
+    
+    // Initialize or update UIManager
+    if (!uiManagerInitialized) {
+        UIManager.init(config);
+        uiManagerInitialized = true;
+    } else {
+        UIManager.updateWidgetUI(config);
+    }
+    
+    // Fetch theme-based branding assets dynamically
+    fetch('/api/active-assets')
+        .then(res => res.json())
+        .then(assets => {
+            if (assets) {
+                UIManager.applyThemeBranding(assets);
+            }
+        })
+        .catch(err => console.error('Error fetching host branding assets:', err));
 });
+
+// Widget Scene design synchronization
+window.addEventListener('ui:updateWidgetPosition', (e) => {
+    const { widget, x, y } = e.detail;
+    SocketClient.emit('update_widget_position', { widget, x, y });
+});
+
+window.addEventListener('ui:toggleWidget', (e) => {
+    const { widget, active } = e.detail;
+    SocketClient.emit('toggle_widget', { widget, active });
+});
+
+socket.on('widget_status_changed', (data) => {
+    if (chatbotConfig && chatbotConfig.widgets && chatbotConfig.widgets[data.widget]) {
+        chatbotConfig.widgets[data.widget].active = data.active;
+        UIManager.updateWidgetUI(chatbotConfig);
+    }
+});
+
+socket.on('widget_position_changed', (data) => {
+    if (chatbotConfig && chatbotConfig.widgets && chatbotConfig.widgets[data.widget]) {
+        chatbotConfig.widgets[data.widget].x = data.x;
+        chatbotConfig.widgets[data.widget].y = data.y;
+        UIManager.updateWidgetUI(chatbotConfig);
+    }
+});
+
+// Sync dynamic gift goals and mapping (cerebro — usado por Multimedia modal)
+socket.on('initMetas', (data) => {
+    giftsMapping = data || {};
+    // El modal de Multimedia sigue usando giftsMapping (cerebro)
+    // El selector de Dinámicas usa goalsCatalog (espejo independiente)
+    if (typeof renderCatalogGiftsGrid === 'function') renderCatalogGiftsGrid();
+});
+
+socket.on('updateMeta', (data) => {
+    const { giftId, name, coins, image } = data;
+    if (!giftsMapping[giftId]) {
+        giftsMapping[giftId] = { name, coins, image, sound: "" };
+        if (typeof renderCatalogGiftsGrid === 'function') renderCatalogGiftsGrid();
+    }
+});
+
+let soundsConfig = {};
+socket.on('initSoundsConfig', (data) => {
+    soundsConfig = data || {};
+    if (typeof window.renderSoundAlertsTable === 'function') window.renderSoundAlertsTable(soundsConfig);
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// CATÁLOGO ESPEJO: goalsCatalog
+// Copia de solo lectura del cerebro (gifts_mapping.json).
+// Usado exclusivamente como picker de regalos en Dinámicas.
+// NO contiene metas activas — esas van en dinamicas_config.json.
+// ─────────────────────────────────────────────────────────────────────
+let goalsCatalog = {};
+socket.on('initGoalsCatalog', (data) => {
+    goalsCatalog = data || {};
+    populateGoalsCatalogSelectors();
+    if (typeof populateApuestasGiftDropdowns === 'function') populateApuestasGiftDropdowns();
+});
+
+function populateGiftSelectors(config) {
+    const goalGiftSelect = document.getElementById('goal-gift-select');
+    if (goalGiftSelect) {
+        const prevVal = goalGiftSelect.value;
+        goalGiftSelect.innerHTML = '';
+        const sortedGifts = Object.entries(giftsMapping || {})
+            .map(([id, g]) => ({ id, ...g }))
+            .sort((a, b) => a.coins - b.coins);
+        if (sortedGifts.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = 'Cargando regalos...';
+            goalGiftSelect.appendChild(opt);
+        } else {
+            const serverPort = window.location.port || '3000';
+            sortedGifts.forEach(gift => {
+                const opt = document.createElement('option');
+                opt.value = gift.id;
+                const giftImage = gift.image || `${(gift.name || '').toLowerCase().replace(/\s+/g, '_')}.png`;
+                opt.setAttribute('data-image', `http://127.0.0.1:${serverPort}/gift-assets/${giftImage}`);
+                opt.setAttribute('data-name', gift.name || '');
+                opt.textContent = `${gift.name} (${gift.coins} ●)`;
+                goalGiftSelect.appendChild(opt);
+            });
+        }
+        if (prevVal && Array.from(goalGiftSelect.options).some(o => o.value === prevVal)) {
+            goalGiftSelect.value = prevVal;
+        }
+        // Trigger change event to update the preview image in the UI
+        goalGiftSelect.dispatchEvent(new Event('change'));
+    }
+
+    const goalGiftNameEl = document.getElementById('goal-gift-name');
+    const activeGoalGiftNameEl = document.getElementById('meta-gift-select');
+    const activeGoalTargetEl = document.getElementById('meta-limit-input');
+
+    if (!goalGiftNameEl && !activeGoalGiftNameEl) return;
+    
+    const activeGiftGoal = (config && config.goals || []).find(g => g.type === 'gift' && g.enabled);
+    const currentVal = activeGiftGoal ? (activeGiftGoal.giftName || '') : '';
+    
+    const giftsList = [];
+    Object.values(giftsMapping).forEach(g => {
+        if (g.name) {
+            giftsList.push({ name: g.name, coins: g.coins || 1 });
+        }
+    });
+    
+    // Sort alphabetically
+    giftsList.sort((a, b) => a.name.localeCompare(b.name));
+    
+    const selectsToPopulate = [];
+    if (goalGiftNameEl) selectsToPopulate.push(goalGiftNameEl);
+    if (activeGoalGiftNameEl) selectsToPopulate.push(activeGoalGiftNameEl);
+    
+    selectsToPopulate.forEach(selectEl => {
+        const prevVal = selectEl.value;
+        selectEl.innerHTML = '';
+        
+        // If empty, add a placeholder option
+        if (giftsList.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = 'Cargando regalos...';
+            selectEl.appendChild(opt);
+        } else {
+            giftsList.forEach(g => {
+                const opt = document.createElement('option');
+                opt.value = g.name;
+                opt.textContent = `${g.name} (${g.coins} Moneda${g.coins > 1 ? 's' : ''})`;
+                selectEl.appendChild(opt);
+            });
+        }
+        
+        if (prevVal && Array.from(selectEl.options).some(o => o.value === prevVal)) {
+            selectEl.value = prevVal;
+        }
+    });
+    
+    if (activeGoalGiftNameEl && currentVal) {
+        activeGoalGiftNameEl.value = currentVal;
+    }
+    if (activeGoalTargetEl && activeGiftGoal) {
+        activeGoalTargetEl.value = activeGiftGoal.target || 100;
+    }
+}
+
+/**
+ * populateGoalsCatalogSelectors
+ * Pobla el selector de regalos del módulo Dinámicas (#goal-gift-select)
+ * usando exclusivamente goalsCatalog (espejo del cerebro).
+ * No interfiere con Multimedia ni con giftsMapping.
+ */
+function populateGoalsCatalogSelectors() {
+    const goalGiftSelect = document.getElementById('goal-gift-select');
+    if (!goalGiftSelect) return;
+
+    const catalog = goalsCatalog;
+    const prevVal = goalGiftSelect.value;
+    goalGiftSelect.innerHTML = '';
+
+    const sorted = Object.entries(catalog || {})
+        .map(([id, g]) => ({ id, ...g }))
+        .sort((a, b) => (a.coins || 0) - (b.coins || 0));
+
+    if (sorted.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = 'Cargando regalos del catálogo...';
+        goalGiftSelect.appendChild(opt);
+    } else {
+        const serverPort = window.location.port || '3000';
+        sorted.forEach(gift => {
+            const opt = document.createElement('option');
+            opt.value = gift.id;
+            const giftImage = gift.image || `${(gift.name || '').toLowerCase().replace(/\s+/g, '_')}.png`;
+            opt.setAttribute('data-image', `http://127.0.0.1:${serverPort}/gift-assets/${giftImage}`);
+            opt.setAttribute('data-name', gift.name || '');
+            opt.textContent = `${gift.name} (${gift.coins || 1} ●)`;
+            goalGiftSelect.appendChild(opt);
+        });
+    }
+
+    if (prevVal && Array.from(goalGiftSelect.options).some(o => o.value === prevVal)) {
+        goalGiftSelect.value = prevVal;
+    }
+    goalGiftSelect.dispatchEvent(new Event('change'));
+}
+
+// Helper: ensure giftsMapping is populated — fetches /api/gifts if cache is empty
+async function fetchGiftsCatalog() {
+    if (Object.keys(giftsMapping).length > 0) return giftsMapping;
+    try {
+        const res = await fetch('/api/gifts');
+        const data = await res.json();
+        giftsMapping = data || {};
+        console.info('[fetchGiftsCatalog] Catalog loaded from API:', Object.keys(giftsMapping).length, 'gifts');
+    } catch (e) {
+        console.error('[fetchGiftsCatalog] Error fetching catalog:', e);
+    }
+    return giftsMapping;
+}
 
 // Update Panel inputs with active configuration
 function updateUIWithConfig(config) {
@@ -454,6 +1072,13 @@ function updateUIWithConfig(config) {
     if (bannedWordsEl) bannedWordsEl.value = (config.bannedWords || []).join(', ');
     if (bannedActionEl) bannedActionEl.value = config.bannedWordsAction || 'skip';
     if (ignoredUsersEl) ignoredUsersEl.value = (config.ignoreUserList || []).join(', ');
+    const bannedUsernamesEl = document.getElementById('bot-banned-username-words');
+    if (bannedUsernamesEl) bannedUsernamesEl.value = (config.bannedUsernames || []).join(', ');
+
+    const aiApiKeyEl = document.getElementById('ai-api-key');
+    if (aiApiKeyEl) aiApiKeyEl.value = config.geminiApiKey || '';
+    const aiApiKeyShortcutEl = document.getElementById('bot-gemini-api-key-shortcut');
+    if (aiApiKeyShortcutEl) aiApiKeyShortcutEl.value = config.geminiApiKey || '';
     
     // Exclusive Voice Chat config fields
     const exclusiveEnabledEl = document.getElementById('bot-exclusive-enabled');
@@ -479,11 +1104,32 @@ function updateUIWithConfig(config) {
     const thankShareEl = document.getElementById('bot-thank-share-phrase');
     const thankFollowEl = document.getElementById('bot-thank-follow-phrase');
     const thankGiftEl = document.getElementById('bot-thank-gift-phrase');
+    const thankLikeEl = document.getElementById('bot-thank-like-phrase');
     
     if (filterEmojisEl) filterEmojisEl.checked = !!config.filterEmojisFromNames;
     if (thankShareEl) thankShareEl.value = config.thankYouSharePhrase || '';
     if (thankFollowEl) thankFollowEl.value = config.thankYouFollowPhrase || '';
     if (thankGiftEl) thankGiftEl.value = config.thankYouGiftPhrase || '';
+    if (thankLikeEl) thankLikeEl.value = config.thankYouLikePhrase || '';
+
+    // Event Alert Actions & Sounds
+    const shareActionEl = document.getElementById('bot-share-action');
+    const shareSoundEl = document.getElementById('bot-share-sound');
+    const followActionEl = document.getElementById('bot-follow-action');
+    const followSoundEl = document.getElementById('bot-follow-sound');
+    const giftActionEl = document.getElementById('bot-gift-action');
+    const giftSoundEl = document.getElementById('bot-gift-sound');
+    const likeActionEl = document.getElementById('bot-like-action');
+    const likeSoundEl = document.getElementById('bot-like-sound');
+
+    if (shareActionEl) shareActionEl.value = config.shareAction || 'read';
+    if (shareSoundEl) shareSoundEl.value = config.shareSound || '';
+    if (followActionEl) followActionEl.value = config.followAction || 'read';
+    if (followSoundEl) followSoundEl.value = config.followSound || '';
+    if (giftActionEl) giftActionEl.value = config.giftAction || 'read';
+    if (giftSoundEl) giftSoundEl.value = config.giftSound || '';
+    if (likeActionEl) likeActionEl.value = config.likeAction || 'read';
+    if (likeSoundEl) likeSoundEl.value = config.likeSound || '';
 
     // Metas, Ruleta y Overlays
     const wheelEnabledEl = document.getElementById('wheel-enabled');
@@ -493,6 +1139,7 @@ function updateUIWithConfig(config) {
     const overlayChatEl = document.getElementById('overlay-chat-enabled');
     const overlayChatPremiumEl = document.getElementById('overlay-chat-premium');
     const ttsEffectsEl = document.getElementById('tts-effects-enabled');
+    const recipeGoalColorEl = document.getElementById('recipe-goal-color-input');
 
     if (wheelEnabledEl) wheelEnabledEl.checked = !!config.wheelEnabled;
     if (wheelGiftEl) wheelGiftEl.value = config.wheelTriggerGift || 'any';
@@ -501,6 +1148,102 @@ function updateUIWithConfig(config) {
     if (overlayChatEl) overlayChatEl.checked = config.overlayChatEnabled !== false;
     if (overlayChatPremiumEl) overlayChatPremiumEl.checked = config.overlayChatFilterPremium !== false;
     if (ttsEffectsEl) ttsEffectsEl.checked = config.ttsEffectsEnabled !== false;
+    if (recipeGoalColorEl) recipeGoalColorEl.value = config.recipeGoalColor || '#ff477e';
+    
+    // Configuración de Redes Sociales
+    const socialRotatorEnabledEl = document.getElementById('social-rotator-enabled');
+    const socialDisplayTimeEl = document.getElementById('social-display-time');
+    const socialPauseTimeEl = document.getElementById('social-pause-time');
+    
+    if (socialRotatorEnabledEl) {
+        socialRotatorEnabledEl.checked = config.socialsSettings ? !!config.socialsSettings.enabled : true;
+    }
+    if (socialDisplayTimeEl) {
+        socialDisplayTimeEl.value = config.socialsSettings ? (config.socialsSettings.displayTime || 10) : 10;
+    }
+    if (socialPauseTimeEl) {
+        socialPauseTimeEl.value = config.socialsSettings ? (config.socialsSettings.pauseTime !== undefined ? config.socialsSettings.pauseTime : 2) : 2;
+    }
+    
+    if (typeof renderSocialsTable === 'function') {
+        renderSocialsTable(config.socials || []);
+    }
+
+    // Popular inputs del banner
+    const bSettings = config.bannerSettings || {
+        width: '100%',
+        height: '80px',
+        borderStyle: 'solid',
+        borderColor: '#ff0077',
+        borderWidth: '2px',
+        borderRadius: '25px',
+        backgroundColor: '#140a0f',
+        backgroundOpacity: 45,
+        fontFamily: 'Outfit',
+        fontSize: '24px',
+        fontColor: '#ffffff',
+        rotationSpeed: 8,
+        slides: [
+            config.bannerSlide1 || "Ejemplo de texto",
+            config.bannerSlide2 || "¡Pide tu canción en el chat usando !song 🎵",
+            config.bannerSlide3 || "Meta de Regalos Activa (Calculada automáticamente)"
+        ]
+    };
+
+    const bWidth = document.getElementById('banner-width-input');
+    const bHeight = document.getElementById('banner-height-input');
+    const bBorderStyle = document.getElementById('banner-border-style');
+    const bBorderColor = document.getElementById('banner-border-color');
+    const bBorderWidth = document.getElementById('banner-border-width');
+    const bBorderRadius = document.getElementById('banner-border-radius');
+    const bBgColor = document.getElementById('banner-bg-color');
+    const bBgOpacity = document.getElementById('banner-bg-opacity');
+    const bFontFamily = document.getElementById('banner-font-family');
+    const bFontSize = document.getElementById('banner-font-size');
+    const bFontColor = document.getElementById('banner-font-color');
+    const bRotationSpeed = document.getElementById('banner-rotation-speed');
+
+    if (bWidth) bWidth.value = bSettings.width || '100%';
+    if (bHeight) bHeight.value = bSettings.height || '80px';
+    if (bBorderStyle) bBorderStyle.value = bSettings.borderStyle || 'solid';
+    if (bBorderColor) bBorderColor.value = bSettings.borderColor || '#ff0077';
+    if (bBorderWidth) {
+        const val = parseInt(bSettings.borderWidth) || 0;
+        bBorderWidth.value = val;
+        const valEl = document.getElementById('val-banner-border-width');
+        if (valEl) valEl.textContent = val + 'px';
+    }
+    if (bBorderRadius) {
+        const val = parseInt(bSettings.borderRadius) || 0;
+        bBorderRadius.value = val;
+        const valEl = document.getElementById('val-banner-border-radius');
+        if (valEl) valEl.textContent = val + 'px';
+    }
+    if (bBgColor) bBgColor.value = bSettings.backgroundColor || '#140a0f';
+    if (bBgOpacity) {
+        const val = bSettings.backgroundOpacity !== undefined ? bSettings.backgroundOpacity : 45;
+        bBgOpacity.value = val;
+        const valEl = document.getElementById('val-banner-bg-opacity');
+        if (valEl) valEl.textContent = val + '%';
+    }
+    if (bFontFamily) bFontFamily.value = bSettings.fontFamily || 'Outfit';
+    if (bFontSize) {
+        const val = parseInt(bSettings.fontSize) || 24;
+        bFontSize.value = val;
+        const valEl = document.getElementById('val-banner-font-size');
+        if (valEl) valEl.textContent = val + 'px';
+    }
+    if (bFontColor) bFontColor.value = bSettings.fontColor || '#ffffff';
+    if (bRotationSpeed) {
+        const val = bSettings.rotationSpeed !== undefined ? bSettings.rotationSpeed : 8;
+        bRotationSpeed.value = val;
+        const valEl = document.getElementById('val-banner-rotation-speed');
+        if (valEl) valEl.textContent = val + 's';
+    }
+
+    if (typeof renderBannerSlides === 'function') {
+        renderBannerSlides(bSettings.slides || []);
+    }
 
     // Render dynamic lists (Metas, Ruleta)
     try {
@@ -509,6 +1252,9 @@ function updateUIWithConfig(config) {
         } else {
             console.warn('renderGoalsList is not defined yet');
         }
+        
+        // Sync active goal inputs and selectors
+        populateGiftSelectors(config);
     } catch (e) {
         console.error('Error rendering goals list:', e);
     }
@@ -526,7 +1272,6 @@ function updateUIWithConfig(config) {
     // Setup and Spotify values
     const setupUserEl = document.getElementById('setup-tiktok-username');
     const setupAutoEl = document.getElementById('setup-auto-connect');
-    const setupThemeEl = document.getElementById('setup-theme');
     const spotActiveEl = document.getElementById('spotify-active');
     const spotClientEl = document.getElementById('spotify-client-id');
     const spotSecretEl = document.getElementById('spotify-client-secret');
@@ -545,18 +1290,23 @@ function updateUIWithConfig(config) {
     // Update theme profile (Naya / Majo / Neutral)
     const themeName = config.themeName || 'neutral';
     document.body.className = 'theme-' + themeName;
+    document.body.setAttribute('data-user-role', themeName === 'neutral' ? 'standard' : themeName);
+    const themeSelect = document.getElementById('setup-theme');
+    if (themeSelect) themeSelect.value = themeName;
     const logoEl = document.querySelector('.brand-logo');
+    const serverPort = window.location.port || '3000';
     if (themeName === 'neutral') {
         document.title = "GRLive - Control Panel";
         if (logoEl) {
-            logoEl.src = `assets/neutral-logo.jpg`;
+            logoEl.src = `http://127.0.0.1:${serverPort}/app-assets/neutral-logo.jpg`;
             logoEl.alt = 'GR Logo';
             logoEl.style.display = 'block';
         }
     } else {
         document.title = themeName === 'majo' ? "Majo's - Control Panel" : "Naya's - Control Panel";
         if (logoEl) {
-            logoEl.src = `assets/${themeName}-logo.png`;
+            const logoFile = themeName === 'majo' ? 'majo-logo2.png' : `${themeName}-logo.png`;
+            logoEl.src = `http://127.0.0.1:${serverPort}/streamer-assets/${logoFile}`;
             logoEl.alt = themeName.charAt(0).toUpperCase() + themeName.slice(1) + ' Logo';
             logoEl.style.display = 'block';
         }
@@ -575,7 +1325,6 @@ function updateUIWithConfig(config) {
             }
         }
     }
-    if (setupThemeEl) setupThemeEl.value = themeName;
     if (spotActiveEl) spotActiveEl.checked = !!config.spotifyEnabled;
     if (spotClientEl) spotClientEl.value = config.spotifyClientId || '';
     if (spotSecretEl) spotSecretEl.value = config.spotifyClientSecret || '';
@@ -643,6 +1392,11 @@ function updateUIWithConfig(config) {
     if (spotPrefixEl) spotPrefixEl.value = config.spotifyCommandPrefix || '!song';
     if (spotVoteLimitEl) spotVoteLimitEl.value = config.spotifyVoteSkipLimit || 3;
     
+    const spotSkipAllowedUsersEl = document.getElementById('spotify-skip-allowed-users');
+    if (spotSkipAllowedUsersEl) {
+        spotSkipAllowedUsersEl.value = config.spotifySkipAllowedUsers || '';
+    }
+    
     // YouTube settings sync
     const ytActiveEl = document.getElementById('youtube-active');
     const ytVolEl = document.getElementById('youtube-volume-slider');
@@ -661,6 +1415,57 @@ function updateUIWithConfig(config) {
     if (ytPermEl) ytPermEl.value = config.youtubePermission || 'all';
     if (ytPrefixEl) ytPrefixEl.value = config.youtubeCommandPrefix || '!yt';
     if (ytVoteLimitEl) ytVoteLimitEl.value = config.youtubeVoteSkipLimit || 3;
+    const ytSearchEngineEl = document.getElementById('youtube-search-engine');
+    if (ytSearchEngineEl) {
+        ytSearchEngineEl.value = config.youtubeSearchEngine || 'youtube';
+    }
+    
+    // YouTube visualization settings sync
+    const ytThemeEl = document.getElementById('youtube-theme');
+    const ytPosEl = document.getElementById('youtube-position');
+    const ytNeonColorEl = document.getElementById('youtube-neon-color');
+    const ytVinylDesignEl = document.getElementById('youtube-vinyl-design');
+    const ytVinylSpeedEl = document.getElementById('youtube-vinyl-speed');
+
+    if (ytThemeEl) {
+        let selectedValue = config.youtubeTheme || 'apple-music';
+        let isSelectedValueVisible = true;
+        const options = ytThemeEl.options;
+        for (let i = 0; i < options.length; i++) {
+            const opt = options[i];
+            if (themeName === 'majo') {
+                if (opt.value === 'naya-chibi' || opt.value === 'coquette-hearts') {
+                    opt.style.display = 'none';
+                    if (selectedValue === opt.value) isSelectedValueVisible = false;
+                } else {
+                    opt.style.display = '';
+                }
+            } else if (themeName === 'naya') {
+                if (opt.value === 'anime-gojo' || opt.value === 'majo-spider') {
+                    opt.style.display = 'none';
+                    if (selectedValue === opt.value) isSelectedValueVisible = false;
+                } else {
+                    opt.style.display = '';
+                }
+            } else {
+                if (opt.value === 'naya-chibi' || opt.value === 'anime-gojo' || opt.value === 'majo-spider') {
+                    opt.style.display = 'none';
+                    if (selectedValue === opt.value) isSelectedValueVisible = false;
+                } else {
+                    opt.style.display = '';
+                }
+            }
+        }
+        if (!isSelectedValueVisible) {
+            selectedValue = themeName === 'majo' ? 'majo-spider' : (themeName === 'naya' ? 'naya-chibi' : 'apple-music');
+        }
+        ytThemeEl.value = selectedValue;
+        updateMockupThemeClassYouTube(selectedValue);
+    }
+    if (ytPosEl) ytPosEl.value = config.youtubePosition || 'bottom-left';
+    if (ytNeonColorEl) ytNeonColorEl.value = config.youtubeNeonColor || 'pink';
+    if (ytVinylDesignEl) ytVinylDesignEl.value = config.youtubeVinylDesign || 'classic';
+    if (ytVinylSpeedEl) ytVinylSpeedEl.value = config.youtubeVinylSpeed || 'normal';
     
     // Spotify OAuth connection profile UI
     const spotifyProfileContainer = document.getElementById('spotify-profile-container');
@@ -693,12 +1498,34 @@ function updateUIWithConfig(config) {
         if (engineEl.value === 'cloud') {
             document.getElementById('container-cloud-voice').style.display = 'block';
             document.getElementById('container-local-voice').style.display = 'none';
+            document.getElementById('container-gemini-model').style.display = 'none';
+            document.getElementById('container-gemini-language').style.display = 'none';
+            document.getElementById('container-gemini-voice').style.display = 'none';
+            document.getElementById('container-gemini-style').style.display = 'none';
+            if (document.getElementById('container-gemini-key-warning')) document.getElementById('container-gemini-key-warning').style.display = 'none';
+        } else if (engineEl.value === 'gemini') {
+            document.getElementById('container-cloud-voice').style.display = 'none';
+            document.getElementById('container-local-voice').style.display = 'none';
+            document.getElementById('container-gemini-model').style.display = 'block';
+            document.getElementById('container-gemini-language').style.display = 'block';
+            document.getElementById('container-gemini-voice').style.display = 'block';
+            document.getElementById('container-gemini-style').style.display = 'block';
+            if (document.getElementById('container-gemini-key-warning')) document.getElementById('container-gemini-key-warning').style.display = 'block';
         } else {
             document.getElementById('container-cloud-voice').style.display = 'none';
             document.getElementById('container-local-voice').style.display = 'block';
+            document.getElementById('container-gemini-model').style.display = 'none';
+            document.getElementById('container-gemini-language').style.display = 'none';
+            document.getElementById('container-gemini-voice').style.display = 'none';
+            document.getElementById('container-gemini-style').style.display = 'none';
+            if (document.getElementById('container-gemini-key-warning')) document.getElementById('container-gemini-key-warning').style.display = 'none';
         }
     }
     if (cloudVoiceEl) cloudVoiceEl.value = config.cloudVoiceName || 'es-CO-SalomeNeural';
+    if (document.getElementById('bot-gemini-model')) document.getElementById('bot-gemini-model').value = config.geminiModel || 'gemini-3.1-flash-tts';
+    if (document.getElementById('bot-gemini-language')) document.getElementById('bot-gemini-language').value = config.geminiLanguage || 'es-MX';
+    if (document.getElementById('bot-gemini-voice')) document.getElementById('bot-gemini-voice').value = config.geminiVoiceName || 'Aoede';
+    if (document.getElementById('bot-gemini-style')) document.getElementById('bot-gemini-style').value = config.geminiStyleInstructions || 'Read aloud in a warm, welcoming tone.';
     
     if (systemVoices.length === 0) populateVoices();
     if (defVoiceEl) defVoiceEl.value = config.voiceName || '';
@@ -753,7 +1580,79 @@ function updateUIWithConfig(config) {
     renderRulesTable(config.userVoices || []);
     
     // Render Sound Alerts Table
-    renderSoundAlertsTable(config.soundAlerts || []);
+    if (typeof window.renderSoundAlertsTable === 'function') {
+        window.renderSoundAlertsTable(soundsConfig);
+    } else {
+        console.warn('renderSoundAlertsTable is not defined yet');
+    }
+    
+    // Sync AI inputs
+    updateAiUI(config);
+    
+    // Sync Apuestas / Betting configuration inputs
+    if (config.apuestas) {
+        const apEnabledEl = document.getElementById('apuestas-enabled');
+        const apTitleEl = document.getElementById('apuestas-title');
+        const apCountEl = document.getElementById('apuestas-count');
+        
+        if (apEnabledEl) apEnabledEl.checked = !!config.apuestas.enabled;
+        if (apTitleEl) apTitleEl.value = config.apuestas.title || '';
+        if (apCountEl) {
+            apCountEl.value = config.apuestas.count || 4;
+            if (typeof toggleApuestasParticipantRows === 'function') {
+                toggleApuestasParticipantRows(config.apuestas.count || 4);
+            }
+        }
+        
+        ['p1', 'p2', 'p3', 'p4'].forEach(pKey => {
+            const participant = config.apuestas[pKey];
+            if (participant) {
+                const nameEl = document.getElementById(`apuestas-${pKey}-name`);
+                const giftEl = document.getElementById(`apuestas-${pKey}-gift`);
+                if (nameEl) nameEl.value = participant.name || '';
+                if (giftEl) giftEl.value = participant.giftId || '';
+            }
+        });
+        
+        // Render Voters captured in the panel
+        if (typeof renderApuestasVotersSummary === 'function') {
+            renderApuestasVotersSummary(config.apuestas);
+        }
+    }
+}
+
+// Function to populate AI Inputs based on current config and theme profile
+function updateAiUI(config) {
+    if (!config || !config.ai) return;
+    const themeName = config.themeName || 'neutral';
+    const aiProfile = themeName === 'majo' ? 'majo' : 'naya';
+    const profileData = config.ai[aiProfile] || {};
+
+    const aiBotActiveEl = document.getElementById('ai-bot-active');
+    const aiMonetizationEl = document.getElementById('ai-monetization-active');
+    const aiMinCoinsEl = document.getElementById('ai-min-coins');
+    const aiMaxCharsEl = document.getElementById('ai-max-chars');
+    const aiCooldownEl = document.getElementById('ai-cooldown');
+    const aiReadUsernameEl = document.getElementById('ai-read-username');
+    const aiVoiceNameEl = document.getElementById('ai-voice-name');
+    const aiVoiceStyleEl = document.getElementById('ai-voice-style');
+    const aiPromptPersonalityEl = document.getElementById('ai-prompt-personality');
+    const aiCommandPrefixEl = document.getElementById('ai-command-prefix');
+    const aiGiftAutoRespondEl = document.getElementById('ai-gift-auto-respond');
+    const aiGiftMinCoinsEl = document.getElementById('ai-gift-min-coins');
+
+    if (aiBotActiveEl) aiBotActiveEl.checked = !!profileData.ai_bot_active;
+    if (aiMonetizationEl) aiMonetizationEl.checked = !!profileData.ai_monetization_active;
+    if (aiMinCoinsEl) aiMinCoinsEl.value = profileData.ai_min_coins !== undefined ? profileData.ai_min_coins : (aiProfile === 'majo' ? 10 : 5);
+    if (aiMaxCharsEl) aiMaxCharsEl.value = profileData.ai_max_chars !== undefined ? profileData.ai_max_chars : 150;
+    if (aiCooldownEl) aiCooldownEl.value = profileData.ai_cooldown !== undefined ? profileData.ai_cooldown : 10;
+    if (aiReadUsernameEl) aiReadUsernameEl.checked = profileData.ai_read_username !== false;
+    if (aiVoiceNameEl) aiVoiceNameEl.value = profileData.ai_voice_name || "default";
+    if (aiVoiceStyleEl) aiVoiceStyleEl.value = profileData.ai_voice_style || "";
+    if (aiPromptPersonalityEl) aiPromptPersonalityEl.value = profileData.ai_prompt_personality || "";
+    if (aiCommandPrefixEl) aiCommandPrefixEl.value = profileData.ai_command_prefix || "!ia";
+    if (aiGiftAutoRespondEl) aiGiftAutoRespondEl.checked = !!profileData.ai_gift_auto;
+    if (aiGiftMinCoinsEl) aiGiftMinCoinsEl.value = profileData.ai_gift_min_coins !== undefined ? profileData.ai_gift_min_coins : 100;
 }
 
 // Render specific user voice rules table
@@ -769,11 +1668,13 @@ function renderRulesTable(rules) {
     
     rules.forEach((rule, index) => {
         const tr = document.createElement('tr');
+        const styleLabel = rule.style ? `<small style="color: var(--accent); display:block;">🎤 ${rule.style.substring(0, 40)}</small>` : '';
         tr.innerHTML = `
             <td><strong>@${rule.username}</strong></td>
             <td>
                 <small style="color: var(--text-main); font-weight: 600;">${rule.voice ? rule.voice.substring(0, 25) : 'Voz por defecto'}</small>
                 <small style="color: var(--text-muted)">Vol: ${Math.round(rule.volume * 100)}% | Tono: ${rule.pitch} | Vel: ${rule.rate}</small>
+                ${styleLabel}
             </td>
             <td class="text-right">
                 <button class="btn-delete" onclick="deleteUserRule(${index})">
@@ -806,6 +1707,11 @@ function sendUpdatedSettings() {
         .map(u => u.trim().replace('@', '').toLowerCase())
         .filter(u => u.length > 0);
 
+    const bannedUsernames = document.getElementById('bot-banned-username-words') ? document.getElementById('bot-banned-username-words').value
+        .split(',')
+        .map(w => w.trim())
+        .filter(w => w.length > 0) : [];
+
     const updated = {
         active: document.getElementById('bot-active').checked,
         playLocation: document.getElementById('bot-play-location').value,
@@ -820,8 +1726,13 @@ function sendUpdatedSettings() {
         bannedWords: bannedWords,
         bannedWordsAction: document.getElementById('bot-banned-action').value,
         ignoreUserList: ignoreUserList,
+        bannedUsernames: bannedUsernames,
         ttsEngine: document.getElementById('bot-tts-engine').value,
         cloudVoiceName: document.getElementById('bot-cloud-voice').value,
+        geminiModel: document.getElementById('bot-gemini-model').value,
+        geminiLanguage: document.getElementById('bot-gemini-language').value,
+        geminiVoiceName: document.getElementById('bot-gemini-voice').value,
+        geminiStyleInstructions: document.getElementById('bot-gemini-style').value.trim(),
         voiceName: document.getElementById('bot-default-voice').value,
         volume: parseFloat(document.getElementById('bot-default-volume').value),
         pitch: parseFloat(document.getElementById('bot-default-pitch').value),
@@ -837,31 +1748,40 @@ function sendUpdatedSettings() {
         // New Settings fields
         tiktokUsername: document.getElementById('setup-tiktok-username').value.trim().replace('@', ''),
         autoConnect: document.getElementById('setup-auto-connect').checked,
-        themeName: document.getElementById('setup-theme').value,
-        spotifyClientId: document.getElementById('spotify-client-id').value.trim(),
-        spotifyClientSecret: document.getElementById('spotify-client-secret').value.trim(),
-        spotifyEnabled: document.getElementById('spotify-active').checked,
-        spotifyTheme: document.getElementById('spotify-theme').value,
-        spotifyPosition: document.getElementById('spotify-position').value,
-        spotifyNeonColor: document.getElementById('spotify-neon-color').value,
-        spotifyVinylDesign: document.getElementById('spotify-vinyl-design').value,
-        spotifyVinylSpeed: document.getElementById('spotify-vinyl-speed').value,
+        geminiApiKey: (document.getElementById('bot-gemini-api-key-shortcut') && document.getElementById('bot-gemini-api-key-shortcut').value.trim()) 
+            ? document.getElementById('bot-gemini-api-key-shortcut').value.trim() 
+            : (document.getElementById('ai-api-key') ? document.getElementById('ai-api-key').value.trim() : ''),
+        spotifyClientId: document.getElementById('spotify-client-id') ? document.getElementById('spotify-client-id').value.trim() : '',
+        spotifyClientSecret: document.getElementById('spotify-client-secret') ? document.getElementById('spotify-client-secret').value.trim() : '',
+        spotifyEnabled: document.getElementById('spotify-active') ? document.getElementById('spotify-active').checked : false,
+        spotifyTheme: document.getElementById('spotify-theme') ? document.getElementById('spotify-theme').value : 'apple-music',
+        spotifyPosition: document.getElementById('spotify-position') ? document.getElementById('spotify-position').value : 'bottom-left',
+        spotifyNeonColor: document.getElementById('spotify-neon-color') ? document.getElementById('spotify-neon-color').value : 'pink',
+        spotifyVinylDesign: document.getElementById('spotify-vinyl-design') ? document.getElementById('spotify-vinyl-design').value : 'classic',
+        spotifyVinylSpeed: document.getElementById('spotify-vinyl-speed') ? document.getElementById('spotify-vinyl-speed').value : 'normal',
         
         // Spotify interactive settings
-        spotifyVolume: parseInt(document.getElementById('spotify-volume-slider').value) || 80,
-        spotifyChatQueueEnabled: document.getElementById('spotify-chat-queue-enabled').checked,
-        spotifyExplicitAllowed: document.getElementById('spotify-explicit-allowed').checked,
-        spotifyPermission: document.getElementById('spotify-permission').value,
-        spotifyCommandPrefix: document.getElementById('spotify-command-prefix').value.trim(),
-        spotifyVoteSkipLimit: parseInt(document.getElementById('spotify-voteskip-limit').value) || 3,
+        spotifyVolume: document.getElementById('spotify-volume-slider') ? parseInt(document.getElementById('spotify-volume-slider').value) || 80 : 80,
+        spotifyChatQueueEnabled: document.getElementById('spotify-chat-queue-enabled') ? document.getElementById('spotify-chat-queue-enabled').checked : true,
+        spotifyExplicitAllowed: document.getElementById('spotify-explicit-allowed') ? document.getElementById('spotify-explicit-allowed').checked : false,
+        spotifyPermission: document.getElementById('spotify-permission') ? document.getElementById('spotify-permission').value : 'all',
+        spotifyCommandPrefix: document.getElementById('spotify-command-prefix') ? document.getElementById('spotify-command-prefix').value.trim() : '!song',
+        spotifyVoteSkipLimit: document.getElementById('spotify-voteskip-limit') ? parseInt(document.getElementById('spotify-voteskip-limit').value) || 3 : 3,
+        spotifySkipAllowedUsers: document.getElementById('spotify-skip-allowed-users') ? document.getElementById('spotify-skip-allowed-users').value.trim() : '',
         
         // YouTube interactive settings
-        youtubeEnabled: document.getElementById('youtube-active').checked,
-        youtubeVolume: parseInt(document.getElementById('youtube-volume-slider').value) || 80,
-        youtubeChatQueueEnabled: document.getElementById('youtube-chat-queue-enabled').checked,
-        youtubePermission: document.getElementById('youtube-permission').value,
-        youtubeCommandPrefix: document.getElementById('youtube-command-prefix').value.trim(),
-        youtubeVoteSkipLimit: parseInt(document.getElementById('youtube-voteskip-limit').value) || 3,
+        youtubeEnabled: document.getElementById('youtube-active') ? document.getElementById('youtube-active').checked : false,
+        youtubeVolume: document.getElementById('youtube-volume-slider') ? parseInt(document.getElementById('youtube-volume-slider').value) || 80 : 80,
+        youtubeChatQueueEnabled: document.getElementById('youtube-chat-queue-enabled') ? document.getElementById('youtube-chat-queue-enabled').checked : true,
+        youtubePermission: document.getElementById('youtube-permission') ? document.getElementById('youtube-permission').value : 'all',
+        youtubeCommandPrefix: document.getElementById('youtube-command-prefix') ? document.getElementById('youtube-command-prefix').value.trim() : '!yt',
+        youtubeVoteSkipLimit: document.getElementById('youtube-voteskip-limit') ? parseInt(document.getElementById('youtube-voteskip-limit').value) || 3 : 3,
+        youtubeTheme: document.getElementById('youtube-theme') ? document.getElementById('youtube-theme').value : 'apple-music',
+        youtubePosition: document.getElementById('youtube-position') ? document.getElementById('youtube-position').value : 'bottom-left',
+        youtubeNeonColor: document.getElementById('youtube-neon-color') ? document.getElementById('youtube-neon-color').value : 'red',
+        youtubeVinylDesign: document.getElementById('youtube-vinyl-design') ? document.getElementById('youtube-vinyl-design').value : 'classic',
+        youtubeVinylSpeed: document.getElementById('youtube-vinyl-speed') ? document.getElementById('youtube-vinyl-speed').value : 'normal',
+        youtubeSearchEngine: document.getElementById('youtube-search-engine') ? document.getElementById('youtube-search-engine').value : 'youtube',
         
         // Music Request Monetization settings
         spotifyMonetizationEnabled: document.getElementById('spotify-monetization-active').checked,
@@ -877,15 +1797,121 @@ function sendUpdatedSettings() {
         thankYouSharePhrase: document.getElementById('bot-thank-share-phrase').value,
         thankYouFollowPhrase: document.getElementById('bot-thank-follow-phrase').value,
         thankYouGiftPhrase: document.getElementById('bot-thank-gift-phrase').value,
+        thankYouLikePhrase: document.getElementById('bot-thank-like-phrase') ? document.getElementById('bot-thank-like-phrase').value : '',
+
+        // Event Alert Actions & Sounds
+        shareAction: document.getElementById('bot-share-action') ? document.getElementById('bot-share-action').value : 'read',
+        shareSound: document.getElementById('bot-share-sound') ? document.getElementById('bot-share-sound').value : '',
+        followAction: document.getElementById('bot-follow-action') ? document.getElementById('bot-follow-action').value : 'read',
+        followSound: document.getElementById('bot-follow-sound') ? document.getElementById('bot-follow-sound').value : '',
+        giftAction: document.getElementById('bot-gift-action') ? document.getElementById('bot-gift-action').value : 'read',
+        giftSound: document.getElementById('bot-gift-sound') ? document.getElementById('bot-gift-sound').value : '',
+        likeAction: document.getElementById('bot-like-action') ? document.getElementById('bot-like-action').value : 'read',
+        likeSound: document.getElementById('bot-like-sound') ? document.getElementById('bot-like-sound').value : '',
+
+        bannerSlide1: (() => {
+            const inputs = document.querySelectorAll('#banner-slides-container .banner-slide-text-input');
+            return inputs[0] ? inputs[0].value.trim() : "Ejemplo de texto";
+        })(),
+        bannerSlide2: (() => {
+            const inputs = document.querySelectorAll('#banner-slides-container .banner-slide-text-input');
+            return inputs[1] ? inputs[1].value.trim() : "¡Pide tu canción en el chat usando !song 🎵";
+        })(),
+        bannerSlide3: (() => {
+            const inputs = document.querySelectorAll('#banner-slides-container .banner-slide-text-input');
+            return inputs[2] ? inputs[2].value.trim() : "Meta de Regalos Activa (Calculada automáticamente)";
+        })(),
+        bannerSettings: {
+            width: document.getElementById('banner-width-input') ? document.getElementById('banner-width-input').value.trim() : '100%',
+            height: document.getElementById('banner-height-input') ? document.getElementById('banner-height-input').value.trim() : '80px',
+            borderStyle: document.getElementById('banner-border-style') ? document.getElementById('banner-border-style').value : 'solid',
+            borderColor: document.getElementById('banner-border-color') ? document.getElementById('banner-border-color').value : '#ff0077',
+            borderWidth: document.getElementById('banner-border-width') ? document.getElementById('banner-border-width').value + 'px' : '2px',
+            borderRadius: document.getElementById('banner-border-radius') ? document.getElementById('banner-border-radius').value + 'px' : '25px',
+            backgroundColor: document.getElementById('banner-bg-color') ? document.getElementById('banner-bg-color').value : '#140a0f',
+            backgroundOpacity: document.getElementById('banner-bg-opacity') ? parseInt(document.getElementById('banner-bg-opacity').value) : 45,
+            fontFamily: document.getElementById('banner-font-family') ? document.getElementById('banner-font-family').value : 'Outfit',
+            fontSize: document.getElementById('banner-font-size') ? document.getElementById('banner-font-size').value + 'px' : '24px',
+            fontColor: document.getElementById('banner-font-color') ? document.getElementById('banner-font-color').value : '#ffffff',
+            rotationSpeed: document.getElementById('banner-rotation-speed') ? parseInt(document.getElementById('banner-rotation-speed').value) : 8,
+            slides: (() => {
+                const slidesList = [];
+                document.querySelectorAll('#banner-slides-container .banner-slide-text-input').forEach(input => {
+                    const txt = input.value.trim();
+                    if (txt) slidesList.push(txt);
+                });
+                return slidesList.length > 0 ? slidesList : ["Ejemplo de mensaje"];
+            })()
+        },
 
         // Metas, Ruleta, Overlays
+        goals: chatbotConfig.goals || [],
         wheelEnabled: document.getElementById('wheel-enabled').checked,
         wheelTriggerGift: document.getElementById('wheel-trigger-gift').value,
         wheelTriggerCoins: parseInt(document.getElementById('wheel-trigger-coins').value) || 10,
         overlayMusicQueueEnabled: document.getElementById('overlay-music-enabled').checked,
         overlayChatEnabled: document.getElementById('overlay-chat-enabled').checked,
         overlayChatFilterPremium: document.getElementById('overlay-chat-premium').checked,
-        ttsEffectsEnabled: document.getElementById('tts-effects-enabled').checked
+        ttsEffectsEnabled: document.getElementById('tts-effects-enabled').checked,
+        recipeGoalColor: document.getElementById('recipe-goal-color-input') ? document.getElementById('recipe-goal-color-input').value : '#ff477e',
+
+        // Rotador de Redes Sociales
+        socials: (() => {
+            const list = [];
+            document.querySelectorAll('#socials-table-body tr').forEach(row => {
+                const platformEl = row.querySelector('.social-platform-select');
+                const usernameEl = row.querySelector('.social-username-input');
+                if (platformEl && usernameEl) {
+                    const platform = platformEl.value;
+                    const username = usernameEl.value.trim();
+                    if (username) {
+                        list.push({ platform, username });
+                    }
+                }
+            });
+            return list;
+        })(),
+        socialsSettings: {
+            enabled: document.getElementById('social-rotator-enabled') ? document.getElementById('social-rotator-enabled').checked : false,
+            displayTime: document.getElementById('social-display-time') ? (parseInt(document.getElementById('social-display-time').value) || 10) : 10,
+            pauseTime: document.getElementById('social-pause-time') ? (parseInt(document.getElementById('social-pause-time').value) !== undefined ? parseInt(document.getElementById('social-pause-time').value) : 2) : 2
+        },
+        
+        // AI Gemini configuration
+        ai: (() => {
+            const themeName = (chatbotConfig && chatbotConfig.themeName) || 'neutral';
+            const aiProfile = themeName === 'majo' ? 'majo' : 'naya';
+            
+            const aiBotActive = document.getElementById('ai-bot-active') ? document.getElementById('ai-bot-active').checked : false;
+            const aiMonetizationActive = document.getElementById('ai-monetization-active') ? document.getElementById('ai-monetization-active').checked : false;
+            const aiMinCoins = document.getElementById('ai-min-coins') ? (parseInt(document.getElementById('ai-min-coins').value) || 5) : 5;
+            const aiMaxChars = document.getElementById('ai-max-chars') ? (parseInt(document.getElementById('ai-max-chars').value) || 150) : 150;
+            const aiCooldown = document.getElementById('ai-cooldown') ? (parseInt(document.getElementById('ai-cooldown').value) || 10) : 10;
+            const aiReadUsername = document.getElementById('ai-read-username') ? document.getElementById('ai-read-username').checked : true;
+            const aiVoiceName = document.getElementById('ai-voice-name') ? document.getElementById('ai-voice-name').value : "default";
+            const aiVoiceStyle = document.getElementById('ai-voice-style') ? document.getElementById('ai-voice-style').value.trim() : "";
+            const aiPromptPersonality = document.getElementById('ai-prompt-personality') ? document.getElementById('ai-prompt-personality').value : "";
+            const aiCommandPrefix = document.getElementById('ai-command-prefix') ? document.getElementById('ai-command-prefix').value.trim() || "!ia" : "!ia";
+            const aiGiftAuto = document.getElementById('ai-gift-auto-respond') ? document.getElementById('ai-gift-auto-respond').checked : false;
+            const aiGiftMinCoins = document.getElementById('ai-gift-min-coins') ? parseInt(document.getElementById('ai-gift-min-coins').value) || 100 : 100;
+            
+            return {
+                [aiProfile]: {
+                    ai_bot_active: aiBotActive,
+                    ai_monetization_active: aiMonetizationActive,
+                    ai_min_coins: aiMinCoins,
+                    ai_max_chars: aiMaxChars,
+                    ai_cooldown: aiCooldown,
+                    ai_read_username: aiReadUsername,
+                    ai_voice_name: aiVoiceName,
+                    ai_voice_style: aiVoiceStyle,
+                    ai_prompt_personality: aiPromptPersonality,
+                    ai_command_prefix: aiCommandPrefix,
+                    ai_gift_auto: aiGiftAuto,
+                    ai_gift_min_coins: aiGiftMinCoins
+                }
+            };
+        })()
     };
     
     socket.emit('update_chatbot_settings', updated);
@@ -896,16 +1922,25 @@ const inputsToWatch = [
     'bot-active', 'bot-play-location', 'bot-read-username', 'bot-filter-emojis-names',
     'bot-prefix-required', 'bot-permission', 'bot-block-rare-languages', 
     'bot-banned-action', 'bot-default-voice', 'bot-tts-engine', 'bot-cloud-voice',
+    'bot-gemini-model', 'bot-gemini-language', 'bot-gemini-voice', 'bot-gemini-style', 'bot-gemini-api-key-shortcut',
     'bot-exclusive-enabled',
     'bot-read-follows', 'bot-read-shares', 'bot-read-gifts', 'bot-read-likes',
-    'setup-auto-connect', 'setup-theme', 'spotify-active', 'spotify-theme', 'spotify-position',
+    'bot-share-action', 'bot-share-sound',
+    'bot-follow-action', 'bot-follow-sound',
+    'bot-gift-action', 'bot-gift-sound',
+    'bot-like-action', 'bot-like-sound',
+    'setup-auto-connect', 'spotify-active', 'spotify-theme', 'spotify-position',
     'spotify-chat-queue-enabled', 'spotify-explicit-allowed', 'spotify-permission',
     'spotify-neon-color', 'spotify-vinyl-design', 'spotify-vinyl-speed',
     'spotify-monetization-active',
     'youtube-active', 'youtube-chat-queue-enabled', 'youtube-permission',
     'youtube-command-prefix', 'youtube-voteskip-limit', 'youtube-monetization-active',
+    'youtube-theme', 'youtube-position', 'youtube-neon-color', 'youtube-vinyl-design', 'youtube-vinyl-speed',
+    'youtube-search-engine',
     'sound-alerts-active',
-    'wheel-enabled', 'overlay-music-enabled', 'overlay-chat-enabled', 'overlay-chat-premium', 'tts-effects-enabled'
+    'wheel-enabled', 'overlay-music-enabled', 'overlay-chat-enabled', 'overlay-chat-premium', 'tts-effects-enabled',
+    'recipe-goal-color-input',
+    'social-rotator-enabled', 'social-display-time', 'social-pause-time'
 ];
 
 inputsToWatch.forEach(id => {
@@ -917,13 +1952,34 @@ inputsToWatch.forEach(id => {
                 if (engine === 'cloud') {
                     document.getElementById('container-cloud-voice').style.display = 'block';
                     document.getElementById('container-local-voice').style.display = 'none';
+                    document.getElementById('container-gemini-model').style.display = 'none';
+                    document.getElementById('container-gemini-language').style.display = 'none';
+                    document.getElementById('container-gemini-voice').style.display = 'none';
+                    document.getElementById('container-gemini-style').style.display = 'none';
+                    if (document.getElementById('container-gemini-key-warning')) document.getElementById('container-gemini-key-warning').style.display = 'none';
+                } else if (engine === 'gemini') {
+                    document.getElementById('container-cloud-voice').style.display = 'none';
+                    document.getElementById('container-local-voice').style.display = 'none';
+                    document.getElementById('container-gemini-model').style.display = 'block';
+                    document.getElementById('container-gemini-language').style.display = 'block';
+                    document.getElementById('container-gemini-voice').style.display = 'block';
+                    document.getElementById('container-gemini-style').style.display = 'block';
+                    if (document.getElementById('container-gemini-key-warning')) document.getElementById('container-gemini-key-warning').style.display = 'block';
                 } else {
                     document.getElementById('container-cloud-voice').style.display = 'none';
                     document.getElementById('container-local-voice').style.display = 'block';
+                    document.getElementById('container-gemini-model').style.display = 'none';
+                    document.getElementById('container-gemini-language').style.display = 'none';
+                    document.getElementById('container-gemini-voice').style.display = 'none';
+                    document.getElementById('container-gemini-style').style.display = 'none';
+                    if (document.getElementById('container-gemini-key-warning')) document.getElementById('container-gemini-key-warning').style.display = 'none';
                 }
             }
             if (id === 'spotify-theme') {
                 updateMockupThemeClass(el.value);
+            }
+            if (id === 'youtube-theme') {
+                updateMockupThemeClassYouTube(el.value);
             }
             if (id === 'spotify-monetization-active') {
                 const group = document.getElementById('spotify-monetization-coins-group');
@@ -940,13 +1996,14 @@ inputsToWatch.forEach(id => {
 
 // For text inputs and textareas, update on 'blur' to avoid socket spam on typing
 const textInputsToWatch = [
-    'bot-prefixes', 'bot-max-characters', 'bot-banned-words', 'bot-ignored-users',
+    'bot-prefixes', 'bot-max-characters', 'bot-banned-words', 'bot-ignored-users', 'bot-banned-username-words',
     'bot-exclusive-user', 'bot-likes-milestone',
-    'bot-thank-share-phrase', 'bot-thank-follow-phrase', 'bot-thank-gift-phrase',
+    'bot-thank-share-phrase', 'bot-thank-follow-phrase', 'bot-thank-gift-phrase', 'bot-thank-like-phrase',
     'setup-tiktok-username', 'spotify-client-id', 'spotify-client-secret',
-    'spotify-command-prefix', 'spotify-voteskip-limit',
+    'spotify-command-prefix', 'spotify-voteskip-limit', 'spotify-skip-allowed-users',
     'spotify-monetization-coins', 'youtube-monetization-coins',
-    'wheel-trigger-gift', 'wheel-trigger-coins'
+    'wheel-trigger-gift', 'wheel-trigger-coins',
+    'banner-slide1-input', 'banner-slide2-input', 'banner-slide3-input'
 ];
 textInputsToWatch.forEach(id => {
     const el = document.getElementById(id);
@@ -1048,10 +2105,36 @@ if (testBtn) {
         if (engine === 'cloud') {
             const voiceName = document.getElementById('bot-cloud-voice').value;
             socket.emit('test_cloud_tts', { text, voiceName, pitch, rate });
+        } else if (engine === 'gemini') {
+            const voiceName = document.getElementById('bot-gemini-voice').value;
+            socket.emit('test_cloud_tts', { text, voiceName, pitch, rate });
         } else {
             const voiceName = document.getElementById('bot-default-voice').value;
             speakText(text, voiceName, volume, pitch, rate);
         }
+    });
+}
+
+// Simulated Alerts (QA Validation Triggers)
+const btnSimulateMvp = document.getElementById('btn-simulate-mvp');
+if (btnSimulateMvp) {
+    btnSimulateMvp.addEventListener('click', () => {
+        socket.emit('manual_control', {
+            action: 'test_trigger',
+            event: 'trigger_mvp',
+            nickname: 'NayaMVP'
+        });
+    });
+}
+
+const btnSimulateJoin = document.getElementById('btn-simulate-join');
+if (btnSimulateJoin) {
+    btnSimulateJoin.addEventListener('click', () => {
+        socket.emit('manual_control', {
+            action: 'test_trigger',
+            event: 'trigger_join',
+            nickname: 'FansDeNaya'
+        });
     });
 }
 
@@ -1071,6 +2154,7 @@ if (addRuleBtn) {
         const volume = parseFloat(document.getElementById('rule-volume').value);
         const pitch = parseFloat(document.getElementById('rule-pitch').value);
         const rate = parseFloat(document.getElementById('rule-rate').value);
+        const style = (document.getElementById('rule-style') ? document.getElementById('rule-style').value.trim() : '');
         
         if (!chatbotConfig) return;
         
@@ -1079,9 +2163,9 @@ if (addRuleBtn) {
         // Check if rule already exists for user
         const existingIndex = rules.findIndex(r => r.username.toLowerCase() === username);
         if (existingIndex > -1) {
-            rules[existingIndex] = { username, voice, volume, pitch, rate };
+            rules[existingIndex] = { username, voice, volume, pitch, rate, style };
         } else {
-            rules.push({ username, voice, volume, pitch, rate });
+            rules.push({ username, voice, volume, pitch, rate, style });
         }
         
         socket.emit('update_chatbot_settings', { userVoices: rules });
@@ -1166,7 +2250,8 @@ function processTtsQueue() {
     
     if (item.type === 'cloud') {
         try {
-            currentAudioTts = new Audio("data:audio/mp3;base64," + item.base64Audio);
+            const mimeType = item.base64Audio.startsWith('UklGR') ? 'audio/wav' : 'audio/mp3';
+            currentAudioTts = new Audio(`data:${mimeType};base64,` + item.base64Audio);
             
             if (rateMultiplier > 1.0) {
                 currentAudioTts.playbackRate = rateMultiplier;
@@ -1234,34 +2319,39 @@ function processTtsQueue() {
 socket.on('play_tts_audio', (data) => {
     const { base64Audio, playLocation } = data;
     
-    // Check play location
+    // Play on panel to guarantee native Electron playback
     const isPanel = window.location.pathname === '/' || !window.location.pathname.includes('overlay');
-    if (playLocation === 'overlay' && isPanel) return;
-    if (playLocation === 'panel' && !isPanel) return;
-    
-    queueCloudTTS(base64Audio, playLocation);
+    if (isPanel) {
+        queueCloudTTS(base64Audio, playLocation);
+    } else if (playLocation === 'overlay' || playLocation === 'both') {
+        queueCloudTTS(base64Audio, playLocation);
+    }
+});
+
+// Handle TTS error notifications from the server
+socket.on('test_tts_error', (data) => {
+    showToast(data.message || 'Error al generar la voz.', 'error');
 });
 
 // Handle playing sound alerts
 socket.on('play_sound_alert', (data) => {
     const { soundUrl, volume } = data;
     
-    // Check play location
-    if (chatbotConfig.playLocation !== 'panel' && chatbotConfig.playLocation !== 'both') return;
+    // Sound alerts always play in the panel regardless of TTS playLocation setting
+    if (!soundUrl) return;
     
     const audio = new Audio(soundUrl);
     audio.volume = (volume !== undefined ? volume : 100) / 100;
-    audio.play().catch(err => {
-        console.error('Failed to play sound alert in panel:', err);
-    });
-});
-
-// Handle speaking in Panel if destination matches
-socket.on('tiktok_event_raw', (payload) => {
-    const { eventType, data } = payload;
-    if (eventType === 'chat') {
-        processAndSpeak(data);
-    }
+    audio.play()
+        .then(() => {
+            audio.onended = () => {
+                audio.src = '';
+                audio.load();
+            };
+        })
+        .catch(err => {
+            console.error('Failed to play sound alert in panel:', err);
+        });
 });
 
 // Text-to-Speech Core Logic
@@ -1284,10 +2374,9 @@ function processAndSpeak(data) {
         if (!isExclusiveUser) return;
     }
     
-    // Check play location
+    // Check play location: guarantee native Electron playback in panel
     const isPanel = window.location.pathname === '/' || !window.location.pathname.includes('overlay');
-    if (chatbotConfig.playLocation === 'overlay' && isPanel) return;
-    if (chatbotConfig.playLocation === 'panel' && !isPanel) return;
+    if (!isPanel && chatbotConfig.playLocation === 'panel') return;
     
     const nickname = data.nickname || data.uniqueId || 'Usuario';
     let comment = data.comment || '';
@@ -1298,10 +2387,22 @@ function processAndSpeak(data) {
     
     // 2. Permission check
     const userRole = chatbotConfig.permission || 'all';
-    const isSubscriber = data.isSubscriber || (data.userIdentity && data.userIdentity.isSubscriberOfAnchor);
-    const isModerator = data.isModerator || (data.userIdentity && data.userIdentity.isModeratorOfAnchor);
-    const isAnchor = data.isAnchor || (data.userIdentity && data.userIdentity.isAnchor);
     
+    // Ignore all chat comment readings if permission is set to none (No leer a ninguno / Solo alertas)
+    if (userRole === 'none') return;
+    
+    const isAnchor = (data.userIdentity && typeof data.userIdentity.isAnchor !== 'undefined')
+        ? data.userIdentity.isAnchor
+        : (chatbotConfig.tiktokUsername && uniqueId === chatbotConfig.tiktokUsername.toLowerCase());
+        
+    const isModerator = isAnchor || ((data.userIdentity && typeof data.userIdentity.isModeratorOfAnchor !== 'undefined')
+        ? data.userIdentity.isModeratorOfAnchor
+        : !!data.isModerator);
+        
+    const isSubscriber = isAnchor || ((data.userIdentity && typeof data.userIdentity.isSubscriberOfAnchor !== 'undefined')
+        ? data.userIdentity.isSubscriberOfAnchor
+        : !!data.isSubscriber);
+        
     if (userRole === 'mods' && !isModerator && !isAnchor) return;
     if (userRole === 'subs' && !isSubscriber && !isModerator && !isAnchor) return;
     
@@ -1401,6 +2502,26 @@ function updateMockupThemeClass(themeName) {
     player.classList.add(`theme-${themeName}`);
 }
 
+function updateMockupThemeClassYouTube(themeName) {
+    const player = document.getElementById('youtube-mockup-player');
+    if (!player) return;
+    
+    player.classList.remove(
+        'theme-apple-music', 
+        'theme-spotify-classic', 
+        'theme-neon-gradient', 
+        'theme-transparent',
+        'theme-coquette-hearts',
+        'theme-anime-luffy',
+        'theme-naya-chibi',
+        'theme-anime-gojo',
+        'theme-majo-spider'
+    );
+    
+    // Add new theme class
+    player.classList.add(`theme-${themeName}`);
+}
+
 // Copy Buttons listeners
 const setupCopyUrlBtn = document.getElementById('btn-copy-obs-url');
 if (setupCopyUrlBtn) {
@@ -1408,9 +2529,71 @@ if (setupCopyUrlBtn) {
         const input = document.getElementById('obs-overlay-url');
         if (input) {
             navigator.clipboard.writeText(input.value).then(() => {
-                const originalText = setupCopyUrlBtn.textContent;
-                setupCopyUrlBtn.textContent = '¡Copiado!';
-                setTimeout(() => setupCopyUrlBtn.textContent = originalText, 1500);
+                const originalHTML = setupCopyUrlBtn.innerHTML;
+                setupCopyUrlBtn.innerHTML = '<span style="font-size: 11px; font-weight: bold; color: #00ffcc;">✓</span>';
+                setTimeout(() => {
+                    setupCopyUrlBtn.innerHTML = originalHTML;
+                    if (window.lucide) window.lucide.createIcons();
+                }, 1500);
+            });
+        }
+    });
+}
+
+const copyObsAnimationsBtn = document.getElementById('btn-copy-obs-animations');
+if (copyObsAnimationsBtn) {
+    copyObsAnimationsBtn.addEventListener('click', () => {
+        const input = document.getElementById('obs-animations-url');
+        if (input) {
+            navigator.clipboard.writeText(input.value).then(() => {
+                const originalText = copyObsAnimationsBtn.textContent;
+                copyObsAnimationsBtn.textContent = '¡Copiado!';
+                setTimeout(() => copyObsAnimationsBtn.textContent = originalText, 1500);
+            });
+        }
+    });
+}
+
+const copyObsDinamicasBtn = document.getElementById('btn-copy-obs-dinamicas');
+if (copyObsDinamicasBtn) {
+    copyObsDinamicasBtn.addEventListener('click', () => {
+        const input = document.getElementById('obs-dinamicas-url');
+        if (input) {
+            navigator.clipboard.writeText(input.value).then(() => {
+                const originalText = copyObsDinamicasBtn.textContent;
+                copyObsDinamicasBtn.textContent = '¡Copiado!';
+                setTimeout(() => copyObsDinamicasBtn.textContent = originalText, 1500);
+            });
+        }
+    });
+}
+
+const copyObsRecetasBtn = document.getElementById('btn-copy-obs-recetas');
+if (copyObsRecetasBtn) {
+    copyObsRecetasBtn.addEventListener('click', () => {
+        const input = document.getElementById('obs-recetas-url');
+        if (input) {
+            navigator.clipboard.writeText(input.value).then(() => {
+                const originalText = copyObsRecetasBtn.textContent;
+                copyObsRecetasBtn.textContent = '¡Copiado!';
+                setTimeout(() => copyObsRecetasBtn.textContent = originalText, 1500);
+            });
+        }
+    });
+}
+
+const copyObsAlertsBtn = document.getElementById('btn-copy-obs-alerts');
+if (copyObsAlertsBtn) {
+    copyObsAlertsBtn.addEventListener('click', () => {
+        const input = document.getElementById('obs-alerts-url');
+        if (input) {
+            navigator.clipboard.writeText(input.value).then(() => {
+                const originalHTML = copyObsAlertsBtn.innerHTML;
+                copyObsAlertsBtn.innerHTML = '<span style="font-size: 11px; font-weight: bold; color: #00ffcc;">✓</span>';
+                setTimeout(() => {
+                    copyObsAlertsBtn.innerHTML = originalHTML;
+                    if (window.lucide) window.lucide.createIcons();
+                }, 1500);
             });
         }
     });
@@ -1436,9 +2619,12 @@ if (copyObsMusicBtn) {
         const input = document.getElementById('obs-music-url');
         if (input) {
             navigator.clipboard.writeText(input.value).then(() => {
-                const originalText = copyObsMusicBtn.textContent;
-                copyObsMusicBtn.textContent = '¡Copiado!';
-                setTimeout(() => copyObsMusicBtn.textContent = originalText, 1500);
+                const originalHTML = copyObsMusicBtn.innerHTML;
+                copyObsMusicBtn.innerHTML = '<span style="font-size: 11px; font-weight: bold; color: #00ffcc;">✓</span>';
+                setTimeout(() => {
+                    copyObsMusicBtn.innerHTML = originalHTML;
+                    if (window.lucide) window.lucide.createIcons();
+                }, 1500);
             });
         }
     });
@@ -1464,9 +2650,29 @@ if (copyObsMusicHorizontalBtn) {
         const input = document.getElementById('obs-music-horizontal-url');
         if (input) {
             navigator.clipboard.writeText(input.value).then(() => {
-                const originalText = copyObsMusicHorizontalBtn.textContent;
-                copyObsMusicHorizontalBtn.textContent = '¡Copiado!';
-                setTimeout(() => copyObsMusicHorizontalBtn.textContent = originalText, 1500);
+                const originalHTML = copyObsMusicHorizontalBtn.innerHTML;
+                copyObsMusicHorizontalBtn.innerHTML = '<span style="font-size: 11px; font-weight: bold; color: #00ffcc;">✓</span>';
+                setTimeout(() => {
+                    copyObsMusicHorizontalBtn.innerHTML = originalHTML;
+                    if (window.lucide) window.lucide.createIcons();
+                }, 1500);
+            });
+        }
+    });
+}
+
+const copyObsSonglistBtn = document.getElementById('btn-copy-obs-songlist');
+if (copyObsSonglistBtn) {
+    copyObsSonglistBtn.addEventListener('click', () => {
+        const input = document.getElementById('obs-songlist-url');
+        if (input) {
+            navigator.clipboard.writeText(input.value).then(() => {
+                const originalHTML = copyObsSonglistBtn.innerHTML;
+                copyObsSonglistBtn.innerHTML = '<span style="font-size: 11px; font-weight: bold; color: #00ffcc;">✓</span>';
+                setTimeout(() => {
+                    copyObsSonglistBtn.innerHTML = originalHTML;
+                    if (window.lucide) window.lucide.createIcons();
+                }, 1500);
             });
         }
     });
@@ -1481,6 +2687,23 @@ if (copyObsYoutubeHorizontalBtn) {
                 const originalText = copyObsYoutubeHorizontalBtn.textContent;
                 copyObsYoutubeHorizontalBtn.textContent = '¡Copiado!';
                 setTimeout(() => copyObsYoutubeHorizontalBtn.textContent = originalText, 1500);
+            });
+        }
+    });
+}
+
+const copyObsBannerBtn = document.getElementById('btn-copy-obs-banner');
+if (copyObsBannerBtn) {
+    copyObsBannerBtn.addEventListener('click', () => {
+        const input = document.getElementById('obs-banner-url');
+        if (input) {
+            navigator.clipboard.writeText(input.value).then(() => {
+                const originalHTML = copyObsBannerBtn.innerHTML;
+                copyObsBannerBtn.innerHTML = '<span style="font-size: 11px; font-weight: bold; color: #00ffcc;">✓</span>';
+                setTimeout(() => {
+                    copyObsBannerBtn.innerHTML = originalHTML;
+                    if (window.lucide) window.lucide.createIcons();
+                }, 1500);
             });
         }
     });
@@ -1513,7 +2736,6 @@ if (copyObsTapsBtn) {
         }
     });
 }
-
 const copyObsMvpBtn = document.getElementById('btn-copy-obs-mvp');
 if (copyObsMvpBtn) {
     copyObsMvpBtn.addEventListener('click', () => {
@@ -1527,6 +2749,52 @@ if (copyObsMvpBtn) {
         }
     });
 }
+const copyObsSocialRotatorBtn = document.getElementById('btn-copy-obs-social-rotator');
+if (copyObsSocialRotatorBtn) {
+    copyObsSocialRotatorBtn.addEventListener('click', () => {
+        const input = document.getElementById('obs-social-rotator-url');
+        if (input) {
+            navigator.clipboard.writeText(input.value).then(() => {
+                const originalText = copyObsSocialRotatorBtn.textContent;
+                copyObsSocialRotatorBtn.textContent = '¡Copiado!';
+                setTimeout(() => copyObsSocialRotatorBtn.textContent = originalText, 1500);
+            });
+        }
+    });
+}
+
+
+// Automatically update OBS overlay URLs to match current window location origin (using 127.0.0.1 instead of localhost)
+const urlInputsToUpdate = [
+    'obs-overlay-url',
+    'obs-widgets-url',
+    'obs-animations-url',
+    'obs-dinamicas-url',
+    'obs-recetas-url',
+    'obs-alerts-url',
+    'obs-banner-url',
+    'obs-music-url',
+    'obs-music-horizontal-url',
+    'obs-songlist-url',
+    'obs-youtube-url',
+    'obs-youtube-horizontal-url',
+    'obs-donors-url',
+    'obs-taps-url',
+    'obs-mvp-url',
+    'obs-social-rotator-url'
+];
+urlInputsToUpdate.forEach(id => {
+    const input = document.getElementById(id);
+    if (input && input.value) {
+        try {
+            const url = new URL(input.value);
+            const origin = window.location.origin.replace('localhost', '127.0.0.1');
+            input.value = origin + url.pathname + url.search;
+        } catch (e) {
+            // Ignore malformed URLs or other errors
+        }
+    }
+});
 
 // Manual Updates Check Trigger
 const checkUpdatesBtn = document.getElementById('btn-check-updates');
@@ -1616,7 +2884,8 @@ function loadMockupTrack(index) {
     const bgArtEl = document.getElementById('mockup-bg-art');
     if (imgEl) {
         if (index === 0 && ((chatbotConfig && chatbotConfig.themeName) || 'neutral') === 'naya') {
-            imgEl.src = 'assets/naya-logo.png';
+            const serverPort = window.location.port || '3000';
+            imgEl.src = `http://127.0.0.1:${serverPort}/streamer-assets/naya-logo.png`;
         } else {
             imgEl.src = track.cover;
         }
@@ -1807,6 +3076,10 @@ socket.on('rankings_updated', (rankings) => {
     updateRankingTable('ranking-gifts-body', rankings.gifts, 'monedas');
     updateRankingTable('ranking-likes-body', rankings.likes, 'likes');
     updateRankingTable('ranking-mvp-body', rankings.mvp, 'puntos');
+
+    updateRankingTable('users-ranking-gifts-body', rankings.gifts, 'monedas');
+    updateRankingTable('users-ranking-likes-body', rankings.likes, 'likes');
+    updateRankingTable('users-ranking-mvp-body', rankings.mvp, 'puntos');
 });
 
 function updateRankingTable(elementId, dataList, unitLabel) {
@@ -1814,7 +3087,7 @@ function updateRankingTable(elementId, dataList, unitLabel) {
     if (!body) return;
     
     if (!dataList || dataList.length === 0) {
-        body.innerHTML = `<tr><td colspan="3" class="text-center" style="color: var(--text-muted); padding: 20px;">Esperando datos de la transmisión...</td></tr>`;
+        body.innerHTML = `<tr><td colspan="3" class="text-center" style="color: var(--text-muted); padding: 20px; font-size: 13px;">Esperando datos de la transmisión...</td></tr>`;
         return;
     }
     
@@ -1822,17 +3095,28 @@ function updateRankingTable(elementId, dataList, unitLabel) {
     dataList.forEach((user, index) => {
         const row = document.createElement('tr');
         
-        let positionBadge = `${index + 1}.`;
-        if (index === 0) positionBadge = '🥇';
-        else if (index === 1) positionBadge = '🥈';
-        else if (index === 2) positionBadge = '🥉';
+        let positionBadge = `${index + 1}`;
         
-        const boldStyle = index < 3 ? 'font-weight: bold; color: var(--text-main);' : 'color: var(--text-muted);';
+        const initials = (user.nickname || user.username || 'US').substring(0, 2).toUpperCase();
+        const hasAvatar = user.profilePictureUrl && user.profilePictureUrl.trim().length > 0;
+        const avatarImg = hasAvatar 
+            ? `<img src="${escapeHtml(user.profilePictureUrl)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />`
+            : '';
+        const fallbackStyle = hasAvatar ? 'style="display: none;"' : 'style="display: flex; width: 100%; height: 100%; justify-content: center; align-items: center;"';
         
         row.innerHTML = `
-            <td style="font-size: 16px; width: 60px; vertical-align: middle;">${positionBadge}</td>
-            <td style="${boldStyle} vertical-align: middle;">${escapeHtml(user.nickname)} <small style="color: var(--text-muted); display: block; font-size: 10px;">@${escapeHtml(user.username)}</small></td>
-            <td class="text-right" style="font-weight: bold; font-family: monospace; font-size: 14px; vertical-align: middle;">${user.count.toLocaleString()}</td>
+            <td class="rank-pos">${positionBadge}</td>
+            <td class="rank-user">
+                <div class="rank-avatar" style="position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+                    ${avatarImg}
+                    <span class="rank-avatar-fallback" ${fallbackStyle}>${initials}</span>
+                </div>
+                <div class="rank-info">
+                    <span class="rank-nickname">${escapeHtml(user.nickname || user.username)}</span>
+                    <span class="rank-username">@${escapeHtml(user.username)}</span>
+                </div>
+            </td>
+            <td class="rank-val text-right">${user.count.toLocaleString()}</td>
         `;
         body.appendChild(row);
     });
@@ -1873,12 +3157,14 @@ socket.on('spotify_track', (track) => {
             bgArtEl.style.backgroundSize = 'cover';
         }
         
+        const spotifyPlayBtn = document.getElementById('mockup-btn-play');
+        if (spotifyPlayBtn) {
+            spotifyPlayBtn.innerHTML = `<i data-lucide="${track.isPlaying ? 'pause' : 'play'}"></i>`;
+        }
         if (track.isPlaying) {
             if (playerEl) playerEl.classList.add('is-playing');
-            if (playIconEl) playIconEl.setAttribute('data-lucide', 'pause');
         } else {
             if (playerEl) playerEl.classList.remove('is-playing');
-            if (playIconEl) playIconEl.setAttribute('data-lucide', 'play');
         }
         
         // Progress display
@@ -1900,8 +3186,53 @@ socket.on('spotify_track', (track) => {
 // ==========================================
 // SPOTIFY QUEUE UI RENDERER
 // ==========================================
+socket.on('ai_queue_updated', (queue) => {
+    const tbody = document.getElementById('ai-queue-body');
+    if (!tbody) return;
+    
+    if (!queue || queue.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 30px 15px;">La cola de inteligencia artificial está vacía.</td></tr>`;
+        return;
+    }
+    
+    let html = '';
+    queue.forEach((item) => {
+        html += `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <td style="padding: 10px;">
+                    <div style="font-weight: bold; color: var(--text-main); font-size: 13px;">${item.nickname}</div>
+                </td>
+                <td style="padding: 10px; color: var(--text-muted); font-size: 12px; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    ${item.prompt || item.comment || 'Petición'}
+                </td>
+                <td class="text-right" style="padding: 10px;">
+                    <button class="btn secondary small" onclick="removeAiQueueItem('${item.id}')" style="padding: 4px 8px; font-size: 11px;" title="Eliminar">❌</button>
+                </td>
+            </tr>
+        `;
+    });
+    tbody.innerHTML = html;
+});
+
+window.removeAiQueueItem = function(id) {
+    socket.emit('remove_ai_queue_item', id);
+};
+
+const btnClearAiQueue = document.getElementById('btn-clear-ai-queue');
+if (btnClearAiQueue) {
+    btnClearAiQueue.addEventListener('click', () => {
+        if(confirm('¿Seguro que deseas vaciar toda la cola de la IA?')) {
+            socket.emit('clear_ai_queue');
+        }
+    });
+}
+
 socket.on('spotify_queue_updated', (queue) => {
     renderSpotifyQueue(queue);
+});
+
+socket.on('spotify_monetized_users_updated', (users) => {
+    renderSpotifyMonetizedUsers(users);
 });
 
 function renderSpotifyQueue(queue) {
@@ -1930,8 +3261,8 @@ function renderSpotifyQueue(queue) {
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <img src="${albumArtSrc}" class="queue-thumb" alt="Cover">
                     <div class="track-details">
-                        <span class="track-title">${track.title}</span>
-                        <span class="track-artist">${track.artist}</span>
+                        <span class="track-title">${escapeHtml(track.title)}</span>
+                        <span class="track-artist">${escapeHtml(track.artist)}</span>
                     </div>
                 </div>
             </td>
@@ -1950,6 +3281,42 @@ function renderSpotifyQueue(queue) {
             </td>
         `;
         
+        tbody.appendChild(tr);
+    });
+    
+    lucide.createIcons();
+}
+
+function renderSpotifyMonetizedUsers(users) {
+    const tbody = document.getElementById('spotify-monetized-users-body');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    if (!users || users.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 15px 15px; font-size: 12px;">
+                    Sin usuarios premium en esta sesión.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    users.forEach((user, index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>
+                <span class="requester-badge">@${user.userId}</span>
+            </td>
+            <td>
+                <span style="font-weight: 500; color: var(--accent-color);">💰 ${user.totalCoins}</span>
+            </td>
+            <td class="text-right">
+                <span style="font-size: 12px; color: var(--text-muted);">${user.creditsAvailable} crédito${user.creditsAvailable !== 1 ? 's' : ''}</span>
+            </td>
+        `;
         tbody.appendChild(tr);
     });
     
@@ -1975,8 +3342,17 @@ if (btnClearQueue) {
     });
 }
 
+// Bind clear spotify monetized users button
+const btnClearSpotifyMonetized = document.getElementById('btn-clear-spotify-monetized');
+if (btnClearSpotifyMonetized) {
+    btnClearSpotifyMonetized.addEventListener('click', () => {
+        if (confirm('¿Estás seguro de que deseas limpiar los créditos y monedas acumulados de todos los usuarios en esta sesión?')) {
+            socket.emit('clear_monetized_users');
+        }
+    });
+}
+
 // Developer Settings Panel Authentication Lock
-let isDeveloperAuthenticated = false;
 const devDetails = document.getElementById('dev-settings-details');
 const devPasswordModal = document.getElementById('dev-password-modal');
 const devPasswordInput = document.getElementById('dev-password-input');
@@ -1993,7 +3369,7 @@ if (devDetails) {
                 // If remote config unlocks developer settings, open directly without password
                 if (latestRemoteConfig && (latestRemoteConfig.devSettingsUnlocked || latestRemoteConfig.disableDevPassword)) {
                     console.log('Access granted remotely via raw.githubusercontent config');
-                    isDeveloperAuthenticated = true;
+                    e.preventDefault();
                     devDetails.open = true;
                     return;
                 }
@@ -2029,12 +3405,21 @@ if (btnCloseDevModal && devPasswordModal) {
 }
 
 function handleDevPasswordSubmit() {
-    if (!devPasswordInput || !devDetails || !devPasswordModal) return;
+    if (!devPasswordInput || !devPasswordModal) return;
     const password = devPasswordInput.value.trim();
     if (password === 'tavo_dev' || password === 'naya_dev') {
         isDeveloperAuthenticated = true;
-        devDetails.open = true;
+        if (devDetails) devDetails.open = true;
         devPasswordModal.style.display = 'none';
+        
+        // Redirect to pending view if exists
+        if (pendingNavigationTarget) {
+            const pendingItem = document.querySelector(`.menu-item[data-target="${pendingNavigationTarget}"]`);
+            if (pendingItem) {
+                switchToTab(pendingItem, pendingNavigationTarget);
+            }
+            pendingNavigationTarget = null;
+        }
     } else {
         if (devPasswordError) devPasswordError.style.display = 'block';
     }
@@ -2103,16 +3488,6 @@ function renderCustomAnimationsList() {
             </tr>
         `;
     }).join('');
-}
-
-// Helper to escape HTML characters
-function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/&/g, '&amp;')
-              .replace(/</g, '&lt;')
-              .replace(/>/g, '&gt;')
-              .replace(/"/g, '&quot;')
-              .replace(/'/g, '&#039;');
 }
 
 // Copy URL to clipboard helper
@@ -2491,6 +3866,7 @@ window.deleteMasterAnimationFile = async function(event, key) {
 
 // Update master custom badges on the cards
 function updateMasterAnimationsUI(settings) {
+    if (!settings) return;
     const keys = ['trigger_glove', 'trigger_levelup', 'trigger_quiereme', 'trigger_x2'];
     keys.forEach(key => {
         const card = document.querySelector(`[data-event="${key}"]`);
@@ -2500,7 +3876,7 @@ function updateMasterAnimationsUI(settings) {
         const existingBadge = card.querySelector('.badge.custom-badge');
         if (existingBadge) existingBadge.remove();
         
-        const hasCustom = settings.masterAnimations && settings.masterAnimations[key] && settings.masterAnimations[key].filepath;
+        const hasCustom = settings?.masterAnimations && settings.masterAnimations[key] && settings.masterAnimations[key].filepath;
         if (hasCustom) {
             const meta = card.querySelector('.card-meta');
             if (meta) {
@@ -2615,6 +3991,26 @@ document.addEventListener('DOMContentLoaded', () => {
             reader.readAsText(file);
         });
     }
+
+    // Borrar Caché / Restaurar de fábrica
+    const btnClearCache = document.getElementById('btn-clear-cache');
+    if (btnClearCache) {
+        btnClearCache.addEventListener('click', () => {
+            const confirmed = confirm("¡ADVERTENCIA CRÍTICA!\n\n¿Estás completamente seguro de que deseas borrar toda la caché del sistema y restaurar GRLive a sus valores de fábrica?\n\nEsta acción eliminará de forma permanente todos los perfiles de streamers, configuraciones de Spotify/YouTube, voces personalizadas y archivos multimedia subidos.\n\nEsta acción NO se puede deshacer.");
+            if (confirmed) {
+                socket.emit('clear_cache');
+            }
+        });
+    }
+
+    socket.on('cache_cleared', (result) => {
+        if (result.success) {
+            alert("¡Sistema restaurado de fábrica y caché eliminada con éxito! La aplicación se reiniciará ahora.");
+            window.location.reload();
+        } else {
+            alert("Error al intentar borrar la caché: " + (result.error || "Desconocido"));
+        }
+    });
     
     // ==========================================
     // YOUTUBE TRACK & COLA CONTROLS & LISTENERS
@@ -2622,6 +4018,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     socket.on('youtube_queue_updated', (queue) => {
         renderYoutubeQueue(queue);
+    });
+
+    socket.on('youtube_monetized_users_updated', (users) => {
+        renderYoutubeMonetizedUsers(users);
     });
 
     function renderYoutubeQueue(queue) {
@@ -2650,8 +4050,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div style="display: flex; align-items: center; gap: 12px;">
                         <img src="${albumArtSrc}" class="queue-thumb" alt="Cover" style="width: 40px; height: 40px; border-radius: 4px; object-fit: cover;">
                         <div class="track-details" style="display: flex; flex-direction: column;">
-                            <span class="track-title" style="font-weight: bold; font-size: 13px; color: var(--text-main);">${track.title}</span>
-                            <span class="track-artist" style="font-size: 11px; color: var(--text-muted);">${track.artist}</span>
+                            <span class="track-title" style="font-weight: bold; font-size: 13px; color: var(--text-main);">${escapeHtml(track.title)}</span>
+                            <span class="track-artist" style="font-size: 11px; color: var(--text-muted);">${escapeHtml(track.artist)}</span>
                         </div>
                     </div>
                 </td>
@@ -2667,6 +4067,44 @@ document.addEventListener('DOMContentLoaded', () => {
                             <i data-lucide="trash-2" class="icon-small"></i>
                         </button>
                     </div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+        
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+
+    function renderYoutubeMonetizedUsers(users) {
+        const tbody = document.getElementById('youtube-monetized-users-body');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '';
+        
+        if (!users || users.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 15px 15px; font-size: 12px;">
+                        Sin usuarios premium en esta sesión.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        users.forEach((user, index) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>
+                    <span class="requester-badge" style="background: rgba(255, 0, 0, 0.1); color: #ff0000; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold;">@${user.userId}</span>
+                </td>
+                <td>
+                    <span style="font-weight: 500; color: #ff0000;">💰 ${user.totalCoins}</span>
+                </td>
+                <td class="text-right">
+                    <span style="font-size: 12px; color: var(--text-muted);">${user.creditsAvailable} crédito${user.creditsAvailable !== 1 ? 's' : ''}</span>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -2695,6 +4133,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Bind clear YouTube monetized users button
+    const btnClearYoutubeMonetized = document.getElementById('btn-clear-youtube-monetized');
+    if (btnClearYoutubeMonetized) {
+        btnClearYoutubeMonetized.addEventListener('click', () => {
+            if (confirm('¿Estás seguro de que deseas limpiar los créditos y monedas acumulados de todos los usuarios en esta sesión?')) {
+                socket.emit('clear_monetized_users');
+            }
+        });
+    }
+
     // Listen to actual YouTube playback for live preview mockup
     socket.on('youtube_track', (track) => {
         const titleEl = document.getElementById('youtube-mockup-title');
@@ -2718,8 +4166,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 bgArtEl.style.backgroundSize = 'cover';
             }
             
-            if (playIconEl) {
-                playIconEl.setAttribute('data-lucide', track.isPlaying ? 'pause' : 'play');
+            const ytPlayBtn = document.getElementById('youtube-mockup-btn-play');
+            if (ytPlayBtn) {
+                ytPlayBtn.innerHTML = `<i data-lucide="${track.isPlaying ? 'pause' : 'play'}"></i>`;
             }
             
             // Progress display
@@ -2746,7 +4195,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 imgEl.src = "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231a1a1a%22%2F%3E%3Ccircle%20cx%3D%22100%22%20cy%3D%22100%22%20r%3D%2230%22%20fill%3D%22%23ff0000%22%2F%3E%3Cpolygon%20points%3D%2295%2C90%2095%2C110%20112%2C100%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E";
                 imgEl.style.animationPlayState = 'paused';
             }
-            if (playIconEl) playIconEl.setAttribute('data-lucide', 'play');
+            const ytPlayBtn = document.getElementById('youtube-mockup-btn-play');
+            if (ytPlayBtn) {
+                ytPlayBtn.innerHTML = `<i data-lucide="play"></i>`;
+            }
             if (fillEl) fillEl.style.width = '0%';
             if (currentEl) currentEl.textContent = '0:00';
             if (totalEl) totalEl.textContent = '0:00';
@@ -2810,1285 +4262,362 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// Global Audio Preview State Variables
+let currentlyPlayingIdx = null;
+let localPreviewAudio = null;
+let activeEditRowIndex = null;
+let activeEditGiftId = null;
+let modalPreviewAudio = null;
+let modalPlayingUrl = null;
+let SYSTEM_SOUNDS = [];
+
+async function loadSystemSounds() {
+    try {
+        const response = await fetch('/api/system-sounds');
+        const data = await response.json();
+        if (Array.isArray(data)) {
+            SYSTEM_SOUNDS = data;
+        }
+    } catch (e) {
+        console.error("Failed to load system sounds dynamically, falling back to defaults", e);
+        SYSTEM_SOUNDS = [
+            { name: 'GRLive Bruh', url: '/sounds/bruh.mp3' },
+            { name: 'GRLive Fart', url: '/sounds/fart.mp3' },
+            { name: 'GRLive Vine Boom', url: '/sounds/vine-boom.mp3' },
+            { name: 'GRLive Anime Wow', url: '/sounds/anime-wow.mp3' },
+            { name: 'GRLive Roblox Oof', url: '/sounds/oof.mp3' },
+            { name: 'GRLive Bonk', url: '/sounds/bonk.mp3' },
+            { name: 'GRLive Taco Bell', url: '/sounds/taco-bell.mp3' },
+            { name: 'GRLive Yeet', url: '/sounds/yeet.mp3' },
+            { name: 'GRLive Nice Click', url: '/sounds/nice.mp3' },
+            { name: 'GRLive Discord Notif', url: '/sounds/discord-notification.mp3' }
+        ];
+    }
+}
+
 // ============================================================================
 // MULTIMEDIA SOUND ALERTS & MODALS SYSTEM
 // ============================================================================
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Library Definitions
-    const SYSTEM_SOUNDS = [
-        { name: 'GRLive Bruh', url: '/sounds/bruh.mp3' },
-        { name: 'GRLive Fart', url: '/sounds/fart.mp3' },
-        { name: 'GRLive Vine Boom', url: '/sounds/vine-boom.mp3' },
-        { name: 'GRLive Anime Wow', url: '/sounds/anime-wow.mp3' },
-        { name: 'GRLive Roblox Oof', url: '/sounds/oof.mp3' },
-        { name: 'GRLive Bonk', url: '/sounds/bonk.mp3' },
-        { name: 'GRLive Taco Bell', url: '/sounds/taco-bell.mp3' },
-        { name: 'GRLive Yeet', url: '/sounds/yeet.mp3' },
-        { name: 'GRLive Nice Click', url: '/sounds/nice.mp3' },
-        { name: 'GRLive Discord Notif', url: '/sounds/discord-notification.mp3' }
-    ];
 
-                const DEFAULT_GIFTS = [
-        {
-                "name": "Adicto a las pantallas",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Adicto a las pantallas.png"
-        },
-        {
-                "name": "ASMR Starter Kit",
-                "coins": 1,
-                "iconUrl": "/assets/gift/ASMR Starter Kit.png"
-        },
-        {
-                "name": "Beach Date",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Beach Date.png"
-        },
-        {
-                "name": "Breakthrough superstar",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Breakthrough superstar.png"
-        },
-        {
-                "name": "Cheems Dog",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Cheems Dog.png"
-        },
-        {
-                "name": "Heart on Hands",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Corazon en Manos.png"
-        },
-        {
-                "name": "Finger Heart",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Corazón Coreano.png"
-        },
-        {
-                "name": "Beating Heart",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Corazón que late.png"
-        },
-        {
-                "name": "Heart Me",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Corazón.png"
-        },
-        {
-                "name": "Corona de la comunidad",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Corona de la comunidad.png"
-        },
-        {
-                "name": "Correo",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Correo.png"
-        },
-        {
-                "name": "Día de muertos",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Día de muertos.png"
-        },
-        {
-                "name": "Pop",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Equipo Poder.png"
-        },
-        {
-                "name": "Eres increíble",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Eres Asombroso.png"
-        },
-        {
-                "name": "Buen Juego (GG)",
-                "coins": 1,
-                "iconUrl": "/assets/gift/GG.png"
-        },
-        {
-                "name": "Gift Box 2",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Gift Box 2.png"
-        },
-        {
-                "name": "Barra luminosa",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Glow Stick.png"
-        },
-        {
-                "name": "Heart",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Heart.png"
-        },
-        {
-                "name": "Cono de helado",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Helado.png"
-        },
-        {
-                "name": "Te amo",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Love you.png"
-        },
-        {
-                "name": "Corn",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Maiz.png"
-        },
-        {
-                "name": "Maracas",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Maracas.png"
-        },
-        {
-                "name": "Álbum de música",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Música.png"
-        },
-        {
-                "name": "Nachos",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Nachos.png"
-        },
-        {
-                "name": "Rebanada de pastel",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Pastel.png"
-        },
-        {
-                "name": "Pato",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Pato.png"
-        },
-        {
-                "name": "Quiereme",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Quiereme.png"
-        },
-        {
-                "name": "Rey de leyendas",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Rey de leyendas.png"
-        },
-        {
-                "name": "White Rose",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Rosa Blanca.png"
-        },
-        {
-                "name": "Cosmic Rose",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Rosa Cosmica.png"
-        },
-        {
-                "name": "Eternity Rose",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Rosa de la Eternidad.png"
-        },
-        {
-                "name": "Big Rose",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Rosa Grande.png"
-        },
-        {
-                "name": "Rose",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Rosa.png"
-        },
-        {
-                "name": "Te quiero mucho",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Te Quiero.png"
-        },
-        {
-                "name": "Pulgar arriba",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Thumbs Up.png"
-        },
-        {
-                "name": "TikTok All Stars",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Tik Tok All Stars.png"
-        },
-        {
-                "name": "TikTok Live",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Tik Tok Live.png"
-        },
-        {
-                "name": "TikTok Universe",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Tik tok Universo.png"
-        },
-        {
-                "name": "TikTok",
-                "coins": 1,
-                "iconUrl": "/assets/gift/Tik Tok.png"
-        },
-        {
-                "name": "Alegrarte el día",
-                "coins": 9,
-                "iconUrl": "/assets/gift/Cheer You Up.png"
-        },
-        {
-                "name": "Perfume",
-                "coins": 20,
-                "iconUrl": "/assets/gift/Perfume.png"
-        },
-        {
-                "name": "Capybara",
-                "coins": 30,
-                "iconUrl": "/assets/gift/Capibara.png"
-        },
-        {
-                "name": "Dancing Capybaras",
-                "coins": 30,
-                "iconUrl": "/assets/gift/Capibaras Bailando.png"
-        },
-        {
-                "name": "Bathing Capybaras",
-                "coins": 30,
-                "iconUrl": "/assets/gift/Capibaras Bañandose.png"
-        },
-        {
-                "name": "Dona",
-                "coins": 30,
-                "iconUrl": "/assets/gift/Dona.png"
-        },
-        {
-                "name": "Autumn Leaves",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Autumn Leaves.png"
-        },
-        {
-                "name": "Cabeza de calabaza",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Cabeza de calabaza.png"
-        },
-        {
-                "name": "Calabaza",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Calabaza.png"
-        },
-        {
-                "name": "Candado de amor",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Candado de amor.png"
-        },
-        {
-                "name": "Candado y llave",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Candado y llave.png"
-        },
-        {
-                "name": "Casco de leyendas",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Casco de leyendas.png"
-        },
-        {
-                "name": "Celebración de la comunidad",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Celebración de la comunidad.png"
-        },
-        {
-                "name": "Celebridad",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Celebridad.png"
-        },
-        {
-                "name": "Community Fest",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Community Fest.png"
-        },
-        {
-                "name": "Corona pequeña",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Corona.png"
-        },
-        {
-                "name": "el gato de la furgoneta",
-                "coins": 99,
-                "iconUrl": "/assets/gift/el gato de la furgoneta.png"
-        },
-        {
-                "name": "encanto del café",
-                "coins": 99,
-                "iconUrl": "/assets/gift/encanto del café.png"
-        },
-        {
-                "name": "Equipo Animador",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Equipo Animador.png"
-        },
-        {
-                "name": "Equipo de ensueño",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Equipo de ensueño.png"
-        },
-        {
-                "name": "Equipo victoria",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Equipo victoria.png"
-        },
-        {
-                "name": "Falling For You",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Falling For You.png"
-        },
-        {
-                "name": "Fantasmita",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Fantasmita.png"
-        },
-        {
-                "name": "Fiesta de caramelos",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Fiesta de caramelos.png"
-        },
-        {
-                "name": "Flor Bailarina",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Flor Bailarina.png"
-        },
-        {
-                "name": "Fruits Hat",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Fruits Hat.png"
-        },
-        {
-                "name": "Gimme the mic",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Gimme the mic.png"
-        },
-        {
-                "name": "Gorra",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Gorra.png"
-        },
-        {
-                "name": "Guirnalda",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Guirnalda.png"
-        },
-        {
-                "name": "Health Potion",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Health Potion.png"
-        },
-        {
-                "name": "Holiday Stocking",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Holiday Stocking.png"
-        },
-        {
-                "name": "Husky",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Husky.png"
-        },
-        {
-                "name": "iris de verano",
-                "coins": 99,
-                "iconUrl": "/assets/gift/iris de verano.png"
-        },
-        {
-                "name": "Like-Pop",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Like-Pop.png"
-        },
-        {
-                "name": "Magic Hat",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Magic Hat.png"
-        },
-        {
-                "name": "Make-up Box",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Make-up Box.png"
-        },
-        {
-                "name": "Manos danzantes",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Manos danzantes.png"
-        },
-        {
-                "name": "Maquina de suerte",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Maquina de suerte.png"
-        },
-        {
-                "name": "Me alegro por ti",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Me alegro por ti.png"
-        },
-        {
-                "name": "Mejores Amigos",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Mejores Amigos.png"
-        },
-        {
-                "name": "Mirror Bloom",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Mirror Bloom.png"
-        },
-        {
-                "name": "Música agradable",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Música agradable.png"
-        },
-        {
-                "name": "Osito",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Osito.png"
-        },
-        {
-                "name": "Panther Paws",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Panther Paws.png"
-        },
-        {
-                "name": "Patas de gato",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Patas de gato.png"
-        },
-        {
-                "name": "Pintura de amor",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Pintura de amor.png"
-        },
-        {
-                "name": "Piñata",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Piñata.png"
-        },
-        {
-                "name": "Pool Party",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Pool Party.png"
-        },
-        {
-                "name": "Pug",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Pug.png"
-        },
-        {
-                "name": "Pulsera de Equipo",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Pulsera de Equipo.png"
-        },
-        {
-                "name": "Rabbit",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Rabbit.png"
-        },
-        {
-                "name": "Sandía enamorada",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Sandía enamorada.png"
-        },
-        {
-                "name": "Sombrero de Mariachi",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Sombrero de Mariachi.png"
-        },
-        {
-                "name": "Sombrero y bigote",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Sombrero y bigote.png"
-        },
-        {
-                "name": "Spooktacular",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Spooktacular.png"
-        },
-        {
-                "name": "Tango",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Tango.png"
-        },
-        {
-                "name": "Gorra",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Toca para ti.png"
-        },
-        {
-                "name": "trompo",
-                "coins": 99,
-                "iconUrl": "/assets/gift/trompo.png"
-        },
-        {
-                "name": "Trono de Estrellas",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Trono de Estrellas.png"
-        },
-        {
-                "name": "Visitando el espacio",
-                "coins": 99,
-                "iconUrl": "/assets/gift/Visitando el espacio.png"
-        },
-        {
-                "name": "Confeti",
-                "coins": 100,
-                "iconUrl": "/assets/gift/confeti premiun.png"
-        },
-        {
-                "name": "Confeti",
-                "coins": 100,
-                "iconUrl": "/assets/gift/Confeti.png"
-        },
-        {
-                "name": "Control de videojuegos",
-                "coins": 100,
-                "iconUrl": "/assets/gift/Control.png"
-        },
-        {
-                "name": "Explosión de amor",
-                "coins": 100,
-                "iconUrl": "/assets/gift/Explosión de amor.png"
-        },
-        {
-                "name": "Cocoa de Santa",
-                "coins": 149,
-                "iconUrl": "/assets/gift/Taco.png"
-        },
-        {
-                "name": "Corazones",
-                "coins": 199,
-                "iconUrl": "/assets/gift/Corazones.png"
-        },
-        {
-                "name": "Corona de flores para la cabeza",
-                "coins": 199,
-                "iconUrl": "/assets/gift/Corona de flores.png"
-        },
-        {
-                "name": "Masaje para ti",
-                "coins": 199,
-                "iconUrl": "/assets/gift/masaje para ti.png"
-        },
-        {
-                "name": "Masaje para ti",
-                "coins": 199,
-                "iconUrl": "/assets/gift/Sage.png"
-        },
-        {
-                "name": "Estrella nocturna",
-                "coins": 199,
-                "iconUrl": "/assets/gift/star.png"
-        },
-        {
-                "name": "Abeja picadora",
-                "coins": 199,
-                "iconUrl": "/assets/gift/Stinging Bee.png"
-        },
-        {
-                "name": "Gafas de sol",
-                "coins": 199,
-                "iconUrl": "/assets/gift/Sunglasses.png"
-        },
-        {
-                "name": "Te estoy viendo",
-                "coins": 199,
-                "iconUrl": "/assets/gift/Te veo.png"
-        },
-        {
-                "name": "Medalla de oro",
-                "coins": 200,
-                "iconUrl": "/assets/gift/Medalla de oro.png"
-        },
-        {
-                "name": "Medalla de oro",
-                "coins": 200,
-                "iconUrl": "/assets/gift/Medalla.png"
-        },
-        {
-                "name": "Caja de tulipanes",
-                "coins": 200,
-                "iconUrl": "/assets/gift/Tulipanes.png"
-        },
-        {
-                "name": "Aves melódicas",
-                "coins": 249,
-                "iconUrl": "/assets/gift/Aves.png"
-        },
-        {
-                "name": "Micrófono de helado",
-                "coins": 249,
-                "iconUrl": "/assets/gift/Micrófono.png"
-        },
-        {
-                "name": "Brisa de palmeras",
-                "coins": 249,
-                "iconUrl": "/assets/gift/Palmeras.png"
-        },
-        {
-                "name": "Apretar mejillas",
-                "coins": 249,
-                "iconUrl": "/assets/gift/Pinch Face.png"
-        },
-        {
-                "name": "Amigos de frutas",
-                "coins": 299,
-                "iconUrl": "/assets/gift/Amigos Frutas.png"
-        },
-        {
-                "name": "Guantes de boxeo",
-                "coins": 299,
-                "iconUrl": "/assets/gift/Boxing Gloves.png"
-        },
-        {
-                "name": "Corgi",
-                "coins": 299,
-                "iconUrl": "/assets/gift/Corgi.png"
-        },
-        {
-                "name": "Trompa de elefante",
-                "coins": 299,
-                "iconUrl": "/assets/gift/Elefante.png"
-        },
-        {
-                "name": "Estrella de rock",
-                "coins": 299,
-                "iconUrl": "/assets/gift/Estrella de Rock.png"
-        },
-        {
-                "name": "Caja de regalo de Eid",
-                "coins": 299,
-                "iconUrl": "/assets/gift/Gift Box.png"
-        },
-        {
-                "name": "Llamada de amor",
-                "coins": 299,
-                "iconUrl": "/assets/gift/Llama.png"
-        },
-        {
-                "name": "Pollo travieso",
-                "coins": 299,
-                "iconUrl": "/assets/gift/Pollo Travieso.png"
-        },
-        {
-                "name": "¡Hola, Rosie!",
-                "coins": 299,
-                "iconUrl": "/assets/gift/Rosie.png"
-        },
-        {
-                "name": "Trompa de elefante",
-                "coins": 299,
-                "iconUrl": "/assets/gift/Trompa y orejas de elefante.png"
-        },
-        {
-                "name": "El abrazo de Tom",
-                "coins": 399,
-                "iconUrl": "/assets/gift/Abrazo de Tom.png"
-        },
-        {
-                "name": "Jollie el frijol de la alegría",
-                "coins": 399,
-                "iconUrl": "/assets/gift/Jollie.png"
-        },
-        {
-                "name": "Ganso relajado",
-                "coins": 399,
-                "iconUrl": "/assets/gift/Oca relajada.png"
-        },
-        {
-                "name": "Ritmo mágico",
-                "coins": 399,
-                "iconUrl": "/assets/gift/Ritmo mágico.png"
-        },
-        {
-                "name": "Campeón del micrófono",
-                "coins": 400,
-                "iconUrl": "/assets/gift/Campeon.png"
-        },
-        {
-                "name": "Coral",
-                "coins": 499,
-                "iconUrl": "/assets/gift/Coral.png"
-        },
-        {
-                "name": "Manos arriba",
-                "coins": 499,
-                "iconUrl": "/assets/gift/Hands UP.png"
-        },
-        {
-                "name": "Manos arriba",
-                "coins": 499,
-                "iconUrl": "/assets/gift/Manos arriba.png"
-        },
-        {
-                "name": "Gafas de DJ",
-                "coins": 500,
-                "iconUrl": "/assets/gift/Anteojos de DJ.png"
-        },
-        {
-                "name": "Gafas de realidad virtual",
-                "coins": 500,
-                "iconUrl": "/assets/gift/Gafas de RV.png"
-        },
-        {
-                "name": "Pistola de gemas",
-                "coins": 500,
-                "iconUrl": "/assets/gift/Gem Gun.png"
-        },
-        {
-                "name": "Guitarra de corazón",
-                "coins": 500,
-                "iconUrl": "/assets/gift/Guitarra.png"
-        },
-        {
-                "name": "Manifestando",
-                "coins": 500,
-                "iconUrl": "/assets/gift/Manifesting.png"
-        },
-        {
-                "name": "Pistola de dinero",
-                "coins": 500,
-                "iconUrl": "/assets/gift/Pistola.png"
-        },
-        {
-                "name": "Cisne",
-                "coins": 699,
-                "iconUrl": "/assets/gift/cisne de papel.png"
-        },
-        {
-                "name": "Cisne",
-                "coins": 699,
-                "iconUrl": "/assets/gift/Cisne.png"
-        },
-        {
-                "name": "TE AMO",
-                "coins": 899,
-                "iconUrl": "/assets/gift/LOVE U.png"
-        },
-        {
-                "name": "Tren",
-                "coins": 899,
-                "iconUrl": "/assets/gift/Spring train.png"
-        },
-        {
-                "name": "Tren",
-                "coins": 899,
-                "iconUrl": "/assets/gift/Tren.png"
-        },
-        {
-                "name": "Caja de suministros de la suerte",
-                "coins": 999,
-                "iconUrl": "/assets/gift/Caja de lanzamiento aéreo de la suerte.png"
-        },
-        {
-                "name": "Flower Overflow",
-                "coins": 999,
-                "iconUrl": "/assets/gift/Flower Overflow.png"
-        },
-        {
-                "name": "Mina de Oro",
-                "coins": 999,
-                "iconUrl": "/assets/gift/Mina de Oro.png"
-        },
-        {
-                "name": "Pistola de Dulces",
-                "coins": 999,
-                "iconUrl": "/assets/gift/Pistola de Dulces.png"
-        },
-        {
-                "name": "Que siga la fiesta",
-                "coins": 999,
-                "iconUrl": "/assets/gift/Que siga la fiesta.png"
-        },
-        {
-                "name": "Todo por un sueño",
-                "coins": 999,
-                "iconUrl": "/assets/gift/Todo por un sueño.png"
-        },
-        {
-                "name": "Viajar contigo",
-                "coins": 999,
-                "iconUrl": "/assets/gift/Travel with You.png"
-        },
-        {
-                "name": "Cintas florecientes",
-                "coins": 1000,
-                "iconUrl": "/assets/gift/Blooming Ribbons.png"
-        },
-        {
-                "name": "Disco ball",
-                "coins": 1000,
-                "iconUrl": "/assets/gift/Disco ball.png"
-        },
-        {
-                "name": "El pueblo de bu",
-                "coins": 1000,
-                "iconUrl": "/assets/gift/El pueblo de bu.png"
-        },
-        {
-                "name": "Foca y ballena",
-                "coins": 1000,
-                "iconUrl": "/assets/gift/Foca y ballena.png"
-        },
-        {
-                "name": "Futuro Encuentro",
-                "coins": 1000,
-                "iconUrl": "/assets/gift/Futuro Encuentro.png"
-        },
-        {
-                "name": "Futuro viaje",
-                "coins": 1000,
-                "iconUrl": "/assets/gift/Futuro viaje.png"
-        },
-        {
-                "name": "Galaxia",
-                "coins": 1000,
-                "iconUrl": "/assets/gift/Galaxia.png"
-        },
-        {
-                "name": "Gamer Cat",
-                "coins": 1000,
-                "iconUrl": "/assets/gift/Gamer Cat.png"
-        },
-        {
-                "name": "Gatita Bruja",
-                "coins": 1000,
-                "iconUrl": "/assets/gift/Gatita Bruja.png"
-        },
-        {
-                "name": "Gato terrorífico",
-                "coins": 1000,
-                "iconUrl": "/assets/gift/Gato terrorífico.png"
-        },
-        {
-                "name": "jets volando",
-                "coins": 1000,
-                "iconUrl": "/assets/gift/jets volando.png"
-        },
-        {
-                "name": "La pandilla de bu",
-                "coins": 1000,
-                "iconUrl": "/assets/gift/La pandilla de bu.png"
-        },
-        {
-                "name": "Globo de aire brillante",
-                "coins": 1000,
-                "iconUrl": "/assets/gift/Shiny air balloon.png"
-        },
-        {
-                "name": "Wanda la bruja",
-                "coins": 1000,
-                "iconUrl": "/assets/gift/Wanda la bruja.png"
-        },
-        {
-                "name": "Fuegos artificiales",
-                "coins": 1088,
-                "iconUrl": "/assets/gift/Fuegos Artificiales.png"
-        },
-        {
-                "name": "Bajo control",
-                "coins": 1500,
-                "iconUrl": "/assets/gift/Bajo Control.png"
-        },
-        {
-                "name": "Tarjeta de felicitación",
-                "coins": 1500,
-                "iconUrl": "/assets/gift/Greeting Card.png"
-        },
-        {
-                "name": "Aquí vamos",
-                "coins": 1799,
-                "iconUrl": "/assets/gift/Here We Go.png"
-        },
-        {
-                "name": "Gota de amor",
-                "coins": 1800,
-                "iconUrl": "/assets/gift/Love Drop.png"
-        },
-        {
-                "name": "Cooper vuela a casa",
-                "coins": 1999,
-                "iconUrl": "/assets/gift/Cooper Flies Home.png"
-        },
-        {
-                "name": "Fuegos artificiales misteriosos",
-                "coins": 1999,
-                "iconUrl": "/assets/gift/Fuegos Artificiales Misteriosos.png"
-        },
-        {
-                "name": "Estrella de la alfombra roja",
-                "coins": 1999,
-                "iconUrl": "/assets/gift/Red Carpet.png"
-        },
-        {
-                "name": "Ballena Sumergida",
-                "coins": 2150,
-                "iconUrl": "/assets/gift/Ballena Sumergida.png"
-        },
-        {
-                "name": "Ballena sumergiéndose",
-                "coins": 2150,
-                "iconUrl": "/assets/gift/Ballena.png"
-        },
-        {
-                "name": "Banda de animales",
-                "coins": 2500,
-                "iconUrl": "/assets/gift/Banda animal.png"
-        },
-        {
-                "name": "Motocicleta",
-                "coins": 2988,
-                "iconUrl": "/assets/gift/moto.png"
-        },
-        {
-                "name": "Oso rítmico",
-                "coins": 2999,
-                "iconUrl": "/assets/gift/Rhythemic Bear.png"
-        },
-        {
-                "name": "Lluvia de meteoros",
-                "coins": 3000,
-                "iconUrl": "/assets/gift/Lluvia de meteoritos.png"
-        },
-        {
-                "name": "Tu concierto",
-                "coins": 4500,
-                "iconUrl": "/assets/gift/Tu concierto.png"
-        },
-        {
-                "name": "Jet privado",
-                "coins": 4888,
-                "iconUrl": "/assets/gift/Jet Privado premiun.png"
-        },
-        {
-                "name": "Jet privado",
-                "coins": 4888,
-                "iconUrl": "/assets/gift/Jet Privado.png"
-        },
-        {
-                "name": "Leon el gatito",
-                "coins": 4888,
-                "iconUrl": "/assets/gift/Leon Gatito.png"
-        },
-        {
-                "name": "Jungla",
-                "coins": 5000,
-                "iconUrl": "/assets/gift/Jungla.png"
-        },
-        {
-                "name": "Magic Forest",
-                "coins": 5000,
-                "iconUrl": "/assets/gift/Magic Forest.png"
-        },
-        {
-                "name": "Pistola de diamantes",
-                "coins": 5000,
-                "iconUrl": "/assets/gift/Pistola de Diamantes.png"
-        },
-        {
-                "name": "Portal antiguo",
-                "coins": 5000,
-                "iconUrl": "/assets/gift/Portal antiguo.png"
-        },
-        {
-                "name": "Pueblo Embrujado",
-                "coins": 5000,
-                "iconUrl": "/assets/gift/Pueblo Embrujado.png"
-        },
-        {
-                "name": "Fantasía de unicornio",
-                "coins": 5000,
-                "iconUrl": "/assets/gift/Unicornio.png"
-        },
-        {
-                "name": "Corazón devoto",
-                "coins": 5999,
-                "iconUrl": "/assets/gift/Voto.png"
-        },
-        {
-                "name": "Ciudad del futuro",
-                "coins": 6000,
-                "iconUrl": "/assets/gift/cuidad del futuro.png"
-        },
-        {
-                "name": "Trabaja duro, juega más duro",
-                "coins": 6000,
-                "iconUrl": "/assets/gift/Trabaja Duro.png"
-        },
-        {
-                "name": "Lili la leoparda",
-                "coins": 6599,
-                "iconUrl": "/assets/gift/Lili.png"
-        },
-        {
-                "name": "Tiempo de celebración",
-                "coins": 6999,
-                "iconUrl": "/assets/gift/Celebration Time.png"
-        },
-        {
-                "name": "Fiesta feliz",
-                "coins": 6999,
-                "iconUrl": "/assets/gift/Happy Party.png"
-        },
-        {
-                "name": "Carro Deportivo",
-                "coins": 7000,
-                "iconUrl": "/assets/gift/Carro Deportivo.png"
-        },
-        {
-                "name": "Interestelar",
-                "coins": 10000,
-                "iconUrl": "/assets/gift/interstellar.png"
-        },
-        {
-                "name": "Halcón",
-                "coins": 10999,
-                "iconUrl": "/assets/gift/Halcón.png"
-        },
-        {
-                "name": "Relámpago rojo",
-                "coins": 12000,
-                "iconUrl": "/assets/gift/Red Lightning.png"
-        },
-        {
-                "name": "Galope dorado",
-                "coins": 15000,
-                "iconUrl": "/assets/gift/Golden.png"
-        },
-        {
-                "name": "Leopardo",
-                "coins": 15000,
-                "iconUrl": "/assets/gift/Leopardo.png"
-        },
-        {
-                "name": "Parque de atracciones",
-                "coins": 17000,
-                "iconUrl": "/assets/gift/Amusement Park.png"
-        },
-        {
-                "name": "Vuelo de amor",
-                "coins": 19999,
-                "iconUrl": "/assets/gift/Fly Love.png"
-        },
-        {
-                "name": "Fantasía de castillo",
-                "coins": 20000,
-                "iconUrl": "/assets/gift/Castillo.png"
-        },
-        {
-                "name": "Transbordador premium",
-                "coins": 20000,
-                "iconUrl": "/assets/gift/Premium Shuttle.png"
-        },
-        {
-                "name": "Transbordador de TikTok",
-                "coins": 20000,
-                "iconUrl": "/assets/gift/TikTok Shuttle.png"
-        },
-        {
-                "name": "El sueño de Adam",
-                "coins": 25999,
-                "iconUrl": "/assets/gift/Adams Dream.png"
-        },
-        {
-                "name": "Phoenix",
-                "coins": 25999,
-                "iconUrl": "/assets/gift/Fenix.png"
-        },
-        {
-                "name": "Fire Phoenix",
-                "coins": 25999,
-                "iconUrl": "/assets/gift/Phoenix de Fuego.png"
-        },
-        {
-                "name": "Llama de dragón",
-                "coins": 26999,
-                "iconUrl": "/assets/gift/Dragon Flame.png"
-        },
-        {
-                "name": "Bulevar",
-                "coins": 29999,
-                "iconUrl": "/assets/gift/Bulevar.png"
-        },
-        {
-                "name": "Lion and Cub",
-                "coins": 29999,
-                "iconUrl": "/assets/gift/Leon y Leoncito.png"
-        },
-        {
-                "name": "Lion",
-                "coins": 29999,
-                "iconUrl": "/assets/gift/Leon.png"
-        },
-        {
-                "name": "Lion and Lili",
-                "coins": 29999,
-                "iconUrl": "/assets/gift/Leoncito y lili.png"
-        },
-        {
-                "name": "Noria",
-                "coins": 29999,
-                "iconUrl": "/assets/gift/Noria.png"
-        },
-        {
-                "name": "Rio de janeiro",
-                "coins": 29999,
-                "iconUrl": "/assets/gift/Rio de janeiro.png"
-        },
-        {
-                "name": "Gorila",
-                "coins": 30000,
-                "iconUrl": "/assets/gift/Gorilla.png"
-        },
-        {
-                "name": "Zeus",
-                "coins": 34000,
-                "iconUrl": "/assets/gift/Zeus.png"
-        },
-        {
-                "name": "Halcón de trueno",
-                "coins": 39999,
-                "iconUrl": "/assets/gift/Halcón de Trueno.png"
-        },
-        {
-                "name": "Pegaso",
-                "coins": 42999,
-                "iconUrl": "/assets/gift/Pegaso.png"
-        }
-];
-
-    const giftNameMappings = {
-        "rose": "rosa",
-        "white rose": "rosa blanca",
-        "corn": "es maíz",
-        "it's corn": "es maíz",
-        "it’s corn": "es maíz",
-        "tiktok": "tik tok",
-        "tiktok universe": "tik tok universo",
-        "heart": "corazón",
-        "donut": "dona",
-        "paper duck": "pato",
-        "duck": "pato",
-        "finger heart": "corazón coreano",
-        "crown": "corona",
-        "gg": "buen juego (gg)",
-        "cap": "gorra",
-        "tom's hug": "abrazo de tom",
-        "capybara": "capibara",
-        "love you": "te amo",
-        "rose cosmic": "rose cosmic",
-        "rose eternity": "rose eternity",
-        "rose big": "rose big",
-        "coffee charm": "encanto del café",
-        "coffee cup": "encanto del café",
-        "motorcycle": "moto",
-        "star": "estrella",
-        
-        "rosa": "rose",
-        "rosa blanca": "white rose",
-        "es maíz": "corn",
-        "maiz": "corn",
-        "tik tok": "tiktok",
-        "tik tok universo": "tiktok universe",
-        "corazón": "heart",
-        "corazon": "heart",
-        "dona": "donut",
-        "pato": "duck",
-        "corazón coreano": "finger heart",
-        "corona": "crown",
-        "buen juego (gg)": "gg",
-        "gorra": "cap",
-        "abrazo de tom": "tom's hug",
-        "capibara": "capybara",
-        "te amo": "love you",
-        "rosa cosmica": "rose cosmic",
-        "rosa de la eternidad": "rose eternity",
-        "rosa grande": "rose big",
-        "encanto del café": "coffee charm",
-        "moto": "motorcycle",
-        "estrella": "star"
-    };
-
-    function normalizeGiftName(name) {
-        if (!name) return "";
-        return name.toLowerCase()
-            .replace(/\s+/g, '') // remove spaces
-            .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // remove accents
+    const widgetUrlInput = document.getElementById('dynamics-widget-url');
+    const widgetPreviewIframe = document.getElementById('dynamics-widget-preview');
+    if (widgetUrlInput && widgetPreviewIframe) {
+        const serverPort = window.location.port || '3000';
+        const dynamicsUrl = `http://127.0.0.1:${serverPort}/dinamicas`;
+        widgetUrlInput.value = dynamicsUrl;
+        widgetPreviewIframe.src = dynamicsUrl;
     }
 
-    function findDefaultGift(triggerName) {
-        if (!triggerName) return null;
-        const normTrigger = normalizeGiftName(triggerName);
-        
-        // 1. Direct match (space & accent insensitive)
-        let found = DEFAULT_GIFTS.find(g => normalizeGiftName(g.name) === normTrigger);
-        if (found) return found;
-        
-        // 2. Mapped translation match
-        const cleanTrigger = triggerName.toLowerCase().trim();
-        const mapped = giftNameMappings[cleanTrigger];
-        if (mapped) {
-            const normMapped = normalizeGiftName(mapped);
-            found = DEFAULT_GIFTS.find(g => normalizeGiftName(g.name) === normMapped);
-            if (found) return found;
-        }
-        
-        // 3. Accent-only insensitive translation match
-        const normCleanTrigger = cleanTrigger.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        const mappedNorm = giftNameMappings[normCleanTrigger];
-        if (mappedNorm) {
-            const normMappedNorm = normalizeGiftName(mappedNorm);
-            found = DEFAULT_GIFTS.find(g => normalizeGiftName(g.name) === normMappedNorm);
-            if (found) return found;
-        }
-        
-        return null;
+    const btnCopyDynamics = document.getElementById('btn-copy-dynamics-url');
+    if (btnCopyDynamics) {
+        btnCopyDynamics.addEventListener('click', () => {
+            const copyText = document.getElementById('dynamics-widget-url');
+            if (copyText) {
+                copyText.select();
+                copyText.setSelectionRange(0, 99999);
+                navigator.clipboard.writeText(copyText.value);
+                alert('¡Enlace de widget copiado al portapapeles!');
+            }
+        });
     }
 
-    let activeEditRowIndex = null;
-    let localPreviewAudio = null;
-    let currentlyPlayingIdx = null;
+    // Populate selectors immediately: cerebro para Multimedia, espejo para Dinámicas
+    // populateGiftSelectors se omite aquí porque cada módulo tiene su propio catálogo.
+    // Dinámicas usa populateGoalsCatalogSelectors() al recibir initGoalsCatalog vía socket.
+
+    // Dynamic Goals Table for Dinamicas Tab
+    const dynamicsMetasTbody = document.getElementById('dynamics-metas-tbody');
+    let dinamicasConfig = [];
+
+    const dinamicasGoalTypeSelect = document.getElementById('goal-type-select');
+    const dinamicasGoalGiftSelectContainer = document.getElementById('goal-gift-select-container');
+    const dinamicasGoalGiftSelect = document.getElementById('goal-gift-select');
+    const dinamicasGoalTitleInput = document.getElementById('goal-title-input');
+    const dinamicasGoalTargetInput = document.getElementById('goal-target-input');
+    const dinamicasBtnCreateGoal = document.getElementById('btn-create-dynamic-goal');
+    const dinamicasBtnResetGoals = document.getElementById('btn-reset-dynamic-goals');
+
+    // Reemplaza el bloque que maneja el cambio de 'Tipo de Meta' (panel.js)
+if (dinamicasGoalTypeSelect) {
+    dinamicasGoalTypeSelect.addEventListener('change', () => {
+        if (dinamicasGoalTypeSelect.value === 'gift') {
+            dinamicasGoalGiftSelectContainer.style.display = 'block';
+            // Poblar desde el catálogo espejo de Dinámicas (goalsCatalog),
+            // que está sincronizado con el cerebro pero es independiente de Multimedia.
+            populateGoalsCatalogSelectors();
+        } else {
+            dinamicasGoalGiftSelectContainer.style.display = 'none';
+        }
+    });
+}
+
+    // Update gift image preview when a different gift is selected in Dinámicas
+    if (dinamicasGoalGiftSelect) {
+        dinamicasGoalGiftSelect.addEventListener('change', () => {
+            const previewImg = document.getElementById('goal-gift-preview');
+            if (!previewImg) return;
+            const selectedOpt = dinamicasGoalGiftSelect.options[dinamicasGoalGiftSelect.selectedIndex];
+            const imgSrc = selectedOpt ? selectedOpt.getAttribute('data-image') : '';
+            if (imgSrc) {
+                previewImg.src = imgSrc;
+                previewImg.style.display = 'block';
+                const serverPort = window.location.port || '3000';
+                previewImg.onerror = () => { previewImg.src = `http://127.0.0.1:${serverPort}/app-assets/neutral-logo.jpg`; };
+            } else {
+                previewImg.style.display = 'none';
+            }
+            // Inject selected giftId and giftName into hidden inputs if present
+            try {
+                const hiddenId = document.getElementById('goal-gift-id');
+                const hiddenName = document.getElementById('goal-gift-name');
+                if (selectedOpt) {
+                    const gid = selectedOpt.value || '';
+                    const gname = selectedOpt.getAttribute('data-name') || (selectedOpt.textContent || '').replace(/ \(.*$/, '').trim();
+                    if (hiddenId) hiddenId.value = gid;
+                    if (hiddenName) hiddenName.value = gname;
+                }
+            } catch (e) {
+                // silent
+            }
+        });
+    }
+
+    if (dinamicasBtnCreateGoal) {
+        dinamicasBtnCreateGoal.addEventListener('click', () => {
+            const type = dinamicasGoalTypeSelect.value;
+            const title = dinamicasGoalTitleInput.value.trim() || (type === 'likes' ? 'Meta de Likes' : type === 'follows' ? 'Meta de Seguidores' : 'Meta de Regalo');
+            const target = Number(dinamicasGoalTargetInput.value) || 100;
+            
+            const data = {
+                type: type,
+                title: title,
+                target: target
+            };
+
+            if (type === 'gift') {
+                // Prefer hidden inputs if present (injected from selector), otherwise read from select
+                const hiddenIdEl = document.getElementById('goal-gift-id');
+                const hiddenNameEl = document.getElementById('goal-gift-name');
+                const giftId = (hiddenIdEl && hiddenIdEl.value) ? hiddenIdEl.value : (dinamicasGoalGiftSelect ? dinamicasGoalGiftSelect.value : '');
+                if (!giftId) {
+                    alert('Por favor selecciona un regalo del catálogo.');
+                    return;
+                }
+
+                let giftName = '';
+                if (hiddenNameEl && hiddenNameEl.value) {
+                    giftName = hiddenNameEl.value;
+                } else if (dinamicasGoalGiftSelect) {
+                    const selectedOpt = dinamicasGoalGiftSelect.options[dinamicasGoalGiftSelect.selectedIndex];
+                    if (selectedOpt) {
+                        giftName = selectedOpt.getAttribute('data-name') || (selectedOpt.textContent || '').replace(/ \(.*$/, '').trim();
+                    }
+                }
+
+                data.giftId = giftId;
+                data.giftName = giftName;
+            }
+
+            socket.emit('add_dynamic_goal', data);
+            
+            // Clear inputs
+            dinamicasGoalTitleInput.value = '';
+            dinamicasGoalTargetInput.value = '100';
+        });
+    }
+
+    if (dinamicasBtnResetGoals) {
+        dinamicasBtnResetGoals.addEventListener('click', () => {
+            if (confirm('¿Estás seguro de que deseas reiniciar el progreso de todas las metas activas?')) {
+                socket.emit('reset_dynamic_goals');
+            }
+        });
+    }
+
+    socket.on('initDinamicas', (data) => {
+        dinamicasConfig = data || [];
+        renderDynamicsMetasTable();
+    });
+
+    socket.on('initReceta', (config) => {
+        if (!config) return;
+        
+        const titleInput = document.getElementById('vs-title-input');
+        if (titleInput && titleInput.value !== config.title) {
+            titleInput.value = config.title || '';
+        }
+        
+        const container = document.getElementById('ingredients-container');
+        if (container) {
+            const inputs = container.querySelectorAll('.vs-item-name-input');
+            const items = config.items || [];
+            if (inputs.length !== items.length || inputs.length === 0) {
+                container.innerHTML = '';
+                items.forEach(item => {
+                    const row = document.createElement('div');
+                    row.className = 'vs-control-row';
+                    row.style = 'display: flex; gap: 10px; align-items: center; width: 100%; margin-bottom: 8px;';
+                    row.innerHTML = `
+                        <input type="text" class="vs-item-name-input" value="${item.name || ''}" placeholder="Ingrediente...">
+                        <button type="button" class="btn-delete-ingredient" style="background: transparent; border: none; color: #ff3b30; cursor: pointer; padding: 4px; display: inline-flex; align-items: center; justify-content: center; transition: background-color 0.2s; border-radius: 4px; height: 38px; width: 38px; flex-shrink: 0;">
+                            <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+                        </button>
+                    `;
+
+                    row.querySelector('.btn-delete-ingredient').addEventListener('click', () => {
+                        row.remove();
+                        const updatedItems = [];
+                        document.querySelectorAll('.vs-item-name-input').forEach(input => {
+                            if (input.value.trim() !== '') updatedItems.push({ name: input.value, count: 1 });
+                        });
+                        socket.emit('manual_control', {
+                            action: 'vs_update',
+                            title: titleInput ? titleInput.value : '',
+                            items: updatedItems
+                        });
+                    });
+
+                    row.querySelector('.vs-item-name-input').addEventListener('input', () => {
+                        const updatedItems = [];
+                        document.querySelectorAll('.vs-item-name-input').forEach(input => {
+                            if (input.value.trim() !== '') updatedItems.push({ name: input.value, count: 1 });
+                        });
+                        socket.emit('manual_control', {
+                            action: 'vs_update',
+                            title: titleInput ? titleInput.value : '',
+                            items: updatedItems
+                        });
+                    });
+
+                    container.appendChild(row);
+                });
+                if (window.lucide) window.lucide.createIcons();
+            }
+        }
+    });
+
+    function renderDynamicsMetasTable() {
+        if (!dynamicsMetasTbody) return;
+        dynamicsMetasTbody.innerHTML = '';
+
+        if (dinamicasConfig.length === 0) {
+            dynamicsMetasTbody.innerHTML = `
+                <tr>
+                    <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 30px;">
+                        No hay metas activas en el widget. Configura una arriba.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        const serverPort = window.location.port || '3000';
+
+        dinamicasConfig.forEach(goal => {
+            const tr = document.createElement('tr');
+            
+            let typeText = '';
+            let iconSrc = '';
+            
+            if (goal.type === 'likes') {
+                typeText = 'Meta de Likes';
+                iconSrc = `http://127.0.0.1:${serverPort}/app-assets/neutral-logo.jpg`;
+            } else if (goal.type === 'follows') {
+                typeText = 'Meta de Seguidores';
+                iconSrc = `http://127.0.0.1:${serverPort}/app-assets/neutral-logo.jpg`;
+            } else if (goal.type === 'gift') {
+                typeText = goal.giftName || 'Regalo';
+                const giftImage = goal.image || `${(goal.giftName || '').toLowerCase().replace(/\s+/g, '_')}.png`;
+                iconSrc = `http://127.0.0.1:${serverPort}/gift-assets/${giftImage}`;
+            }
+
+            const current = goal.current || 0;
+            const target = goal.target || 100;
+            const percent = Math.min(Math.round((current / target) * 100), 100);
+
+            tr.innerHTML = `
+                <td>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <img src="${iconSrc}" style="width: 30px; height: 30px; object-fit: contain; border-radius: 4px;" onerror="this.src='http://127.0.0.1:${serverPort}/app-assets/neutral-logo.jpg'">
+                        <span style="font-weight: 700; color: var(--text-main);">${typeText}</span>
+                    </div>
+                </td>
+                <td>
+                    <span style="font-weight: 500; color: var(--text-main);">${goal.title || ''}</span>
+                </td>
+                <td>
+                    <div style="display: flex; align-items: center; gap: 10px; min-width: 140px;">
+                        <div style="flex: 1; height: 8px; background: rgba(255, 255, 255, 0.1); border-radius: 4px; overflow: hidden; position: relative;">
+                            <div style="width: ${percent}%; height: 100%; background: #00ffcc; box-shadow: 0 0 8px rgba(0, 255, 204, 0.4); transition: width 0.3s ease;"></div>
+                        </div>
+                        <span style="font-size: 11px; font-weight: bold; color: var(--text-main); white-space: nowrap;">${current} / ${target}</span>
+                    </div>
+                </td>
+                <td class="text-right">
+                    <button class="btn-icon btn-delete-dynamics-meta" data-goal-id="${goal.id}" style="color: var(--accent-red); background: transparent; border: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;" title="Eliminar Meta">
+                        <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+                    </button>
+                </td>
+            `;
+
+            tr.querySelector('.btn-delete-dynamics-meta').addEventListener('click', () => {
+                socket.emit('remove_dynamic_goal', { goalId: goal.id });
+            });
+
+            dynamicsMetasTbody.appendChild(tr);
+        });
+
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+
+    const btnAddDynamicsMeta = document.getElementById('btn-add-dynamics-meta');
+    if (btnAddDynamicsMeta) {
+        btnAddDynamicsMeta.addEventListener('click', () => {
+            openGiftModal();
+        });
+    }
 
     // 2. DOM Elements
-    const btnCreateAlert = document.getElementById('btn-create-sound-alert');
     const tableBody = document.getElementById('sound-alerts-body');
-    const searchAlertsInput = document.getElementById('search-alerts');
     const alertsStatusText = document.getElementById('alerts-status-text');
     
     // Modals
-    const giftModal = document.getElementById('gift-selector-modal');
-    const btnCloseGiftModal = document.getElementById('btn-close-gift-modal');
     const giftsGrid = document.getElementById('gifts-grid-container');
-    const searchGiftsInput = document.getElementById('search-gifts-input');
 
-    const soundModal = document.getElementById('sound-selector-modal');
-    const btnCloseSoundModal = document.getElementById('btn-close-sound-modal');
     const systemSoundsList = document.getElementById('system-sounds-list');
     const customSoundsList = document.getElementById('custom-sounds-list');
-    const searchSoundsInput = document.getElementById('search-sounds-input');
-    
-    const btnTriggerUpload = document.getElementById('btn-trigger-upload-sound');
-    const soundFileInput = document.getElementById('sound-file-input');
     const dropzone = document.getElementById('sound-upload-dropzone');
 
     // 3. Render Table
-    window.renderSoundAlertsTable = function(alerts) {
+    function renderSoundAlertsTable(mapping) {
         if (!tableBody) return;
         tableBody.innerHTML = '';
 
-        const searchQuery = (searchAlertsInput ? searchAlertsInput.value.toLowerCase().trim() : '');
-        const filtered = alerts.filter((alert, idx) => {
+        const searchQuery = (document.getElementById('search-alerts') ? document.getElementById('search-alerts').value.toLowerCase().trim() : '');
+        const serverPort = window.location.port || '3000';
+
+        const giftIds = Object.keys(mapping || {});
+        const filteredIds = giftIds.filter(giftId => {
+            const gift = mapping[giftId];
             if (!searchQuery) return true;
-            const typeText = alert.type === 'gift' ? 'regalo' : (alert.type === 'follow' ? 'seguir' : (alert.type === 'share' ? 'compartir' : 'like tap tap'));
-            const triggerText = (alert.trigger || '').toLowerCase();
-            const soundText = (alert.soundName || '').toLowerCase();
-            return typeText.includes(searchQuery) || triggerText.includes(searchQuery) || soundText.includes(searchQuery);
+            const nameText = (gift.name || '').toLowerCase();
+            const soundText = (gift.sound || '').toLowerCase();
+            return nameText.includes(searchQuery) || soundText.includes(searchQuery);
         });
 
         // Update status text
         if (alertsStatusText) {
-            const activeCount = alerts.filter(a => a.enabled).length;
-            alertsStatusText.textContent = `${alerts.length} alertas creadas (${activeCount} activas)`;
+            const configuredCount = giftIds.filter(id => mapping[id].sound).length;
+            alertsStatusText.textContent = `${giftIds.length} alertas configuradas (${configuredCount} con sonido)`;
         }
 
-        if (filtered.length === 0) {
+        if (filteredIds.length === 0) {
             tableBody.innerHTML = `
                 <tr>
-                    <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">
+                    <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 30px;">
                         No se encontraron alertas configuradas. Haz clic en "+ Crear alerta sonora" para empezar.
                     </td>
                 </tr>
@@ -4096,78 +4625,48 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        filtered.forEach((alert, actualIdx) => {
-            const idx = alerts.indexOf(alert);
+        // Sort by coins value ascending
+        const sortedIds = filteredIds.sort((a, b) => (mapping[a].coins || 0) - (mapping[b].coins || 0));
+
+        sortedIds.forEach(giftId => {
+            const gift = mapping[giftId];
             const tr = document.createElement('tr');
             
             // Play icon
-            const isPlaying = (currentlyPlayingIdx === idx);
+            const isPlaying = (currentlyPlayingIdx === giftId);
             const playIcon = isPlaying ? 'square' : 'play';
             
             // Gift icon url
-            let giftIconHtml = '';
-            if (alert.type === 'gift') {
-                const metadata = chatbotConfig.giftMetadata || {};
-                const defaultGift = findDefaultGift(alert.trigger);
-                
-                let iconSrc = 'assets/neutral-logo.jpg';
-                if (defaultGift && defaultGift.iconUrl && (defaultGift.iconUrl.startsWith('assets/') || defaultGift.iconUrl.startsWith('/assets/'))) {
-                    iconSrc = defaultGift.iconUrl;
-                } else {
-                    const cleanTrigger = (alert.trigger || '').toLowerCase().trim();
-                    const mappedTrigger = giftNameMappings[cleanTrigger] || alert.trigger;
-                    const giftMeta = metadata[alert.trigger] || metadata[mappedTrigger] || defaultGift;
-                    if (giftMeta) iconSrc = giftMeta.iconUrl;
-                }
-                giftIconHtml = `<img src="${iconSrc}" style="width: 20px; height: 20px; object-fit: contain; border-radius: 4px;">`;
-            }
+            const giftImage = gift.image || `${(gift.name || '').toLowerCase().replace(/\s+/g, '_')}.png`;
+            const iconSrc = `http://127.0.0.1:${serverPort}/gift-assets/${giftImage}`;
 
             // Generate row HTML
             tr.innerHTML = `
                 <td>
-                    <button class="btn-icon btn-test-sound" data-idx="${idx}" style="color: ${isPlaying ? 'var(--accent-pink)' : 'var(--text-main)'}; background: transparent; border: none; cursor: pointer;">
+                    <button class="btn-icon btn-test-sound" data-gift-id="${giftId}" style="color: ${isPlaying ? 'var(--accent-pink)' : 'var(--text-main)'}; background: transparent; border: none; cursor: pointer;">
                         <i data-lucide="${playIcon}" style="width: 18px; height: 18px;"></i>
                     </button>
                 </td>
                 <td>
-                    <button class="btn-icon btn-delete-alert" data-idx="${idx}" style="color: var(--accent-red); background: transparent; border: none; cursor: pointer;">
-                        <i data-lucide="trash-2" style="width: 18px; height: 18px;"></i>
-                    </button>
+                    <img src="${iconSrc}" style="width: 30px; height: 30px; object-fit: contain; border-radius: 4px;" onerror="this.src='http://127.0.0.1:${serverPort}/app-assets/neutral-logo.jpg'">
                 </td>
                 <td>
-                    <input type="checkbox" class="alert-row-enabled" data-idx="${idx}" ${alert.enabled ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px; accent-color: var(--accent-pink);">
+                    <span style="font-weight: 700; color: var(--text-main);">${gift.name || 'Desconocido'}</span>
                 </td>
                 <td>
-                    <select class="alert-row-type" data-idx="${idx}" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); color: var(--text-main); font-weight: 700; width: 100%;">
-                        <option value="gift" ${alert.type === 'gift' ? 'selected' : ''}>Regalo</option>
-                        <option value="follow" ${alert.type === 'follow' ? 'selected' : ''}>Seguir</option>
-                        <option value="share" ${alert.type === 'share' ? 'selected' : ''}>Compartir</option>
-                        <option value="like" ${alert.type === 'like' ? 'selected' : ''}>Like / Tap Tap</option>
-                    </select>
+                    <span style="font-weight: 700; color: #ffd700;">${gift.coins || 1} ●</span>
                 </td>
                 <td>
-                    ${alert.type === 'gift' 
-                        ? `<button class="gift-trigger-btn" data-idx="${idx}">${giftIconHtml} <span>${alert.trigger || 'Rose'}</span></button>` 
-                        : `<span style="color: var(--text-muted); font-size: 12px; font-weight: 600; padding-left: 8px;">Cualquiera</span>`
-                    }
-                </td>
-                <td>
-                    <input type="number" class="alert-row-qty" data-idx="${idx}" min="1" value="${alert.cantidad || 1}" 
-                        style="padding: 6px 10px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-main); text-align: center; width: 70px;"
-                        ${(alert.type === 'follow' || alert.type === 'share') ? 'disabled style="opacity: 0.3;"' : ''}
-                    >
-                </td>
-                <td>
-                    <button class="btn-sound-select" data-idx="${idx}">
-                        <span>${alert.soundName || 'Seleccionar sonido...'}</span>
+                    <button class="btn-sound-select" data-gift-id="${giftId}" style="padding: 6px 12px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-main); display: flex; align-items: center; gap: 8px; cursor: pointer; width: 100%; justify-content: space-between;">
+                        <span>${gift.sound || 'Seleccionar sonido...'}</span>
                         <i data-lucide="chevron-down" style="width: 14px; height: 14px; color: var(--text-muted);"></i>
                     </button>
                 </td>
                 <td>
-                    <div class="volume-slider-container">
-                        <input type="range" class="alert-row-volume" data-idx="${idx}" min="0" max="100" value="${alert.volume !== undefined ? alert.volume : 100}">
-                        <span class="volume-val">${alert.volume !== undefined ? alert.volume : 100}%</span>
-                    </div>
+                    <button class="btn-icon btn-clear-sound" data-gift-id="${giftId}" style="color: var(--accent-red); background: transparent; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600;" title="Quitar Alerta">
+                        <i data-lucide="x-circle" style="width: 16px; height: 16px;"></i>
+                        <span>Quitar</span>
+                    </button>
                 </td>
             `;
 
@@ -4180,103 +4679,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Attach listeners
         attachRowListeners();
-    };
+    }
+    // Expose on window for external callers (e.g. initSoundsConfig socket listener)
+    window.renderSoundAlertsTable = renderSoundAlertsTable;
 
     function attachRowListeners() {
         // Play/Preview
         document.querySelectorAll('.btn-test-sound').forEach(btn => {
             btn.addEventListener('click', () => {
-                const idx = parseInt(btn.getAttribute('data-idx'));
-                const alert = chatbotConfig.soundAlerts[idx];
-                if (!alert || !alert.sound) return;
+                const giftId = btn.getAttribute('data-gift-id');
+                const gift = soundsConfig[giftId];
+                if (!gift || !gift.sound) return;
 
-                if (currentlyPlayingIdx === idx) {
+                if (currentlyPlayingIdx === giftId) {
                     stopSoundPreview();
                 } else {
-                    playSoundPreview(alert.sound, alert.volume !== undefined ? alert.volume : 100, idx);
+                    const serverPort = window.location.port || '3000';
+                    const soundUrl = `http://127.0.0.1:${serverPort}/sound-assets/${gift.sound}`;
+                    playSoundPreview(soundUrl, 100, giftId);
                 }
-            });
-        });
-
-        // Delete
-        document.querySelectorAll('.btn-delete-alert').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const idx = parseInt(btn.getAttribute('data-idx'));
-                chatbotConfig.soundAlerts.splice(idx, 1);
-                saveSoundAlertsSettings();
-            });
-        });
-
-        // Enabled checkbox
-        document.querySelectorAll('.alert-row-enabled').forEach(cb => {
-            cb.addEventListener('change', () => {
-                const idx = parseInt(cb.getAttribute('data-idx'));
-                chatbotConfig.soundAlerts[idx].enabled = cb.checked;
-                saveSoundAlertsSettings();
-            });
-        });
-
-        // Type select change
-        document.querySelectorAll('.alert-row-type').forEach(sel => {
-            sel.addEventListener('change', () => {
-                const idx = parseInt(sel.getAttribute('data-idx'));
-                const type = sel.value;
-                chatbotConfig.soundAlerts[idx].type = type;
-                if (type === 'gift') {
-                    chatbotConfig.soundAlerts[idx].trigger = 'Rose';
-                    chatbotConfig.soundAlerts[idx].cantidad = 1;
-                } else if (type === 'like') {
-                    chatbotConfig.soundAlerts[idx].trigger = 'likes';
-                    chatbotConfig.soundAlerts[idx].cantidad = 100;
-                } else {
-                    chatbotConfig.soundAlerts[idx].trigger = '';
-                    chatbotConfig.soundAlerts[idx].cantidad = 1;
-                }
-                saveSoundAlertsSettings();
-            });
-        });
-
-        // Quantity change
-        document.querySelectorAll('.alert-row-qty').forEach(inp => {
-            inp.addEventListener('change', () => {
-                const idx = parseInt(inp.getAttribute('data-idx'));
-                chatbotConfig.soundAlerts[idx].cantidad = parseInt(inp.value) || 1;
-                saveSoundAlertsSettings();
-            });
-        });
-
-        // Volume range input
-        document.querySelectorAll('.alert-row-volume').forEach(range => {
-            range.addEventListener('input', (e) => {
-                const idx = parseInt(range.getAttribute('data-idx'));
-                const val = range.value;
-                const parent = range.closest('.volume-slider-container');
-                if (parent) {
-                    const label = parent.querySelector('.volume-val');
-                    if (label) label.textContent = `${val}%`;
-                }
-            });
-
-            range.addEventListener('change', () => {
-                const idx = parseInt(range.getAttribute('data-idx'));
-                chatbotConfig.soundAlerts[idx].volume = parseInt(range.value);
-                saveSoundAlertsSettings();
-            });
-        });
-
-        // Gift Trigger Select Button Click
-        document.querySelectorAll('.gift-trigger-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                activeEditRowIndex = parseInt(btn.getAttribute('data-idx'));
-                openGiftModal();
             });
         });
 
         // Sound Select Button Click
         document.querySelectorAll('.btn-sound-select').forEach(btn => {
             btn.addEventListener('click', () => {
-                activeEditRowIndex = parseInt(btn.getAttribute('data-idx'));
+                activeEditGiftId = btn.getAttribute('data-gift-id');
                 openSoundModal();
+            });
+        });
+
+        // Clear sound (Quitar)
+        document.querySelectorAll('.btn-clear-sound').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const giftId = btn.getAttribute('data-gift-id');
+                if (soundsConfig[giftId]) {
+                    socket.emit('remove_sound_alert', { giftId: giftId });
+                }
             });
         });
     }
@@ -4293,7 +4732,7 @@ document.addEventListener('DOMContentLoaded', () => {
         localPreviewAudio.volume = volume / 100;
         currentlyPlayingIdx = idx;
         
-        renderSoundAlertsTable(chatbotConfig.soundAlerts || []);
+        renderSoundAlertsTable(soundsConfig);
 
         localPreviewAudio.play().catch(e => {
             console.error('Failed to preview sound:', e);
@@ -4311,143 +4750,103 @@ document.addEventListener('DOMContentLoaded', () => {
             localPreviewAudio = null;
         }
         currentlyPlayingIdx = null;
-        renderSoundAlertsTable(chatbotConfig.soundAlerts || []);
-    }
-
-    // 5. Create Button Event
-    if (btnCreateAlert) {
-        btnCreateAlert.addEventListener('click', () => {
-            if (!chatbotConfig.soundAlerts) {
-                chatbotConfig.soundAlerts = [];
-            }
-            // Add a default gift sound alert (Rose - bruh.mp3)
-            chatbotConfig.soundAlerts.push({
-                id: `alert_${Date.now()}`,
-                enabled: true,
-                type: 'gift',
-                trigger: 'Rose',
-                cantidad: 1,
-                sound: '/sounds/bruh.mp3',
-                soundName: 'GRLive Bruh',
-                volume: 100
-            });
-            saveSoundAlertsSettings();
-        });
-    }
-
-    if (searchAlertsInput) {
-        searchAlertsInput.addEventListener('input', () => {
-            renderSoundAlertsTable(chatbotConfig.soundAlerts || []);
-        });
+        renderSoundAlertsTable(soundsConfig);
     }
 
     // 6. Gift Selector Modal Operations
-    function openGiftModal() {
-        if (!giftModal) return;
-        giftModal.style.display = 'flex';
+    // Reemplaza la función openGiftModal (panel.js)
+async function openGiftModal() {
+    const giftModal = document.getElementById('gift-selector-modal');
+    if (!giftModal) return;
+    giftModal.style.display = 'flex';
+    // Immediately clear container so UI stays responsive
+    if (giftsGrid) giftsGrid.innerHTML = '';
+
+    // If we already have mapping from initMetas, render immediately
+    if (Object.keys(giftsMapping || {}).length > 0) {
         renderGiftsGrid('');
+        return;
     }
 
+    // Show loading state while fetching
+    if (giftsGrid) giftsGrid.innerHTML = `<div style="grid-column: span 4; text-align: center; color: var(--text-muted); padding: 30px;"><i data-lucide=\"loader\" style=\"width:24px;height:24px;animation:spin 1s linear infinite;\"></i><br>Cargando catálogo...</div>`;
+
+    // Fetch catalog from API as fallback and then render
+    await fetchGiftsCatalog();
+    renderGiftsGrid('');
+}
+
     function closeGiftModal() {
+        const giftModal = document.getElementById('gift-selector-modal');
         if (giftModal) giftModal.style.display = 'none';
         activeEditRowIndex = null;
     }
 
-    if (btnCloseGiftModal) btnCloseGiftModal.addEventListener('click', closeGiftModal);
-    if (giftModal) {
-        giftModal.addEventListener('click', (e) => {
-            if (e.target === giftModal) closeGiftModal();
-        });
+    // Reemplaza la función renderGiftsGrid (panel.js)
+function renderGiftsGrid(searchQuery) {
+    if (!giftsGrid) return;
+    giftsGrid.innerHTML = '';
+
+    const query = (searchQuery || '').toLowerCase().trim();
+    const list = Object.entries(giftsMapping || {}).map(([id, g]) => ({ id, ...g }));
+    const sorted = list.sort((a, b) => (a.coins || 0) - (b.coins || 0));
+    const filtered = sorted.filter(g => (g.name || '').toLowerCase().includes(query));
+
+    if (filtered.length === 0) {
+        giftsGrid.innerHTML = `<div style="grid-column: span 4; text-align: center; color: var(--text-muted); padding: 20px;">No se encontraron regalos.</div>`;
+        return;
     }
 
-    if (searchGiftsInput) {
-        searchGiftsInput.addEventListener('input', (e) => {
-            renderGiftsGrid(e.target.value);
-        });
-    }
+    filtered.forEach(gift => {
+        const item = document.createElement('div');
+        item.className = 'gift-item';
+        const serverPort = window.location.port || '3000';
+        const giftImage = gift.image || `${(gift.name || '').toLowerCase().replace(/\s+/g, '_')}.png`;
+        const iconSrc = `http://127.0.0.1:${serverPort}/gift-assets/${giftImage}`;
 
-    function renderGiftsGrid(searchQuery) {
-        if (!giftsGrid) return;
-        giftsGrid.innerHTML = '';
-
-        const query = searchQuery.toLowerCase().trim();
-        
-        // Merge default gifts and dynamic cached ones from server metadata
-        const metadata = chatbotConfig.giftMetadata || {};
-        const allGiftsMap = {};
-        
-        // Load default gifts first (clone to avoid modifying original array objects)
-        DEFAULT_GIFTS.forEach(g => {
-            allGiftsMap[g.name.toLowerCase()] = { ...g };
-        });
-
-        // Load cached gifts next (preserving custom local icons starting with 'assets/')
-        Object.keys(metadata).forEach(key => {
-            const lowerKey = key.toLowerCase();
-            if (allGiftsMap[lowerKey]) {
-                // Only override if the default gift does NOT have a local icon
-                if (!allGiftsMap[lowerKey].iconUrl || (!allGiftsMap[lowerKey].iconUrl.startsWith('assets/') && !allGiftsMap[lowerKey].iconUrl.startsWith('/assets/'))) {
-                    allGiftsMap[lowerKey].iconUrl = metadata[key].iconUrl;
-                }
-            } else {
-                allGiftsMap[lowerKey] = {
-                    name: metadata[key].name,
-                    coins: metadata[key].coins,
-                    iconUrl: metadata[key].iconUrl
-                };
-            }
-        });
-
-        const list = Object.values(allGiftsMap).sort((a,b) => a.coins - b.coins);
-        const filtered = list.filter(g => g.name.toLowerCase().includes(query));
-
-        if (filtered.length === 0) {
-            giftsGrid.innerHTML = `<div style="grid-column: span 4; text-align: center; color: var(--text-muted); padding: 20px;">No se encontraron regalos.</div>`;
-            return;
-        }
-
-        filtered.forEach(gift => {
-            const item = document.createElement('div');
-            item.className = 'gift-item';
-            item.innerHTML = `
-                <img src="${gift.iconUrl || 'assets/neutral-logo.jpg'}" alt="${gift.name}">
+        item.innerHTML = `
+            <img src="${iconSrc}" alt="${gift.name}" onerror="this.src='http://127.0.0.1:${serverPort}/app-assets/neutral-logo.jpg'">
+            <div style="display:flex;flex-direction:column;flex:1;">
                 <span class="gift-name">${gift.name}</span>
                 <span class="gift-coins">${gift.coins} <span style="color: #ffd700;">●</span></span>
-            `;
-            item.addEventListener('click', () => {
-                if (activeEditRowIndex !== null && chatbotConfig.soundAlerts[activeEditRowIndex]) {
-                    chatbotConfig.soundAlerts[activeEditRowIndex].trigger = gift.name;
-                    saveSoundAlertsSettings();
-                }
-                closeGiftModal();
+            </div>
+            <button class="btn-select-gift" style="margin-left:8px;padding:6px 10px;border-radius:6px;">Seleccionar</button>
+        `;
+
+        // Manual selection button
+        const selectBtnHandler = (e) => {
+            e.stopPropagation();
+            socket.emit('add_sound_alert', {
+                giftId: gift.id,
+                name: gift.name,
+                coins: gift.coins,
+                image: giftImage
             });
-            giftsGrid.appendChild(item);
-        });
-    }
+            closeGiftModal();
+        };
+
+        // Click anywhere on the item or on the button selects the gift
+        item.addEventListener('click', selectBtnHandler);
+        giftsGrid.appendChild(item);
+        const btn = item.querySelector('.btn-select-gift');
+        if (btn) btn.addEventListener('click', selectBtnHandler);
+    });
+}
 
     // 7. Sound Selector Modal Operations
     function openSoundModal() {
+        const soundModal = document.getElementById('sound-selector-modal');
         if (!soundModal) return;
         soundModal.style.display = 'flex';
-        renderSoundsList('');
+        loadSystemSounds().then(() => {
+            renderSoundsList('');
+        });
     }
 
     function closeSoundModal() {
+        const soundModal = document.getElementById('sound-selector-modal');
         if (soundModal) soundModal.style.display = 'none';
         activeEditRowIndex = null;
-    }
-
-    if (btnCloseSoundModal) btnCloseSoundModal.addEventListener('click', closeSoundModal);
-    if (soundModal) {
-        soundModal.addEventListener('click', (e) => {
-            if (e.target === soundModal) closeSoundModal();
-        });
-    }
-
-    if (searchSoundsInput) {
-        searchSoundsInput.addEventListener('input', (e) => {
-            renderSoundsList(e.target.value);
-        });
     }
 
     let modalPreviewAudio = null;
@@ -4495,79 +4894,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderSoundsList(searchQuery) {
         if (!systemSoundsList || !customSoundsList) return;
-        systemSoundsList.innerHTML = '';
+        systemSoundsList.innerHTML = `<div style="color: var(--text-muted); font-size: 12px; padding: 10px;">Los archivos físicos detectados se listan a continuación.</div>`;
         customSoundsList.innerHTML = '';
 
         const query = searchQuery.toLowerCase().trim();
 
-        // 1. System Sounds
-        const filteredSystem = SYSTEM_SOUNDS.filter(s => s.name.toLowerCase().includes(query));
-        if (filteredSystem.length === 0) {
-            systemSoundsList.innerHTML = `<div style="color: var(--text-muted); font-size: 12px; padding: 10px;">No se encontraron sonidos de sistema.</div>`;
+        // Render physically scanned sounds from SYSTEM_SOUNDS inside MIS SONIDOS SUBIDOS (customSoundsList)
+        const filtered = SYSTEM_SOUNDS.filter(s => {
+            const displayName = s.filename || s.name;
+            return displayName.toLowerCase().includes(query);
+        });
+
+        if (filtered.length === 0) {
+            customSoundsList.innerHTML = `<div style="color: var(--text-muted); font-size: 12px; padding: 10px;">No se encontraron archivos de sonido en la carpeta public/sounds.</div>`;
         } else {
-            filteredSystem.forEach(sound => {
+            filtered.forEach(sound => {
                 const item = document.createElement('div');
                 item.className = 'sound-list-item';
-                item.innerHTML = `
-                    <div class="sound-info">
-                        <i data-lucide="music" style="width: 14px; height: 14px;"></i>
-                        <span>${sound.name}</span>
-                    </div>
-                    <div class="sound-actions">
-                        <button class="btn-modal-preview-sound btn secondary small" data-url="${sound.url}" style="padding: 6px 10px;">
-                            <i data-lucide="play" style="width: 14px; height: 14px;"></i>
-                        </button>
-                        <button class="btn-modal-select-sound btn primary small" data-url="${sound.url}" data-name="${sound.name}" style="padding: 6px 12px; font-size: 11px;">
-                            Seleccionar
-                        </button>
-                    </div>
-                `;
                 
-                // Add preview listener
-                const previewBtn = item.querySelector('.btn-modal-preview-sound');
-                previewBtn.addEventListener('click', () => {
-                    playModalSoundPreview(sound.url, previewBtn);
-                });
+                const displayName = sound.filename || sound.name;
+                const serverPort = window.location.port || '3000';
+                const soundUrl = `http://127.0.0.1:${serverPort}/sound-assets/${sound.filename}`;
 
-                // Add select listener
-                const selectBtn = item.querySelector('.btn-modal-select-sound');
-                selectBtn.addEventListener('click', () => {
-                    if (activeEditRowIndex !== null && chatbotConfig.soundAlerts[activeEditRowIndex]) {
-                        chatbotConfig.soundAlerts[activeEditRowIndex].sound = sound.url;
-                        chatbotConfig.soundAlerts[activeEditRowIndex].soundName = sound.name;
-                        saveSoundAlertsSettings();
-                    }
-                    if (modalPreviewAudio) modalPreviewAudio.pause();
-                    closeSoundModal();
-                });
-
-                systemSoundsList.appendChild(item);
-            });
-        }
-
-        // 2. Custom Uploaded Sounds
-        const customSounds = chatbotConfig.customSounds || [];
-        const filteredCustom = customSounds.filter(s => s.name.toLowerCase().includes(query));
-        if (filteredCustom.length === 0) {
-            customSoundsList.innerHTML = `<div style="color: var(--text-muted); font-size: 12px; padding: 10px;">Aún no has subido sonidos. Sube un archivo .mp3 o .wav para verlo aquí.</div>`;
-        } else {
-            filteredCustom.forEach(sound => {
-                const item = document.createElement('div');
-                item.className = 'sound-list-item';
                 item.innerHTML = `
                     <div class="sound-info">
                         <i data-lucide="volume-2" style="width: 14px; height: 14px;"></i>
-                        <span>${sound.name}</span>
+                        <span>${displayName}</span>
                     </div>
                     <div class="sound-actions">
-                        <button class="btn-modal-preview-sound btn secondary small" data-url="${sound.filepath}" style="padding: 6px 10px;">
+                        <button class="btn-modal-preview-sound btn secondary small" data-url="${soundUrl}" style="padding: 6px 10px;">
                             <i data-lucide="play" style="width: 14px; height: 14px;"></i>
                         </button>
-                        <button class="btn-modal-select-sound btn primary small" data-url="${sound.filepath}" data-name="${sound.name}" style="padding: 6px 12px; font-size: 11px;">
+                        <button class="btn-modal-select-sound btn primary small" data-url="${soundUrl}" data-name="${displayName}" style="padding: 6px 12px; font-size: 11px;">
                             Seleccionar
-                        </button>
-                        <button class="btn-modal-delete-sound btn danger small" data-id="${sound.id}" style="padding: 6px 8px; color: var(--accent-red); background: transparent; border: 1px solid rgba(255,0,0,0.15);">
-                            <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
                         </button>
                     </div>
                 `;
@@ -4575,27 +4934,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Add preview listener
                 const previewBtn = item.querySelector('.btn-modal-preview-sound');
                 previewBtn.addEventListener('click', () => {
-                    playModalSoundPreview(sound.filepath, previewBtn);
+                    playModalSoundPreview(soundUrl, previewBtn);
                 });
 
                 // Add select listener
                 const selectBtn = item.querySelector('.btn-modal-select-sound');
                 selectBtn.addEventListener('click', () => {
-                    if (activeEditRowIndex !== null && chatbotConfig.soundAlerts[activeEditRowIndex]) {
-                        chatbotConfig.soundAlerts[activeEditRowIndex].sound = sound.filepath;
-                        chatbotConfig.soundAlerts[activeEditRowIndex].soundName = sound.name;
-                        saveSoundAlertsSettings();
+                    if (activeEditGiftId !== null && soundsConfig[activeEditGiftId]) {
+                        const filename = sound.filename || displayName;
+                        soundsConfig[activeEditGiftId].sound = filename;
+                        socket.emit('update_gift_sound', { giftId: activeEditGiftId, sound: filename });
                     }
                     if (modalPreviewAudio) modalPreviewAudio.pause();
                     closeSoundModal();
-                });
-
-                // Add delete listener
-                const deleteBtn = item.querySelector('.btn-modal-delete-sound');
-                deleteBtn.addEventListener('click', () => {
-                    if (confirm(`¿Estás seguro de eliminar el sonido "${sound.name}"?`)) {
-                        deleteCustomSound(sound.id);
-                    }
                 });
 
                 customSoundsList.appendChild(item);
@@ -4608,55 +4959,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 8. Custom Sound Upload Actions
-    if (btnTriggerUpload && soundFileInput) {
-        btnTriggerUpload.addEventListener('click', () => {
-            soundFileInput.click();
-        });
-    }
-
-    if (soundFileInput) {
-        soundFileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                uploadSoundFile(file);
-            }
-        });
-    }
-
-    // Drag and drop dropzone
-    if (dropzone) {
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropzone.addEventListener(eventName, (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                dropzone.classList.add('dragover');
-            }, false);
-        });
-
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropzone.addEventListener(eventName, (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                dropzone.classList.remove('dragover');
-            }, false);
-        });
-
-        dropzone.addEventListener('drop', (e) => {
-            const dt = e.dataTransfer;
-            const file = dt.files[0];
-            if (file && (file.type === 'audio/mpeg' || file.type === 'audio/wav' || file.name.endsWith('.mp3') || file.name.endsWith('.wav'))) {
-                uploadSoundFile(file);
-            } else {
-                alert('Por favor, arrastra solo archivos de audio (.mp3 o .wav).');
-            }
-        });
-    }
-
     function uploadSoundFile(file) {
         const reader = new FileReader();
         reader.readAsDataURL(file);
         reader.onloadend = function() {
             const base64Data = reader.result;
+            const btnTriggerUpload = document.getElementById('btn-trigger-upload-sound');
             
             // Show uploading status
             if (btnTriggerUpload) btnTriggerUpload.innerHTML = '<i data-lucide="loader" class="spin" style="width: 14px; height: 14px;"></i> Subiendo...';
@@ -4680,8 +4988,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (data.success) {
                     console.log('Sound uploaded successfully:', data.sound);
-                    // Refresh selectors
-                    renderSoundsList(searchSoundsInput ? searchSoundsInput.value : '');
+                    // Reload sounds dynamically to scan the physical file
+                    loadSystemSounds().then(() => {
+                        renderSoundsList(document.getElementById('search-sounds-input') ? document.getElementById('search-sounds-input').value : '');
+                    });
                 } else {
                     alert('Error subiendo sonido: ' + (data.error || 'Desconocido'));
                 }
@@ -4703,7 +5013,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(data => {
             if (data.success) {
                 console.log('Sound deleted successfully.');
-                renderSoundsList(searchSoundsInput ? searchSoundsInput.value : '');
+                renderSoundsList(document.getElementById('search-sounds-input') ? document.getElementById('search-sounds-input').value : '');
             } else {
                 alert('Error al borrar: ' + (data.error || 'Desconocido'));
             }
@@ -4719,15 +5029,33 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================================
     // Note: renderGoalsList and renderWheelOptionsList have been moved to the global scope at the end of this file to prevent ReferenceErrors during early socket setup.
 
-    // Define global action hooks
-    window.deleteGoal = function(index) {
-        if (!chatbotConfig || !chatbotConfig.goals) return;
-        chatbotConfig.goals.splice(index, 1);
-        renderGoalsList(chatbotConfig.goals);
-        sendUpdatedSettings();
-    };
+    window.addEventListener('ui:deleteGoal', (e) => {
+        const id = e.detail.id;
+        if (!id) return;
+        if (!confirm('¿Estás seguro de eliminar esta meta?')) return;
+        
+        fetch(`/api/goals/${id}`, {
+            method: 'DELETE'
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                console.log('Goal deleted successfully.');
+                chatbotConfig.goals = data.goals || [];
+                renderGoalsList(chatbotConfig.goals);
+            } else {
+                alert('Error al borrar la meta: ' + (data.error || 'Desconocido'));
+            }
+        })
+        .catch(err => {
+            console.error('Error deleting goal:', err);
+            alert('Error en conexión al intentar borrar la meta.');
+        });
+    });
 
-    window.deleteWheelOption = function(index) {
+    window.addEventListener('ui:deleteWheelOption', (e) => {
+        const index = e.detail.index;
+        if (index === undefined || index === null) return;
         if (!chatbotConfig || !chatbotConfig.wheelOptions) return;
         if (chatbotConfig.wheelOptions.length <= 3) {
             alert('La ruleta debe tener al menos 3 opciones.');
@@ -4736,7 +5064,7 @@ document.addEventListener('DOMContentLoaded', () => {
         chatbotConfig.wheelOptions.splice(index, 1);
         renderWheelOptionsList(chatbotConfig.wheelOptions);
         sendUpdatedSettings();
-    };
+    });
 
     // Wire goal creator
     const btnAddGoal = document.getElementById('btn-add-goal');
@@ -4777,8 +5105,61 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Clear inputs
             document.getElementById('goal-title').value = '';
-            document.getElementById('goal-gift-name').value = '';
+            const gNameEl = document.getElementById('goal-gift-name');
+            if (gNameEl) {
+                if (gNameEl.tagName === 'SELECT') {
+                    gNameEl.selectedIndex = 0;
+                } else {
+                    gNameEl.value = '';
+                }
+            }
+            const gSelectEl = document.getElementById('goal-gift-select');
+            if (gSelectEl) {
+                gSelectEl.selectedIndex = 0;
+                gSelectEl.dispatchEvent(new Event('change'));
+            }
         });
+    }
+
+    // Sync active goal from fast config inputs
+    const activeGoalGiftNameEl = document.getElementById('meta-gift-select');
+    const activeGoalTargetEl = document.getElementById('meta-limit-input');
+
+    function syncActiveGoalFromInputs() {
+        if (!chatbotConfig) return;
+        if (!chatbotConfig.goals) chatbotConfig.goals = [];
+
+        const giftName = activeGoalGiftNameEl.value.trim();
+        const target = parseInt(activeGoalTargetEl.value, 10) || 100;
+
+        let giftGoal = chatbotConfig.goals.find(g => g.type === 'gift' && g.enabled);
+        if (giftGoal) {
+            giftGoal.giftName = giftName;
+            giftGoal.title = `Regalo: ${giftName}`;
+            giftGoal.target = target;
+        } else {
+            // Create a default one if it doesn't exist
+            giftGoal = {
+                id: 'goal_' + Date.now(),
+                type: 'gift',
+                giftName: giftName,
+                title: `Regalo: ${giftName}`,
+                target: target,
+                current: 0,
+                enabled: true
+            };
+            chatbotConfig.goals.push(giftGoal);
+        }
+        renderGoalsList(chatbotConfig.goals);
+        sendUpdatedSettings();
+    }
+
+    if (activeGoalGiftNameEl) {
+        activeGoalGiftNameEl.addEventListener('change', syncActiveGoalFromInputs);
+    }
+    if (activeGoalTargetEl) {
+        activeGoalTargetEl.addEventListener('change', syncActiveGoalFromInputs);
+        activeGoalTargetEl.addEventListener('input', syncActiveGoalFromInputs);
     }
 
     const btnResetAllGoals = document.getElementById('btn-reset-all-goals');
@@ -4830,6 +5211,143 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         renderGoalsList(goals);
     });
+
+    // =========================================================================
+    // MULTIMEDIA EVENT LISTENERS
+    // =========================================================================
+    const btnCreateAlert = document.getElementById('btn-create-sound-alert');
+    if (btnCreateAlert) {
+        btnCreateAlert.addEventListener('click', () => {
+            openGiftModal();
+        });
+    }
+
+    const searchAlertsInput = document.getElementById('search-alerts');
+    if (searchAlertsInput) {
+        searchAlertsInput.addEventListener('input', () => {
+            renderSoundAlertsTable(soundsConfig);
+        });
+    }
+
+    const btnCloseGiftModal = document.getElementById('btn-close-gift-modal');
+    if (btnCloseGiftModal) btnCloseGiftModal.addEventListener('click', closeGiftModal);
+
+    const giftModal = document.getElementById('gift-selector-modal');
+    if (giftModal) {
+        giftModal.addEventListener('click', (e) => {
+            if (e.target === giftModal) closeGiftModal();
+        });
+    }
+
+    const searchGiftsInput = document.getElementById('search-gifts-input');
+    if (searchGiftsInput) {
+        searchGiftsInput.addEventListener('input', (e) => {
+            renderGiftsGrid(e.target.value);
+        });
+    }
+
+    const btnCloseSoundModal = document.getElementById('btn-close-sound-modal');
+    if (btnCloseSoundModal) btnCloseSoundModal.addEventListener('click', closeSoundModal);
+
+    const soundModal = document.getElementById('sound-selector-modal');
+    if (soundModal) {
+        soundModal.addEventListener('click', (e) => {
+            if (e.target === soundModal) closeSoundModal();
+        });
+    }
+
+    const searchSoundsInput = document.getElementById('search-sounds-input');
+    if (searchSoundsInput) {
+        searchSoundsInput.addEventListener('input', (e) => {
+            renderSoundsList(e.target.value);
+        });
+    }
+
+    const btnTriggerUpload = document.getElementById('btn-trigger-upload-sound');
+    const soundFileInput = document.getElementById('sound-file-input');
+    if (btnTriggerUpload && soundFileInput) {
+        btnTriggerUpload.addEventListener('click', () => {
+            soundFileInput.click();
+        });
+    }
+
+    if (soundFileInput) {
+        soundFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                uploadSoundFile(file);
+            }
+        });
+    }
+
+    // Drag and drop dropzone (already declared at line 4205)
+    if (dropzone) {
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.add('dragover');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.remove('dragover');
+            }, false);
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const file = dt.files[0];
+            if (file && (file.type === 'audio/mpeg' || file.type === 'audio/wav' || file.name.endsWith('.mp3') || file.name.endsWith('.wav'))) {
+                uploadSoundFile(file);
+            } else {
+                alert('Por favor, arrastra solo archivos de audio (.mp3 o .wav).');
+            }
+        });
+    }
+
+    // Cerebro → Multimedia: cargar giftsMapping desde la API del cerebro al iniciar el panel
+    fetch('/api/gifts')
+        .then(response => response.json())
+        .then(data => {
+            giftsMapping = data || {};
+            console.log('[Multimedia] Catálogo cerebro cargado:', Object.keys(giftsMapping).length, 'regalos');
+            if (typeof renderCatalogGiftsGrid === 'function') renderCatalogGiftsGrid();
+            if (typeof updateCatalogCountBadge === 'function') updateCatalogCountBadge();
+        })
+        .catch(err => console.error('[Multimedia] Error al cargar catálogo cerebro:', err));
+
+    // Espejo → Dinámicas: cargar goalsCatalog desde el catálogo espejo al iniciar el panel
+    fetch('/api/goals-catalog')
+        .then(response => response.json())
+        .then(data => {
+            goalsCatalog = data || {};
+            console.log('[Dinámicas] Catálogo espejo cargado:', Object.keys(goalsCatalog).length, 'regalos');
+            populateGoalsCatalogSelectors();
+            if (typeof populateApuestasGiftDropdowns === 'function') populateApuestasGiftDropdowns();
+        })
+        .catch(err => console.error('[Dinámicas] Error al cargar catálogo espejo:', err));
+
+    // Catálogo Cerebro Search Input
+    const searchCatalogInput = document.getElementById('search-catalog-gifts');
+    if (searchCatalogInput) {
+        searchCatalogInput.addEventListener('input', () => {
+            renderCatalogGiftsGrid();
+        });
+    }
+
+    // Reset Session Rankings Button
+    const btnResetSessionRankings = document.getElementById('btn-reset-session-rankings');
+    if (btnResetSessionRankings) {
+        btnResetSessionRankings.addEventListener('click', () => {
+            if (confirm('¿Estás seguro de reiniciar todos los rankings de la sesión?')) {
+                socket.emit('reset_session_rankings');
+            }
+        });
+    }
 });
 
 // =========================================================================
@@ -4880,7 +5398,7 @@ function renderGoalsList(goals) {
                 </div>
             </td>
             <td class="text-right">
-                <button class="btn-delete" onclick="window.deleteGoal(${index})" style="background: transparent; border: none; color: #ff3366; cursor: pointer; padding: 5px;">
+                <button class="btn-delete" onclick="window.deleteGoal('${goal.id}')" style="background: transparent; border: none; color: #ff3366; cursor: pointer; padding: 5px;">
                     <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
                 </button>
             </td>
@@ -4920,5 +5438,705 @@ function renderWheelOptionsList(options) {
 
     if (window.lucide) window.lucide.createIcons();
 }
+
+function renderCatalogGiftsGrid() {
+    const grid = document.getElementById('catalog-gifts-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    const searchInput = document.getElementById('search-catalog-gifts');
+    const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+    const list = Object.entries(giftsMapping || {}).map(([id, g]) => ({ id, ...g }));
+    const sorted = list.sort((a, b) => (a.coins || 0) - (b.coins || 0));
+    const filtered = sorted.filter(g => (g.name || '').toLowerCase().includes(query));
+
+    if (filtered.length === 0) {
+        grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); padding: 30px; font-size: 13px;">No se encontraron regalos en el catálogo.</div>';
+        return;
+    }
+
+    filtered.forEach(gift => {
+        const card = document.createElement('div');
+        card.style.cssText = 'background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; display: flex; align-items: center; gap: 12px; transition: background 0.2s;';
+        
+        const giftImage = gift.image || `${(gift.name || '').toLowerCase().replace(/\s+/g, '_')}.png`;
+        const iconSrc = `${window.location.origin}/gift-assets/${giftImage}`;
+        const neutralSrc = `${window.location.origin}/app-assets/neutral-logo.jpg`;
+
+        card.innerHTML = `
+            <img src="${iconSrc}" style="width: 32px; height: 32px; object-fit: contain; border-radius: 4px;" onerror="this.src='${neutralSrc}'">
+            <div style="display: flex; flex-direction: column; min-width: 0; flex-grow: 1;">
+                <span style="font-size: 13px; font-weight: 700; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${gift.name}</span>
+                <span style="font-size: 11px; color: #ffd700; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                    <i data-lucide="gem" style="width: 10px; height: 10px; color: #ffd700;"></i> ${gift.coins}
+                </span>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+
+    if (window.lucide) window.lucide.createIcons();
+}
+
+// ──────────────────────────────────────────
+// Refresh Catalog Button
+// ──────────────────────────────────────────
+function updateCatalogCountBadge() {
+    const countEl = document.getElementById('catalog-gift-count');
+    if (!countEl) return;
+    const total = Object.keys(giftsMapping || {}).length;
+
+    // Count how many gifts have an image that could be resolved
+    const withImage = Object.values(giftsMapping || {}).filter(g => g.image && g.image.trim() !== '').length;
+
+    countEl.textContent = `${total} regalos · ${withImage} con imagen`;
+    countEl.style.display = 'inline';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const btnRefresh = document.getElementById('btn-refresh-catalog');
+    if (btnRefresh) {
+        btnRefresh.addEventListener('click', () => {
+            // Spin animation
+            const icon = btnRefresh.querySelector('i');
+            if (icon) {
+                icon.style.transition = 'transform 0.6s ease';
+                icon.style.transform = 'rotate(360deg)';
+                setTimeout(() => {
+                    icon.style.transition = '';
+                    icon.style.transform = '';
+                }, 650);
+            }
+            btnRefresh.disabled = true;
+            btnRefresh.style.opacity = '0.6';
+
+            fetch('/api/gifts')
+                .then(r => r.json())
+                .then(data => {
+                    giftsMapping = data || {};
+                    console.log('[Catálogo] Actualizado:', Object.keys(giftsMapping).length, 'regalos');
+                    if (typeof renderCatalogGiftsGrid === 'function') renderCatalogGiftsGrid();
+                    updateCatalogCountBadge();
+                    showToast(`✅ Catálogo actualizado: ${Object.keys(giftsMapping).length} regalos encontrados`, 'success');
+                })
+                .catch(err => {
+                    console.error('[Catálogo] Error al actualizar:', err);
+                    showToast('❌ Error al actualizar el catálogo', 'error');
+                })
+                .finally(() => {
+                    btnRefresh.disabled = false;
+                    btnRefresh.style.opacity = '1';
+                });
+        });
+    }
+});
+
+// Bind Simulator events
+document.addEventListener('DOMContentLoaded', () => {
+    const btnSimulateGift = document.getElementById('btn-simulate-gift');
+    if (btnSimulateGift) {
+        btnSimulateGift.addEventListener('click', () => {
+            if (btnSimulateGift.disabled) return;
+            btnSimulateGift.disabled = true;
+            btnSimulateGift.style.opacity = '0.5';
+            setTimeout(() => {
+                btnSimulateGift.disabled = false;
+                btnSimulateGift.style.opacity = '1';
+            }, 500);
+
+            const selectedVal = document.getElementById('sim-gift-select').value;
+            const parts = selectedVal.split('|');
+            const giftId = parseInt(parts[0]);
+            const giftName = parts[1];
+            const diamondCount = parseInt(parts[2]);
+            const repeatCount = parseInt(document.getElementById('sim-gift-count').value) || 1;
+            const uniqueId = document.getElementById('sim-gift-username').value.trim() || 'usuario_test';
+
+            const msgId = 'sim_' + Date.now() + '_' + Math.floor(Math.random() * 1000000);
+
+            socket.emit('simulate_tiktok_event', {
+                eventType: 'gift',
+                eventData: {
+                    uniqueId: uniqueId,
+                    nickname: uniqueId.charAt(0).toUpperCase() + uniqueId.slice(1),
+                    giftId: giftId,
+                    giftName: giftName,
+                    diamondCount: diamondCount,
+                    repeatCount: repeatCount,
+                    repeatEnd: 1,
+                    msgId: msgId
+                }
+            });
+            showToast(`Simulando envío de regalo: ${repeatCount}x ${giftName} por @${uniqueId}`, 'info');
+        });
+    }
+
+    const btnSimulateChat = document.getElementById('btn-simulate-chat');
+    if (btnSimulateChat) {
+        btnSimulateChat.addEventListener('click', () => {
+            if (btnSimulateChat.disabled) return;
+            btnSimulateChat.disabled = true;
+            btnSimulateChat.style.opacity = '0.5';
+            setTimeout(() => {
+                btnSimulateChat.disabled = false;
+                btnSimulateChat.style.opacity = '1';
+            }, 500);
+
+            const uniqueId = document.getElementById('sim-chat-username').value.trim() || 'usuario_test';
+            const comment = document.getElementById('sim-chat-message').value.trim();
+            if (!comment) return;
+
+            socket.emit('simulate_tiktok_event', {
+                eventType: 'chat',
+                eventData: {
+                    uniqueId: uniqueId,
+                    nickname: uniqueId.charAt(0).toUpperCase() + uniqueId.slice(1),
+                    comment: comment,
+                    isSubscriber: false,
+                    isModerator: false,
+                    isAnchor: false
+                }
+            });
+            showToast(`Simulando mensaje de chat de @${uniqueId}: "${comment}"`, 'info');
+        });
+    }
+});
+
+// Render socials table
+function renderSocialsTable(socials) {
+    const tbody = document.getElementById('socials-table-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (!socials || socials.length === 0) {
+        tbody.innerHTML = `
+            <tr class="empty-socials-row">
+                <td colspan="3" style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 15px;">
+                    No hay redes sociales configuradas. Haz clic en "Agregar Red" para comenzar.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    socials.forEach((social, index) => {
+        addSocialRow(social.platform, social.username);
+    });
+}
+
+function addSocialRow(platform = 'instagram', username = '') {
+    const tbody = document.getElementById('socials-table-body');
+    if (!tbody) return;
+
+    // Remove empty row if exists
+    const emptyRow = tbody.querySelector('.empty-socials-row');
+    if (emptyRow) {
+        tbody.removeChild(emptyRow);
+    }
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+        <td style="padding: 8px;">
+            <select class="social-platform-select" style="width: 100%; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--border-color); padding: 6px 8px; border-radius: 4px; font-size: 13px;">
+                <option value="instagram" ${platform === 'instagram' ? 'selected' : ''}>Instagram</option>
+                <option value="tiktok" ${platform === 'tiktok' ? 'selected' : ''}>TikTok</option>
+                <option value="facebook" ${platform === 'facebook' ? 'selected' : ''}>Facebook</option>
+                <option value="youtube" ${platform === 'youtube' ? 'selected' : ''}>YouTube</option>
+                <option value="twitter" ${platform === 'twitter' ? 'selected' : ''}>Twitter / X</option>
+                <option value="discord" ${platform === 'discord' ? 'selected' : ''}>Discord</option>
+                <option value="custom" ${platform === 'custom' ? 'selected' : ''}>Personalizado</option>
+            </select>
+        </td>
+        <td style="padding: 8px;">
+            <input type="text" class="social-username-input" value="${username}" placeholder="ej: @nombre_usuario o url" style="width: 100%; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--border-color); padding: 6px 8px; border-radius: 4px; font-size: 13px;">
+        </td>
+        <td style="padding: 8px; text-align: center; white-space: nowrap;">
+            <button class="btn secondary small test-social-row-btn" style="padding: 6px 10px; border-radius: 4px; background: rgba(0,255,204,0.1); color: #00ffcc; border: 1px solid rgba(0,255,204,0.2); cursor: pointer; margin-right: 5px;">
+                Probar
+            </button>
+            <button class="btn secondary small delete-social-row-btn" style="padding: 6px 10px; border-radius: 4px; background: rgba(255,51,102,0.1); color: #ff3366; border: 1px solid rgba(255,51,102,0.2); cursor: pointer;">
+                Eliminar
+            </button>
+        </td>
+    `;
+
+    // Bind test event
+    tr.querySelector('.test-social-row-btn').addEventListener('click', () => {
+        const platform = tr.querySelector('.social-platform-select').value;
+        const username = tr.querySelector('.social-username-input').value.trim();
+        if (!username) {
+            showToast('Por favor, introduce un nombre de usuario o enlace para probar', 'warning');
+            return;
+        }
+        
+        socket.emit('test_social_rotator', { platform, username });
+        showToast(`Probando red social: ${platform} - ${username}`, 'info');
+    });
+
+    // Bind delete event
+    tr.querySelector('.delete-social-row-btn').addEventListener('click', () => {
+        tr.remove();
+        // If table is now empty, render empty row
+        if (tbody.querySelectorAll('tr').length === 0) {
+            renderSocialsTable([]);
+        }
+        showSaveSettingsFloating();
+    });
+
+    // Mark changes when editing fields
+    tr.querySelector('.social-platform-select').addEventListener('change', showSaveSettingsFloating);
+    tr.querySelector('.social-username-input').addEventListener('input', showSaveSettingsFloating);
+
+    tbody.appendChild(tr);
+}
+
+function renderBannerSlides(slides) {
+    const container = document.getElementById('banner-slides-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!slides || slides.length === 0) {
+        slides = ["Ejemplo de texto"];
+    }
+
+    slides.forEach((slideText, index) => {
+        const div = document.createElement('div');
+        div.className = 'banner-slide-row';
+        div.style.display = 'flex';
+        div.style.gap = '10px';
+        div.style.alignItems = 'center';
+
+        div.innerHTML = `
+            <span style="color: rgba(255,255,255,0.4); font-size: 11px; width: 25px; font-family: monospace;">#${index + 1}</span>
+            <input type="text" class="input banner-slide-text-input" style="flex: 1; padding: 6px 10px; font-size: 13px;" value="${escapeHtml(slideText)}" />
+            <button class="btn danger small btn-delete-banner-slide" style="padding: 6px 10px; font-size: 12px; margin-bottom: 0;">
+                Eliminar
+            </button>
+        `;
+
+        div.querySelector('.banner-slide-text-input').addEventListener('input', showSaveSettingsFloating);
+        div.querySelector('.btn-delete-banner-slide').addEventListener('click', () => {
+            div.remove();
+            showSaveSettingsFloating();
+            reindexBannerSlides();
+        });
+
+        container.appendChild(div);
+    });
+}
+
+function reindexBannerSlides() {
+    const rows = document.querySelectorAll('#banner-slides-container .banner-slide-row');
+    rows.forEach((row, index) => {
+        const label = row.querySelector('span');
+        if (label) label.textContent = `#${index + 1}`;
+    });
+}
+
+// Bind banner settings inputs
+document.addEventListener('DOMContentLoaded', () => {
+    const sliderIds = [
+        { id: 'banner-border-width', valId: 'val-banner-border-width', suffix: 'px' },
+        { id: 'banner-border-radius', valId: 'val-banner-border-radius', suffix: 'px' },
+        { id: 'banner-bg-opacity', valId: 'val-banner-bg-opacity', suffix: '%' },
+        { id: 'banner-font-size', valId: 'val-banner-font-size', suffix: 'px' },
+        { id: 'banner-rotation-speed', valId: 'val-banner-rotation-speed', suffix: 's' }
+    ];
+
+    sliderIds.forEach(item => {
+        const el = document.getElementById(item.id);
+        const valEl = document.getElementById(item.valId);
+        if (el && valEl) {
+            el.addEventListener('input', () => {
+                valEl.textContent = el.value + item.suffix;
+                showSaveSettingsFloating();
+            });
+        }
+    });
+
+    const otherInputs = [
+        'banner-width-input',
+        'banner-height-input',
+        'banner-border-style',
+        'banner-border-color',
+        'banner-bg-color',
+        'banner-font-family',
+        'banner-font-color'
+    ];
+
+    otherInputs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            const eventName = el.tagName === 'SELECT' ? 'change' : 'input';
+            el.addEventListener(eventName, showSaveSettingsFloating);
+        }
+    });
+
+    const btnAddSlide = document.getElementById('btn-add-banner-slide');
+    if (btnAddSlide) {
+        btnAddSlide.addEventListener('click', () => {
+            const container = document.getElementById('banner-slides-container');
+            if (!container) return;
+            
+            const index = container.querySelectorAll('.banner-slide-row').length;
+            const div = document.createElement('div');
+            div.className = 'banner-slide-row';
+            div.style.display = 'flex';
+            div.style.gap = '10px';
+            div.style.alignItems = 'center';
+
+            div.innerHTML = `
+                <span style="color: rgba(255,255,255,0.4); font-size: 11px; width: 25px; font-family: monospace;">#${index + 1}</span>
+                <input type="text" class="input banner-slide-text-input" style="flex: 1; padding: 6px 10px; font-size: 13px;" placeholder="Escribe tu mensaje aquí..." />
+                <button class="btn danger small btn-delete-banner-slide" style="padding: 6px 10px; font-size: 12px; margin-bottom: 0;">
+                    Eliminar
+                </button>
+            `;
+
+            div.querySelector('.banner-slide-text-input').addEventListener('input', showSaveSettingsFloating);
+            div.querySelector('.btn-delete-banner-slide').addEventListener('click', () => {
+                div.remove();
+                showSaveSettingsFloating();
+                reindexBannerSlides();
+            });
+
+            container.appendChild(div);
+            showSaveSettingsFloating();
+            
+            // Scroll to bottom of container
+            container.scrollTop = container.scrollHeight;
+        });
+    }
+});
+
+// Bind button clicks in DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => {
+    const btnAddSocial = document.getElementById('btn-add-social-row');
+    if (btnAddSocial) {
+        btnAddSocial.addEventListener('click', () => {
+            addSocialRow();
+            showSaveSettingsFloating();
+        });
+    }
+
+    const btnSaveSocials = document.getElementById('btn-save-socials');
+    if (btnSaveSocials) {
+        btnSaveSocials.addEventListener('click', () => {
+            sendUpdatedSettings();
+            showToast('¡Redes sociales y configuración guardadas con éxito!', 'success');
+            const originalText = btnSaveSocials.innerHTML;
+            btnSaveSocials.innerHTML = '¡Guardado!';
+            btnSaveSocials.style.background = 'var(--accent-green, #10b981)';
+            setTimeout(() => {
+                btnSaveSocials.innerHTML = originalText;
+                btnSaveSocials.style.background = '';
+            }, 1500);
+        });
+    }
+
+    const btnSaveBannerSettings = document.getElementById('btn-save-banner-settings');
+    if (btnSaveBannerSettings) {
+        btnSaveBannerSettings.addEventListener('click', () => {
+            sendUpdatedSettings();
+            showToast('¡Configuración de banner guardada con éxito!', 'success');
+            const originalText = btnSaveBannerSettings.innerHTML;
+            btnSaveBannerSettings.innerHTML = '<i data-lucide="check" style="width: 16px; height: 16px;"></i> ¡Guardado!';
+            btnSaveBannerSettings.style.background = 'var(--accent-green, #10b981)';
+            if (window.lucide) window.lucide.createIcons();
+            setTimeout(() => {
+                btnSaveBannerSettings.innerHTML = originalText;
+                btnSaveBannerSettings.style.background = '';
+                if (window.lucide) window.lucide.createIcons();
+            }, 1500);
+        });
+    }
+
+    const btnToggleBannerDesign = document.getElementById('btn-toggle-banner-design');
+    const bannerCollapsePanel = document.getElementById('banner-settings-collapse-panel');
+    if (btnToggleBannerDesign && bannerCollapsePanel) {
+        btnToggleBannerDesign.addEventListener('click', () => {
+            const isExpanded = bannerCollapsePanel.classList.toggle('expanded');
+            btnToggleBannerDesign.classList.toggle('active', isExpanded);
+            const spanText = btnToggleBannerDesign.querySelector('span');
+            if (spanText) {
+                spanText.textContent = isExpanded ? 'Cerrar Ajustes' : 'Ajustes de Diseño';
+            }
+        });
+    }
+});
+
+// Helper to show floating save button if available
+function showSaveSettingsFloating() {
+    const floatingSaveBtn = document.getElementById('floating-save-btn');
+    if (floatingSaveBtn) {
+        floatingSaveBtn.classList.add('visible');
+    }
+}
+
+// Function to populate all event sound selects
+function populateEventSoundDropdowns() {
+    const selects = document.querySelectorAll('.bot-event-sound-select');
+    selects.forEach(select => {
+        const currentValue = select.value;
+        select.innerHTML = '<option value="">Sin sonido</option>';
+        SYSTEM_SOUNDS.forEach(sound => {
+            const option = document.createElement('option');
+            option.value = sound.url; // e.g. /sounds/bruh.mp3
+            option.textContent = sound.name; // e.g. GRLive Bruh
+            select.appendChild(option);
+        });
+        select.value = currentValue;
+    });
+}
+
+// Initial system sounds load & quick preview for live event sounds
+document.addEventListener('DOMContentLoaded', () => {
+    loadSystemSounds().then(() => {
+        populateEventSoundDropdowns();
+        if (typeof chatbotConfig !== 'undefined' && chatbotConfig) {
+            updateUIWithConfig(chatbotConfig);
+        }
+    });
+
+    let eventPreviewAudio = null;
+    let eventPreviewPlayingUrl = null;
+
+    document.body.addEventListener('click', (e) => {
+        const btn = e.target.closest('.btn-preview-event-sound');
+        if (!btn) return;
+        
+        const selectId = btn.getAttribute('data-select-id');
+        const selectEl = document.getElementById(selectId);
+        if (!selectEl) return;
+        const url = selectEl.value;
+        if (!url) {
+            showToast('Selecciona un sonido para reproducir la previsualización.', 'info');
+            return;
+        }
+
+        if (eventPreviewAudio && eventPreviewPlayingUrl === url) {
+            eventPreviewAudio.pause();
+            eventPreviewAudio = null;
+            eventPreviewPlayingUrl = null;
+            btn.innerHTML = '<i data-lucide="play" style="width: 14px; height: 14px;"></i>';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            return;
+        }
+
+        // Reset all preview buttons icon
+        document.querySelectorAll('.btn-preview-event-sound').forEach(b => {
+            b.innerHTML = '<i data-lucide="play" style="width: 14px; height: 14px;"></i>';
+        });
+
+        if (eventPreviewAudio) {
+            eventPreviewAudio.pause();
+        }
+
+        eventPreviewAudio = new Audio(url);
+        eventPreviewPlayingUrl = url;
+        btn.innerHTML = '<i data-lucide="square" style="width: 14px; height: 14px;"></i>';
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        eventPreviewAudio.play().catch(err => {
+            console.error(err);
+            btn.innerHTML = '<i data-lucide="play" style="width: 14px; height: 14px;"></i>';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            eventPreviewAudio = null;
+            eventPreviewPlayingUrl = null;
+        });
+
+        eventPreviewAudio.addEventListener('ended', () => {
+            btn.innerHTML = '<i data-lucide="play" style="width: 14px; height: 14px;"></i>';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            eventPreviewAudio = null;
+            eventPreviewPlayingUrl = null;
+        });
+    });
+});
+
+// =====================================================================
+// LÓGICA DEL JUEGO DE APUESTAS (DINÁMICAS)
+// =====================================================================
+
+function populateApuestasGiftDropdowns() {
+    const selects = [
+        document.getElementById('apuestas-p1-gift'),
+        document.getElementById('apuestas-p2-gift'),
+        document.getElementById('apuestas-p3-gift'),
+        document.getElementById('apuestas-p4-gift')
+    ];
+    
+    // Sort gifts alphabetically
+    const sortedGifts = Object.entries(goalsCatalog || {}).map(([id, info]) => {
+        return { id, name: info.name, coins: info.coins };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+    
+    selects.forEach((select, idx) => {
+        if (!select) return;
+        
+        const prevVal = select.value;
+        select.innerHTML = '';
+        
+        if (sortedGifts.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = 'Cargando regalos...';
+            select.appendChild(opt);
+            return;
+        }
+        
+        sortedGifts.forEach(gift => {
+            const opt = document.createElement('option');
+            opt.value = gift.id;
+            opt.textContent = `${gift.name} (${gift.coins} mo.)`;
+            select.appendChild(opt);
+        });
+        
+        // Restore previous value or apply intelligent defaults
+        if (prevVal && Array.from(select.options).some(o => o.value === prevVal)) {
+            select.value = prevVal;
+        } else {
+            const defaultGifts = ['8913', '9947', '45', '46']; // Rosa, BFF Necklace, Heart, Confetti
+            if (defaultGifts[idx] && Array.from(select.options).some(o => o.value === defaultGifts[idx])) {
+                select.value = defaultGifts[idx];
+            } else if (select.options.length > idx) {
+                select.selectedIndex = idx;
+            }
+        }
+    });
+}
+
+function toggleApuestasParticipantRows(count) {
+    const countVal = parseInt(count) || 4;
+    const p3Row = document.getElementById('apuestas-p3-row');
+    const p4Row = document.getElementById('apuestas-p4-row');
+    
+    if (p3Row) p3Row.style.display = countVal >= 3 ? 'flex' : 'none';
+    if (p4Row) p4Row.style.display = countVal >= 4 ? 'flex' : 'none';
+}
+
+function renderApuestasVotersSummary(apuestas) {
+    const container = document.getElementById('apuestas-voters-summary');
+    if (!container) return;
+    
+    const count = parseInt(apuestas.count) || 4;
+    let html = '';
+    let totalVotes = 0;
+    
+    for (let i = 1; i <= count; i++) {
+        const pKey = 'p' + i;
+        const participant = apuestas[pKey];
+        if (participant) {
+            totalVotes += participant.votes || 0;
+            const votersList = (participant.voters || []).map(v => `@${v.username} (${v.count})`).join(', ');
+            html += `
+                <div style="margin-bottom: 8px; border-bottom: 1px dashed rgba(255,255,255,0.05); padding-bottom: 5px;">
+                    <strong style="color: var(--text-main);">${participant.name}</strong> (${participant.giftName}): 
+                    <span style="color: #ff00ff; font-weight: bold;">${participant.votes} votos</span>
+                    <div style="color: var(--text-muted); font-size: 10px; margin-top: 2px;">
+                        Votantes: ${votersList || 'Ninguno'}
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    if (totalVotes === 0) {
+        container.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 10px 0;">Ningún voto registrado aún.</div>`;
+    } else {
+        container.innerHTML = html;
+    }
+}
+
+// Bind Apuestas event listeners
+document.addEventListener('DOMContentLoaded', () => {
+    const apCountEl = document.getElementById('apuestas-count');
+    const btnSaveApuestas = document.getElementById('btn-save-apuestas');
+    const btnResetApuestas = document.getElementById('btn-reset-apuestas');
+    
+    if (apCountEl) {
+        apCountEl.addEventListener('change', (e) => {
+            toggleApuestasParticipantRows(e.target.value);
+        });
+    }
+    
+    if (btnSaveApuestas) {
+        btnSaveApuestas.addEventListener('click', () => {
+            const enabled = document.getElementById('apuestas-enabled').checked;
+            const title = document.getElementById('apuestas-title').value.trim();
+            const count = parseInt(document.getElementById('apuestas-count').value) || 4;
+            
+            const currentApuestas = (chatbotConfig && chatbotConfig.apuestas) || {};
+            const apuestas = {
+                enabled: enabled,
+                title: title,
+                count: count
+            };
+            
+            for (let i = 1; i <= 4; i++) {
+                const pKey = 'p' + i;
+                const nameInput = document.getElementById(`apuestas-${pKey}-name`);
+                const giftSelect = document.getElementById(`apuestas-${pKey}-gift`);
+                
+                const name = (nameInput ? nameInput.value.trim() : '') || `Participante ${i}`;
+                const giftId = giftSelect ? giftSelect.value : '';
+                const giftName = (goalsCatalog[giftId] ? goalsCatalog[giftId].name : '') || 'Regalo';
+                
+                const existing = currentApuestas[pKey] || {};
+                let votes = existing.votes || 0;
+                let voters = existing.voters || [];
+                
+                // If gift changed, reset counts for this participant
+                if (existing.giftId !== giftId) {
+                    votes = 0;
+                    voters = [];
+                }
+                
+                apuestas[pKey] = {
+                    name: name,
+                    giftId: giftId,
+                    giftName: giftName,
+                    votes: votes,
+                    voters: voters
+                };
+            }
+            
+            socket.emit('update_chatbot_settings', { apuestas: apuestas });
+            showToast('Juego de apuestas actualizado con éxito.', 'success');
+        });
+    }
+    
+    if (btnResetApuestas) {
+        btnResetApuestas.addEventListener('click', () => {
+            if (!chatbotConfig || !chatbotConfig.apuestas) return;
+            
+            if (confirm('¿Estás seguro de que deseas reiniciar todos los votos del juego de apuestas a 0?')) {
+                const apuestas = JSON.parse(JSON.stringify(chatbotConfig.apuestas));
+                ['p1', 'p2', 'p3', 'p4'].forEach(pKey => {
+                    if (apuestas[pKey]) {
+                        apuestas[pKey].votes = 0;
+                        apuestas[pKey].voters = [];
+                    }
+                });
+                
+                socket.emit('update_chatbot_settings', { apuestas: apuestas });
+                showToast('Marcadores del juego de apuestas reiniciados.', 'success');
+            }
+        });
+    }
+
+    // Sync Gemini API Key inputs (main and shortcut)
+    const shortcutKeyEl = document.getElementById('bot-gemini-api-key-shortcut');
+    const primaryKeyEl = document.getElementById('ai-api-key');
+    if (shortcutKeyEl && primaryKeyEl) {
+        shortcutKeyEl.addEventListener('input', () => {
+            primaryKeyEl.value = shortcutKeyEl.value;
+        });
+        primaryKeyEl.addEventListener('input', () => {
+            shortcutKeyEl.value = primaryKeyEl.value;
+        });
+    }
+});
 
 

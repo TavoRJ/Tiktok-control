@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rotador de Redes Sociales - Overlay</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- CSS Link -->
+    <link rel="stylesheet" href="css/social-rotator.css">
+</head>
+<body class="theme-neutral">
+    <div id="social-widget" class="social-widget hidden">
+        <div class="glow-container">
+            <div class="glow-bg"></div>
+        </div>
+        <div class="card-content">
+            <!-- Icon Container -->
+            <div class="icon-wrapper" id="social-icon-wrapper">
+                <!-- SVG Icon will be inserted dynamically here -->
+            </div>
+            <!-- Text Content -->
+            <div class="text-wrapper">
+                <span class="platform-label" id="social-platform-label">Instagram</span>
+                <span class="username-text" id="social-username-text">@usuario</span>
+            </div>
+        </div>
+        <!-- Progress Bar Indicator -->
+        <div class="progress-bar" id="progress-bar"></div>
+    </div>
+
+    <!-- Socket.io -->
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- JS Link -->
+    <script src="js/social-rotator.js"></script>
+</body>
+</html>

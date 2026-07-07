@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GRLive - Animaciones Especiales</title>
+    <link rel="stylesheet" href="css/overlay.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@900&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body, html {
+            background-color: transparent !important;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+        /* Custom uploaded video centering/positioning */
+        .anim-container {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+        .anim-container video, .anim-container img {
+            max-width: 500px; /* Slightly larger for dedicated screen impact */
+            max-height: 500px;
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body>
+    <div id="layer-back" class="layer"></div>
+    <div id="layer-front" class="layer"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/animations.js"></script>
+</body>
+</html>
