@@ -6137,6 +6137,41 @@ document.addEventListener('DOMContentLoaded', () => {
             shortcutKeyEl.value = primaryKeyEl.value;
         });
     }
+
+    // Password lock/unlock logic for API keys
+    const btnUnlockGemini = document.getElementById('btn-unlock-gemini-key');
+    const pwdUnlockGemini = document.getElementById('gemini-key-lock-password');
+    const lockScreenGemini = document.getElementById('gemini-key-lock-screen');
+    const unlockScreenGemini = document.getElementById('gemini-key-unlocked-screen');
+
+    const btnUnlockAi = document.getElementById('btn-unlock-ai-key');
+    const pwdUnlockAi = document.getElementById('ai-key-lock-password');
+    const lockScreenAi = document.getElementById('ai-key-lock-screen');
+    const unlockScreenAi = document.getElementById('ai-key-unlocked-screen');
+
+    const tryUnlockKey = (pwdInput, lockDiv, unlockDiv) => {
+        if (pwdInput.value === 'tavo_dev') {
+            lockDiv.style.display = 'none';
+            unlockDiv.style.display = 'block';
+            showToast('🔓 API Key desbloqueada con éxito.', 'success');
+        } else {
+            showToast('❌ Contraseña incorrecta.', 'error');
+        }
+    };
+
+    if (btnUnlockGemini && pwdUnlockGemini && lockScreenGemini && unlockScreenGemini) {
+        btnUnlockGemini.addEventListener('click', () => tryUnlockKey(pwdUnlockGemini, lockScreenGemini, unlockScreenGemini));
+        pwdUnlockGemini.addEventListener('keyup', (e) => {
+            if (e.key === 'Enter') tryUnlockKey(pwdUnlockGemini, lockScreenGemini, unlockScreenGemini);
+        });
+    }
+
+    if (btnUnlockAi && pwdUnlockAi && lockScreenAi && unlockScreenAi) {
+        btnUnlockAi.addEventListener('click', () => tryUnlockKey(pwdUnlockAi, lockScreenAi, unlockScreenAi));
+        pwdUnlockAi.addEventListener('keyup', (e) => {
+            if (e.key === 'Enter') tryUnlockKey(pwdUnlockAi, lockScreenAi, unlockScreenAi);
+        });
+    }
 });
 
 

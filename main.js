@@ -1,7 +1,8 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, powerSaveBlocker } = require('electron');
 const path = require('path');
 
 // Limit V8 heap memory and enable Chrome's low end device mode to significantly reduce RAM usage
+app.name = 'tikttoklive';
 app.commandLine.appendSwitch('js-flags', '--max-old-space-size=128');
 app.commandLine.appendSwitch('enable-low-end-device-mode');
 
@@ -22,7 +23,7 @@ function createWindow() {
         minWidth: 800,
         minHeight: 600,
         title: "GRLive",
-        icon: path.join(__dirname, 'public', 'assets', 'icon.png'), // Puedes crear un ícono luego
+        icon: path.join(__dirname, 'public', 'assets', 'app-icons', 'icon.png'), // Puedes crear un ícono luego
         autoHideMenuBar: true,
         webPreferences: {
             nodeIntegration: false,
@@ -33,7 +34,7 @@ function createWindow() {
     // Cargamos la interfaz desde el servidor local
     // Esperamos 1 segundo para asegurarnos que el servidor levantó
     setTimeout(() => {
-        mainWindow.loadURL('http://localhost:3000');
+        mainWindow.loadURL('http://127.0.0.1:3000');
     }, 1000);
 
     // Permite abrir las herramientas de desarrollo usando Ctrl + Shift + I
@@ -117,6 +118,10 @@ autoUpdater.on('error', (err) => {
 });
 
 app.whenReady().then(() => {
+    // Prevenir que la computadora se suspenda o apague la pantalla mientras el programa está abierto
+    const powerBlockerId = powerSaveBlocker.start('prevent-display-sleep');
+    console.info(`[Sistema] Bloqueo de suspensión de PC activado (ID: ${powerBlockerId})`);
+    
     createWindow();
 
     app.on('activate', function () {

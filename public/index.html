@@ -1495,11 +1495,23 @@
                         </div>
                         
                         <div class="form-group" id="container-gemini-key-warning" style="display: none; background: rgba(255, 193, 7, 0.1); border: 1px solid #ffc107; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
-                            <span style="color: #ffc107; font-weight: bold; display: block; margin-bottom: 5px;">⚠️ Requiere API Key</span>
-                            <span style="font-size: 13px; color: var(--text-muted);">
-                                Para usar Gemini TTS, ingresa tu <strong>API Key de Google AI Studio</strong> (que inicia con <code>AIzaSy...</code>):
-                            </span>
-                            <input type="password" id="bot-gemini-api-key-shortcut" placeholder="AIzaSy..." style="width: 100%; margin-top: 8px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px; border-radius: 4px;">
+                            <div id="gemini-key-lock-screen">
+                                <span style="color: #ffc107; font-weight: bold; display: block; margin-bottom: 5px;">🔒 Configuración Protegida</span>
+                                <span style="font-size: 13px; color: var(--text-muted); display: block; margin-bottom: 8px;">
+                                    Ingresa la contraseña para desbloquear la configuración de la API Key:
+                                </span>
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="password" id="gemini-key-lock-password" placeholder="Contraseña de desarrollador..." style="flex-grow: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px; border-radius: 4px; font-size: 12px; outline: none;">
+                                    <button type="button" id="btn-unlock-gemini-key" style="padding: 6px 12px; background: #ffc107; color: #000; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Desbloquear</button>
+                                </div>
+                            </div>
+                            <div id="gemini-key-unlocked-screen" style="display: none;">
+                                <span style="color: #ffc107; font-weight: bold; display: block; margin-bottom: 5px;">⚠️ Requiere API Key</span>
+                                <span style="font-size: 13px; color: var(--text-muted);">
+                                    Para usar Gemini TTS, ingresa tu <strong>API Key de Google AI Studio</strong> (que inicia con <code>AIzaSy...</code>):
+                                </span>
+                                <input type="password" id="bot-gemini-api-key-shortcut" placeholder="AIzaSy..." style="width: 100%; margin-top: 8px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px; border-radius: 4px;">
+                            </div>
                         </div>
 
                         <div class="form-group" id="container-gemini-language" style="display: none;">
@@ -2802,10 +2814,21 @@
 
                         <details style="margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 8px;">
                             <summary style="cursor: pointer; color: var(--accent-blue); font-weight: bold; list-style-type: '🔐 ';">Mostrar/Editar API Key (Avanzado)</summary>
-                            <div class="form-group" style="margin-top: 10px;">
-                                <label for="ai-api-key">Google Gemini API Key:</label>
-                                <input type="password" id="ai-api-key" placeholder="AIzaSy..." style="width: 100%;">
-                                <small style="color: var(--text-muted); display: block; margin-top: 5px;">Ten cuidado de no modificar esta llave accidentalmente, ya que la IA dejará de funcionar.</small>
+                            <div id="ai-key-lock-screen" style="margin-top: 10px;">
+                                <span style="font-size: 13px; color: var(--text-muted); display: block; margin-bottom: 8px;">
+                                    Ingresa la contraseña para desbloquear la configuración de la API Key:
+                                </span>
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="password" id="ai-key-lock-password" placeholder="Contraseña de desarrollador..." style="flex-grow: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px; border-radius: 4px; font-size: 12px; outline: none;">
+                                    <button type="button" id="btn-unlock-ai-key" style="padding: 6px 12px; background: var(--accent-blue); color: #fff; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Desbloquear</button>
+                                </div>
+                            </div>
+                            <div id="ai-key-unlocked-screen" style="display: none; margin-top: 10px;">
+                                <div class="form-group">
+                                    <label for="ai-api-key">Google Gemini API Key:</label>
+                                    <input type="password" id="ai-api-key" placeholder="AIzaSy..." style="width: 100%;">
+                                    <small style="color: var(--text-muted); display: block; margin-top: 5px;">Ten cuidado de no modificar esta llave accidentalmente, ya que la IA dejará de funcionar.</small>
+                                </div>
                             </div>
                         </details>
 

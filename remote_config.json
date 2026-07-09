@@ -1,5 +1,6 @@
 {
   "youtubeBlocked": false,
   "youtubeBlockMessage": "Esta función se encuentra deshabilitada temporalmente de forma remota por mantenimiento.",
-  "devSettingsUnlocked": true
+  "devSettingsUnlocked": false,
+  "aiSettingsUnlocked": false
 }

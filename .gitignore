@@ -28,6 +28,13 @@ sounds_config.json
 recetas_config.json
 gifts_mapping.json
 session_stats.json
+dinamicas_config.json
+goals_catalog.json
+fix_images.js
+fix_logo.js
+fase3_detail.txt
+mapa_total_proyecto.txt
+project_context_snapshot.txt
 scratch/
 scratch_read_back.py
 step_*.txt
