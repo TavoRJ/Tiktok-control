@@ -475,11 +475,25 @@ const tiktokGiftDatabase = {
 
 function getGiftCoinValue(data) {
     if (!data) return 1;
-    const giftId = data.giftId;
-    const dbGift = tiktokGiftDatabase[giftId];
+    const giftId = String(data.giftId);
+    
+    // 1. Try resolving from local gifts_mapping.json (cerebro)
+    try {
+        const brainData = readJsonFileSafe(GIFTS_MAPPING_FILE, {});
+        if (brainData && brainData[giftId] && brainData[giftId].coins !== undefined) {
+            return parseInt(brainData[giftId].coins) || 1;
+        }
+    } catch (e) {
+        console.error('[Cerebro] Error reading coin value from mapping:', e);
+    }
+    
+    // 2. Fallback to hardcoded TikTok database
+    const dbGift = tiktokGiftDatabase[parseInt(giftId)];
     if (dbGift) {
         return dbGift.coins;
     }
+    
+    // 3. Last fallback
     return data.diamondCount || 1;
 }
 
@@ -4013,7 +4027,7 @@ function processAccumulatedGift(data, repeatCount) {
 
     const uniqueId = (data.uniqueId || '').toLowerCase();
     const nickname = data.nickname || data.uniqueId;
-    const coins = data.diamondCount || 0;
+    const coins = getGiftCoinValue(data);
     const totalCoins = coins * repeatCount;
     
     // 0. Process Betting / Apuestas Game
