@@ -1603,7 +1603,9 @@ async function generateAndPlayTTS(data) {
             }
         }
     } catch (error) {
-        console.error('Error generating Edge TTS:', error);
+        console.error('Error generating Edge/Gemini TTS:', error);
+        // Inform user in real-time about the generation failure (e.g. 429 Rate Limit, Quota)
+        io.emit('system', { type: 'error', message: `Fallo de TTS: ${error.message}` });
         if (fs.existsSync(tempFile)) {
             try { fs.unlinkSync(tempFile); } catch(e) {}
         }
@@ -2618,7 +2620,8 @@ async function executeAiCommand(item) {
             body: JSON.stringify({
                 contents: [ { parts: [ { text: prompt } ] } ],
                 system_instruction: { parts: [ { text: systemPrompt } ] }
-            })
+            }),
+            signal: AbortSignal.timeout(10000) // 10-second timeout to prevent infinite hangs
         });
 
         if (!response.ok) {
@@ -6012,7 +6015,8 @@ async function synthesizeSpeech(text, voice, rateStr, pitchStr, tempFile, custom
         const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify(requestBody),
+            signal: AbortSignal.timeout(12000) // 12-second timeout to prevent infinite hangs
         });
         
         if (!response.ok) {

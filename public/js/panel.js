@@ -2189,8 +2189,36 @@ window.deleteUserRule = function(index) {
 const ttsQueue = [];
 let isPlayingTts = false;
 let currentAudioTts = null;
+let ttsWatchdogTimeout = null;
+
+function clearTtsWatchdog() {
+    if (ttsWatchdogTimeout) {
+        clearTimeout(ttsWatchdogTimeout);
+        ttsWatchdogTimeout = null;
+    }
+}
+
+function startTtsWatchdog() {
+    clearTtsWatchdog();
+    ttsWatchdogTimeout = setTimeout(() => {
+        console.warn('[TTS Watchdog] Audio playback or SpeechSynthesis seems stuck (>20s). Resetting queue.');
+        if (currentAudioTts) {
+            try {
+                currentAudioTts.pause();
+                currentAudioTts.src = "";
+            } catch(e) {}
+            currentAudioTts = null;
+        }
+        if (window.speechSynthesis && window.speechSynthesis.speaking) {
+            try { window.speechSynthesis.cancel(); } catch(e) {}
+        }
+        isPlayingTts = false;
+        setTimeout(processTtsQueue, 100);
+    }, 20000); // 20 seconds safety margin
+}
 
 function stopAllTTS() {
+    clearTtsWatchdog();
     ttsQueue.length = 0; // Clear the queue array
     isPlayingTts = false;
     if (currentAudioTts) {
@@ -2257,13 +2285,17 @@ function processTtsQueue() {
                 currentAudioTts.playbackRate = rateMultiplier;
             }
             
+            startTtsWatchdog(); // Start the 20-second safety watchdog
+            
             currentAudioTts.onended = () => {
+                clearTtsWatchdog();
                 isPlayingTts = false;
                 currentAudioTts = null;
                 setTimeout(processTtsQueue, 400); // 400ms cooldown gap
             };
             
             currentAudioTts.onerror = (err) => {
+                clearTtsWatchdog();
                 console.error('Audio playback error:', err);
                 isPlayingTts = false;
                 currentAudioTts = null;
@@ -2271,12 +2303,14 @@ function processTtsQueue() {
             };
             
             currentAudioTts.play().catch(err => {
+                clearTtsWatchdog();
                 console.error('Audio play failed:', err);
                 isPlayingTts = false;
                 currentAudioTts = null;
                 setTimeout(processTtsQueue, 100);
             });
         } catch (err) {
+            clearTtsWatchdog();
             console.error('Audio setup error:', err);
             isPlayingTts = false;
             currentAudioTts = null;
@@ -2300,12 +2334,16 @@ function processTtsQueue() {
         utterance.pitch = parseFloat(item.pitch);
         utterance.rate = parseFloat(item.rate) * rateMultiplier;
         
+        startTtsWatchdog(); // Start the 20-second safety watchdog
+        
         utterance.onend = () => {
+            clearTtsWatchdog();
             isPlayingTts = false;
             setTimeout(processTtsQueue, 400);
         };
         
         utterance.onerror = (err) => {
+            clearTtsWatchdog();
             console.error('SpeechSynthesis error:', err);
             isPlayingTts = false;
             setTimeout(processTtsQueue, 100);
