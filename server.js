@@ -4329,6 +4329,8 @@ let isProcessingTts = false;
 let ttsMessageTimestamps = [];
 
 let tiktokLiveConnection = null;
+let isBacklogBuffering = false;
+let backlogChatMessages = [];
 
 // In-memory progress tracker for auto-registered gift goals
 const giftMetasProgress = {};
@@ -4546,6 +4548,23 @@ function connectToTikTok(username) {
         io.emit('tiktok_disconnected');
     });
     
+    isBacklogBuffering = true;
+    backlogChatMessages = [];
+    
+    // Buffer backlog comments for 1.5 seconds and only read the last 2 comments
+    setTimeout(() => {
+        isBacklogBuffering = false;
+        const messagesToProcess = backlogChatMessages.slice(-2);
+        console.info(`[TikTok Connector] Backlog buffering ended. Processing last ${messagesToProcess.length} of ${backlogChatMessages.length} comments.`);
+        messagesToProcess.forEach(msg => {
+            handleCloudTTS(msg);
+            handleSpotifyChatCommand(msg);
+            handleYoutubeChatCommand(msg);
+            handleAiChatCommand(msg);
+        });
+        backlogChatMessages = [];
+    }, 1500);
+
     connectionRef.connect().then(state => {
         console.info(`Connected to roomId ${state.roomId}`);
         currentRoomId = state.roomId || '';
@@ -4703,10 +4722,14 @@ function connectToTikTok(username) {
             }
             
             if (eventType === 'chat') {
-                handleCloudTTS(data);
-                handleSpotifyChatCommand(data);
-                handleYoutubeChatCommand(data);
-                handleAiChatCommand(data);
+                if (isBacklogBuffering) {
+                    backlogChatMessages.push(data);
+                } else {
+                    handleCloudTTS(data);
+                    handleSpotifyChatCommand(data);
+                    handleYoutubeChatCommand(data);
+                    handleAiChatCommand(data);
+                }
             }
 
             if (eventType === 'member') {
