@@ -2191,6 +2191,11 @@ let isPlayingTts = false;
 let currentAudioTts = null;
 let ttsWatchdogTimeout = null;
 
+let audioCtx = null;
+let analyserNode = null;
+let audioSourceNode = null;
+let visualizerInterval = null;
+
 function clearTtsWatchdog() {
     if (ttsWatchdogTimeout) {
         clearTimeout(ttsWatchdogTimeout);
@@ -2198,10 +2203,113 @@ function clearTtsWatchdog() {
     }
 }
 
+function startVisualizerAnimation(audioEl) {
+    try {
+        const visualizerContainer = document.getElementById('tts-audio-visualizer');
+        if (visualizerContainer) {
+            visualizerContainer.style.display = 'flex';
+        }
+        
+        // Local SpeechSynthesis cannot be analyzed via Web Audio API, fallback to CSS bounce
+        if (!audioEl) {
+            fallbackVisualizerAnimation();
+            return;
+        }
+
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+
+        analyserNode = audioCtx.createAnalyser();
+        analyserNode.fftSize = 64; // Low resolution = extremely light-weight (32 bars)
+        
+        audioSourceNode = audioCtx.createMediaElementSource(audioEl);
+        audioSourceNode.connect(analyserNode);
+        analyserNode.connect(audioCtx.destination);
+        
+        const bufferLength = analyserNode.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        const bars = document.querySelectorAll('.tts-vis-bar');
+        
+        if (visualizerInterval) clearInterval(visualizerInterval);
+        
+        // 30 FPS = very laptop friendly
+        visualizerInterval = setInterval(() => {
+            if (!isPlayingTts || !currentAudioTts) {
+                stopVisualizerAnimation();
+                return;
+            }
+            
+            analyserNode.getByteFrequencyData(dataArray);
+            
+            for (let i = 0; i < bars.length; i++) {
+                // Map the frequency value (0-255) to a height percent (5% to 100%)
+                const val = dataArray[i * 2] || 0;
+                const percent = Math.min(100, Math.max(5, Math.round((val / 255) * 100)));
+                bars[i].style.height = `${percent}%`;
+            }
+        }, 33);
+        
+    } catch (e) {
+        console.warn('[Visualizer] Web Audio analyser blocked or failed. Using CSS fallback animation.', e);
+        fallbackVisualizerAnimation();
+    }
+}
+
+function fallbackVisualizerAnimation() {
+    const visualizerContainer = document.getElementById('tts-audio-visualizer');
+    if (visualizerContainer) {
+        visualizerContainer.style.display = 'flex';
+    }
+    const bars = document.querySelectorAll('.tts-vis-bar');
+    if (visualizerInterval) clearInterval(visualizerInterval);
+    
+    visualizerInterval = setInterval(() => {
+        if (!isPlayingTts) {
+            stopVisualizerAnimation();
+            return;
+        }
+        bars.forEach(bar => {
+            const rand = Math.floor(Math.random() * 85) + 15; // 15% to 100%
+            bar.style.height = `${rand}%`;
+        });
+    }, 80);
+}
+
+function stopVisualizerAnimation() {
+    if (visualizerInterval) {
+        clearInterval(visualizerInterval);
+        visualizerInterval = null;
+    }
+    
+    // Clean up AudioContext nodes to prevent memory leaks on element recreation
+    if (audioSourceNode) {
+        try { audioSourceNode.disconnect(); } catch(e) {}
+        audioSourceNode = null;
+    }
+    if (analyserNode) {
+        try { analyserNode.disconnect(); } catch(e) {}
+        analyserNode = null;
+    }
+
+    const visualizerContainer = document.getElementById('tts-audio-visualizer');
+    if (visualizerContainer) {
+        visualizerContainer.style.display = 'none';
+    }
+    const bars = document.querySelectorAll('.tts-vis-bar');
+    bars.forEach(bar => {
+        bar.style.height = '5%';
+    });
+}
+
 function startTtsWatchdog() {
     clearTtsWatchdog();
     ttsWatchdogTimeout = setTimeout(() => {
         console.warn('[TTS Watchdog] Audio playback or SpeechSynthesis seems stuck (>20s). Resetting queue.');
+        stopVisualizerAnimation();
         if (currentAudioTts) {
             try {
                 currentAudioTts.pause();
@@ -2219,6 +2327,7 @@ function startTtsWatchdog() {
 
 function stopAllTTS() {
     clearTtsWatchdog();
+    stopVisualizerAnimation();
     ttsQueue.length = 0; // Clear the queue array
     isPlayingTts = false;
     if (currentAudioTts) {
@@ -2289,6 +2398,7 @@ function processTtsQueue() {
             
             currentAudioTts.onended = () => {
                 clearTtsWatchdog();
+                stopVisualizerAnimation();
                 isPlayingTts = false;
                 currentAudioTts = null;
                 setTimeout(processTtsQueue, 400); // 400ms cooldown gap
@@ -2296,14 +2406,18 @@ function processTtsQueue() {
             
             currentAudioTts.onerror = (err) => {
                 clearTtsWatchdog();
+                stopVisualizerAnimation();
                 console.error('Audio playback error:', err);
                 isPlayingTts = false;
                 currentAudioTts = null;
                 setTimeout(processTtsQueue, 100);
             };
             
-            currentAudioTts.play().catch(err => {
+            currentAudioTts.play().then(() => {
+                startVisualizerAnimation(currentAudioTts);
+            }).catch(err => {
                 clearTtsWatchdog();
+                stopVisualizerAnimation();
                 console.error('Audio play failed:', err);
                 isPlayingTts = false;
                 currentAudioTts = null;
@@ -2311,6 +2425,7 @@ function processTtsQueue() {
             });
         } catch (err) {
             clearTtsWatchdog();
+            stopVisualizerAnimation();
             console.error('Audio setup error:', err);
             isPlayingTts = false;
             currentAudioTts = null;
@@ -2338,17 +2453,20 @@ function processTtsQueue() {
         
         utterance.onend = () => {
             clearTtsWatchdog();
+            stopVisualizerAnimation();
             isPlayingTts = false;
             setTimeout(processTtsQueue, 400);
         };
         
         utterance.onerror = (err) => {
             clearTtsWatchdog();
+            stopVisualizerAnimation();
             console.error('SpeechSynthesis error:', err);
             isPlayingTts = false;
             setTimeout(processTtsQueue, 100);
         };
         
+        startVisualizerAnimation(null);
         window.speechSynthesis.speak(utterance);
     }
 }
