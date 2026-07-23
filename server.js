@@ -3015,8 +3015,8 @@ app.use((req, res, next) => {
     const theme = chatbotSettings.themeName || 'neutral';
     
     if (url.includes('/assets/')) {
-        if (url.includes('/assets/gift')) {
-            console.warn(`[Asset Isolation] Access blocked to gifts directory: ${req.url}`);
+        if (url === '/assets/gift' || url === '/assets/gift/') {
+            console.warn(`[Asset Isolation] Access blocked to gifts directory index: ${req.url}`);
             return res.status(404).send('Not Found');
         }
         if (url.includes('naya') && theme !== 'naya') {
@@ -3065,29 +3065,63 @@ function invalidateGiftCache() { _giftFileCache = null; }
 
 app.get('/gift-assets/:filename', (req, res) => {
     const requested = decodeURIComponent(req.params.filename);
+    
+    // 1. Try to load from custom gifts directory in %appdata% Roaming first
+    const customGiftsDir = path.join(writableDir, 'gifts');
+    if (!fs.existsSync(customGiftsDir)) {
+        try { fs.mkdirSync(customGiftsDir, { recursive: true }); } catch (e) {}
+    }
+    
+    try {
+        if (fs.existsSync(customGiftsDir)) {
+            const customFiles = fs.readdirSync(customGiftsDir);
+            
+            // A. Exact match in custom
+            if (customFiles.includes(requested)) {
+                return res.sendFile(path.join(customGiftsDir, requested));
+            }
+            
+            // B. Case-insensitive match in custom
+            const lowerReq = requested.toLowerCase();
+            const customCiMatch = customFiles.find(f => f.toLowerCase() === lowerReq);
+            if (customCiMatch) {
+                return res.sendFile(path.join(customGiftsDir, customCiMatch));
+            }
+            
+            // C. Normalized match in custom
+            const normalize = str => str.toLowerCase().replace(/[\s_]+/g, '').replace(/['']/g, '');
+            const customNormMatch = customFiles.find(f => normalize(f.replace(/\.png$/i, '')) === normalize(requested.replace(/\.png$/i, '')));
+            if (customNormMatch) {
+                return res.sendFile(path.join(customGiftsDir, customNormMatch));
+            }
+        }
+    } catch (e) {
+        console.error('[Gifts Fallback] Error checking custom gifts folder:', e);
+    }
+
+    // 2. Fallback to default packaged assets
     const files = getGiftFiles();
 
-    // 1. Coincidencia exacta
+    // A. Exact match in default
     if (files.includes(requested)) {
         return res.sendFile(path.join(GIFT_ASSETS_DIR, requested));
     }
 
-    // 2. Coincidencia case-insensitive
+    // B. Case-insensitive match in default
     const lowerReq = requested.toLowerCase();
     const ciMatch = files.find(f => f.toLowerCase() === lowerReq);
     if (ciMatch) {
         return res.sendFile(path.join(GIFT_ASSETS_DIR, ciMatch));
     }
 
-    // 3. Coincidencia normalizada: espacios y guiones bajos son equivalentes
+    // C. Normalized match in default
     const normalize = str => str.toLowerCase().replace(/[\s_]+/g, '').replace(/['']/g, '');
-    const normReq = normalize(requested);
     const normMatch = files.find(f => normalize(f.replace(/\.png$/i, '')) === normalize(requested.replace(/\.png$/i, '')));
     if (normMatch) {
         return res.sendFile(path.join(GIFT_ASSETS_DIR, normMatch));
     }
 
-    // 4. No encontrado — responder 404
+    // 4. Not found
     res.status(404).end();
 });
 
@@ -4524,6 +4558,61 @@ function loadProfile(username) {
     }
 }
 
+let lastAnnouncedBattleId = null;
+const announcedBoosters = new Set();
+
+function checkBattleRewardsRecursive(obj) {
+    if (!obj || typeof obj !== 'object') return false;
+    
+    for (const key in obj) {
+        if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
+        const val = obj[key];
+        const lowerKey = key.toLowerCase();
+        
+        if (lowerKey.includes('reward') || lowerKey.includes('booster') || lowerKey.includes('item') || lowerKey.includes('glove_pool')) {
+            if (val === true || val === 1 || val === '1' || (typeof val === 'object' && val !== null && Object.keys(val).length > 0)) {
+                return true;
+            }
+        }
+        
+        if (typeof val === 'object' && val !== null) {
+            if (checkBattleRewardsRecursive(val)) return true;
+        }
+    }
+    
+    try {
+        const str = JSON.stringify(obj).toLowerCase();
+        if (str.includes('reward_pool') || str.includes('has_rewards') || str.includes('glove_pool') || str.includes('battle_rewards')) {
+            return true;
+        }
+    } catch (e) {}
+    
+    return false;
+}
+
+function detectActiveBoosters(obj) {
+    const boosters = [];
+    if (!obj || typeof obj !== 'object') return boosters;
+    
+    try {
+        const str = JSON.stringify(obj).toLowerCase();
+        if (str.includes('glove') || str.includes('guante') || str.includes('crit')) {
+            boosters.push('Guante (Crit)');
+        }
+        if (str.includes('mist') || str.includes('niebla') || str.includes('smoke')) {
+            boosters.push('Niebla (Mist)');
+        }
+        if (str.includes('speed') || str.includes('velocidad') || str.includes('booster_x')) {
+            boosters.push('Multiplicador de Velocidad (x2/x3)');
+        }
+        if (str.includes('timer') || str.includes('clock') || str.includes('reloj') || str.includes('extra_time')) {
+            boosters.push('Reloj (Tiempo Extra)');
+        }
+    } catch (e) {}
+    
+    return boosters;
+}
+
 function connectToTikTok(username) {
     if (username) {
         loadProfile(username);
@@ -5130,10 +5219,88 @@ function connectToTikTok(username) {
             }
             
             if (eventType === 'linkMicBattle') {
+                const hasRewards = checkBattleRewardsRecursive(data);
+                const activeBoosters = detectActiveBoosters(data);
+                
+                // Append parsed properties to the data payload so the panel/overlays can read them directly
+                data.hasRewards = hasRewards;
+                data.activeBoosters = activeBoosters;
+                
+                const battleId = data.battleId || 'current';
+                
+                if (hasRewards && lastAnnouncedBattleId !== battleId) {
+                    lastAnnouncedBattleId = battleId;
+                    console.info(`[BATALLA] ¡Pozo de premios detectado! ID: ${battleId}`);
+                    const phrase = "¡Atención! En esta batalla regalarán potenciadores como guantes al finalizar. ¡Apoyemos con todo para ganar esas recompensas!";
+                    speakCustomTts(phrase, true);
+                    
+                    io.emit('overlay_trigger', {
+                        type: 'battle_rewards_available',
+                        message: '¡RECOMPENSAS DE BATALLA ACTIVAS!'
+                    });
+                }
+                
+                if (activeBoosters.length > 0) {
+                    activeBoosters.forEach(booster => {
+                        const boosterKey = `${battleId}_${booster}`;
+                        if (!announcedBoosters.has(boosterKey)) {
+                            announcedBoosters.add(boosterKey);
+                            if (announcedBoosters.size > 200) {
+                                const first = announcedBoosters.values().next().value;
+                                announcedBoosters.delete(first);
+                            }
+                            
+                            console.info(`[BATALLA] Potenciador detectado en linkMicBattle: ${booster}`);
+                            let phrase = `¡Se ha activado el potenciador ${booster} en la batalla!`;
+                            if (booster.includes('Guante')) {
+                                phrase = "¡Guante activo! Los regalos multiplican sus puntos por dos durante los próximos 30 segundos. ¡Es momento de apoyar!";
+                                io.emit('overlay_trigger', {
+                                    type: 'glove_activated',
+                                    duration: 30
+                                });
+                            } else if (booster.includes('Niebla')) {
+                                phrase = "¡Cuidado! Se ha activado la niebla en la batalla. El marcador del oponente está oculto.";
+                            }
+                            speakCustomTts(phrase, true);
+                        }
+                    });
+                }
+
                 io.emit('overlay_trigger', {
                     type: 'battle_event',
                     data: data
                 });
+            }
+
+            if (eventType === 'linkMicArmies') {
+                const activeBoosters = detectActiveBoosters(data);
+                data.activeBoosters = activeBoosters;
+                
+                const battleId = data.battleId || 'current';
+                
+                if (activeBoosters.length > 0) {
+                    activeBoosters.forEach(booster => {
+                        const boosterKey = `${battleId}_${booster}`;
+                        if (!announcedBoosters.has(boosterKey)) {
+                            announcedBoosters.add(boosterKey);
+                            if (announcedBoosters.size > 200) {
+                                const first = announcedBoosters.values().next().value;
+                                announcedBoosters.delete(first);
+                            }
+                            
+                            console.info(`[BATALLA] Potenciador detectado en linkMicArmies: ${booster}`);
+                            let phrase = `¡Se ha activado el potenciador ${booster} en la batalla!`;
+                            if (booster.includes('Guante')) {
+                                phrase = "¡Guante activo! Los regalos multiplican sus puntos por dos durante los próximos 30 segundos. ¡Es momento de apoyar!";
+                                io.emit('overlay_trigger', {
+                                    type: 'glove_activated',
+                                    duration: 30
+                                });
+                            }
+                            speakCustomTts(phrase, true);
+                        }
+                    });
+                }
             }
         });
     });

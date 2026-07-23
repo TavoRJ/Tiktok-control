@@ -560,7 +560,17 @@ socket.on('tiktok_event_raw', (payload) => {
         processAndSpeak(data);
     } else if (eventType === 'linkMicBattle') {
         cssClass = 'battle';
-        logMessage = `[BATALLA] Status actualizado (Battle Event)`;
+        const rewardsText = data.hasRewards ? '<span style="color: #4caf50; font-weight: 800;">[🎁 CON RECOMPENSAS]</span>' : '<span style="color: #ff9800;">[SIN RECOMPENSAS]</span>';
+        const boostersText = (data.activeBoosters && data.activeBoosters.length > 0)
+            ? `<span style="color: #00e5ff; font-weight: 800;">[⚡ POTENCIADORES: ${data.activeBoosters.join(', ')}]</span>`
+            : '[SIN POTENCIADORES ACTIVOS]';
+        logMessage = `[BATALLA] Estado de PK recibido. ${rewardsText} - ${boostersText} - Raw: ${JSON.stringify(data)}`;
+    } else if (eventType === 'linkMicArmies') {
+        cssClass = 'battle';
+        const boostersText = (data.activeBoosters && data.activeBoosters.length > 0)
+            ? `<span style="color: #00e5ff; font-weight: 800;">[⚡ POTENCIADORES: ${data.activeBoosters.join(', ')}]</span>`
+            : '[SIN POTENCIADORES ACTIVOS]';
+        logMessage = `[EJÉRCITO] Actualización de puntos de batalla. ${boostersText} - Raw: ${JSON.stringify(data)}`;
     } else if (eventType === 'envelope') {
         cssClass = 'battle';
         logMessage = `[SOBRE/ITEM] Evento de Cofre o Item detectado: ${JSON.stringify(data)}`;

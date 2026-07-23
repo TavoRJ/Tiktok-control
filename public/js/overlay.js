@@ -36,7 +36,11 @@ socket.on('chatbot_settings_updated', (config) => {
 socket.on('overlay_trigger', (data) => {
     if (filterAnimationId && data.action === 'play_custom_animation' && filterAnimationId !== data.animation.id) return;
 
-    if (data.type === 'animation_event') {
+    if (data.type === 'battle_rewards_available') {
+        showBattleRewardsAlert(data.message);
+    } else if (data.type === 'glove_activated') {
+        showGloveCountdownAlert(data.duration);
+    } else if (data.type === 'animation_event') {
         switch (data.action) {
             case 'glove':
                 triggerMasterAnimation('trigger_glove', 'back', 'glove-anim', `http://127.0.0.1:${serverPort}/gift-assets/Guante.png`, `🥊 ¡@${data.nickname} activó el Guante Multiplicador! 🥊`, data.nickname);
@@ -228,3 +232,150 @@ function playCustomAnimation(layerType, fileUrl, textTemplate, durationMs, nickn
 
 // Request initial settings on load
 socket.emit('get_chatbot_settings');
+
+function showBattleRewardsAlert(message) {
+    const container = document.createElement('div');
+    container.className = 'battle-rewards-alert';
+    container.innerHTML = `
+        <div class="rewards-icon-box">🎁</div>
+        <div class="rewards-content">
+            <div class="rewards-title">RECOMPENSAS ACTIVAS</div>
+            <div class="rewards-subtitle">Habrá potenciadores al finalizar la batalla</div>
+        </div>
+    `;
+    
+    container.style.cssText = `
+        position: absolute;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%) scale(0.9);
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        background: rgba(20, 20, 30, 0.85);
+        backdrop-filter: blur(12px);
+        border: 2px solid #ecc158;
+        box-shadow: 0 0 25px rgba(236, 193, 88, 0.4);
+        padding: 12px 25px;
+        border-radius: 12px;
+        color: #fff;
+        font-family: 'Outfit', sans-serif;
+        font-weight: 800;
+        z-index: 99999;
+        opacity: 0;
+        animation: slideDownRewards 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards, fadeOutRewards 0.5s ease-in forwards 8s;
+    `;
+    
+    injectOverlayCSS();
+    
+    if (layerFront) {
+        layerFront.appendChild(container);
+    }
+    setTimeout(() => {
+        if (container.parentElement) container.remove();
+    }, 9000);
+}
+
+function showGloveCountdownAlert(duration) {
+    const container = document.createElement('div');
+    container.className = 'glove-countdown-alert';
+    container.innerHTML = `
+        <div class="glove-spinning-box">
+            <img src="gift-assets/Guante.png" style="width: 60px; height: 60px; animation: spinGlove 1.5s linear infinite;" onerror="this.src='gift-assets/glove.png';">
+        </div>
+        <div class="glove-timer-content">
+            <div style="color: #ff3366; font-size: 13px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; font-family: 'Outfit', sans-serif;">¡GUANTE ACTIVO! (x2 PUNTOS)</div>
+            <div class="glove-time-display" style="font-size: 28px; font-weight: 900; color: #fff; text-shadow: 0 0 10px #ff3366; font-family: 'Outfit', sans-serif; margin-top: 2px;">${duration}s</div>
+        </div>
+    `;
+    
+    container.style.cssText = `
+        position: absolute;
+        top: 100px;
+        right: 40px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        background: rgba(255, 20, 80, 0.15);
+        backdrop-filter: blur(10px);
+        border: 2px solid #ff3366;
+        box-shadow: 0 0 30px rgba(255, 51, 102, 0.4);
+        padding: 12px 20px;
+        border-radius: 14px;
+        z-index: 99999;
+        opacity: 0;
+        animation: slideInGlove 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    `;
+    
+    injectOverlayCSS();
+    
+    if (layerFront) {
+        layerFront.appendChild(container);
+    }
+    
+    let timeLeft = duration || 30;
+    const timeDisplay = container.querySelector('.glove-time-display');
+    const timerInterval = setInterval(() => {
+        timeLeft--;
+        if (timeLeft <= 0) {
+            clearInterval(timerInterval);
+            container.style.animation = 'fadeOutGlove 0.5s ease-in forwards';
+            setTimeout(() => {
+                if (container.parentElement) container.remove();
+            }, 500);
+        } else {
+            if (timeDisplay) timeDisplay.textContent = `${timeLeft}s`;
+        }
+    }, 1000);
+}
+
+let cssInjected = false;
+function injectOverlayCSS() {
+    if (cssInjected) return;
+    cssInjected = true;
+    const style = document.createElement('style');
+    style.innerHTML = `
+        @keyframes slideDownRewards {
+            0% { transform: translate(-50%, -100px) scale(0.9); opacity: 0; }
+            100% { transform: translate(-50%, 0) scale(1); opacity: 1; }
+        }
+        @keyframes fadeOutRewards {
+            100% { opacity: 0; transform: translate(-50%, -30px) scale(0.95); }
+        }
+        @keyframes slideInGlove {
+            0% { transform: translateX(120%) scale(0.8); opacity: 0; }
+            100% { transform: translateX(0) scale(1); opacity: 1; }
+        }
+        @keyframes fadeOutGlove {
+            100% { transform: translateX(120%) scale(0.8); opacity: 0; }
+        }
+        @keyframes spinGlove {
+            0% { transform: rotate(0deg) scale(1); }
+            50% { transform: rotate(15deg) scale(1.08); }
+            100% { transform: rotate(0deg) scale(1); }
+        }
+        .rewards-icon-box {
+            font-size: 28px;
+            animation: bounceIcon 2s infinite ease-in-out;
+        }
+        @keyframes bounceIcon {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-4px); }
+        }
+        .rewards-title {
+            font-size: 14px;
+            letter-spacing: 1px;
+            color: #ecc158;
+            text-shadow: 0 0 10px rgba(236, 193, 88, 0.4);
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800;
+        }
+        .rewards-subtitle {
+            font-size: 11px;
+            font-weight: 600;
+            color: #ccc;
+            font-family: 'Outfit', sans-serif;
+        }
+    `;
+    document.head.appendChild(style);
+}
