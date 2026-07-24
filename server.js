@@ -4561,6 +4561,137 @@ function loadProfile(username) {
 let lastAnnouncedBattleId = null;
 const announcedBoosters = new Set();
 
+let sessionViewers = {};
+let lastViewerLogEmitTime = 0;
+let viewerLogPendingUpdate = false;
+let currentConnectedCreator = '';
+
+const HISTORY_DIR = path.join(writableDir, 'history');
+if (!fs.existsSync(HISTORY_DIR)) {
+    try { fs.mkdirSync(HISTORY_DIR, { recursive: true }); } catch (e) {}
+}
+
+function registerSessionViewer(uniqueId, nickname, avatarUrl, eventType, count = 1) {
+    if (!uniqueId) return;
+    const uidLower = uniqueId.toLowerCase().trim();
+    const timeStr = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    
+    if (!sessionViewers[uidLower]) {
+        sessionViewers[uidLower] = {
+            uniqueId: uniqueId,
+            nickname: nickname || uniqueId,
+            avatar: avatarUrl || '',
+            firstSeen: timeStr,
+            lastSeen: timeStr,
+            chats: eventType === 'chat' ? 1 : 0,
+            likes: eventType === 'like' ? count : 0,
+            gifts: eventType === 'gift' ? count : 0,
+            followed: eventType === 'follow' ? 1 : 0,
+            shared: eventType === 'share' ? 1 : 0
+        };
+    } else {
+        const viewer = sessionViewers[uidLower];
+        viewer.lastSeen = timeStr;
+        if (nickname) viewer.nickname = nickname;
+        if (avatarUrl) viewer.avatar = avatarUrl;
+        
+        if (eventType === 'chat') viewer.chats += count;
+        if (eventType === 'like') viewer.likes += count;
+        if (eventType === 'gift') viewer.gifts += count;
+        if (eventType === 'follow') viewer.followed = 1;
+        if (eventType === 'share') viewer.shared = 1;
+    }
+    
+    emitViewerLogThrottled();
+}
+
+function emitViewerLogThrottled() {
+    const now = Date.now();
+    if (now - lastViewerLogEmitTime > 2000) {
+        lastViewerLogEmitTime = now;
+        viewerLogPendingUpdate = false;
+        io.emit('viewer_log_updated', Object.values(sessionViewers));
+    } else {
+        if (!viewerLogPendingUpdate) {
+            viewerLogPendingUpdate = true;
+            setTimeout(() => {
+                lastViewerLogEmitTime = Date.now();
+                viewerLogPendingUpdate = false;
+                io.emit('viewer_log_updated', Object.values(sessionViewers));
+            }, 2000);
+        }
+    }
+}
+
+function saveViewerSessionHistory() {
+    try {
+        const viewerCount = Object.keys(sessionViewers).length;
+        if (viewerCount === 0) return;
+        
+        const dateStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        const timeStr = new Date().toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS
+        
+        const filename = `espectadores_${currentConnectedCreator || 'stream'}_${dateStr}_${timeStr}.json`;
+        const filepath = path.join(HISTORY_DIR, filename);
+        
+        fs.writeFileSync(filepath, JSON.stringify(Object.values(sessionViewers), null, 2), 'utf8');
+        console.info(`[Historial] Sesión de espectadores guardada en: ${filepath} (${viewerCount} usuarios)`);
+        
+        cleanupOldHistoryFiles();
+    } catch (err) {
+        console.error('[Historial] Error al guardar historial de sesión:', err);
+    }
+}
+
+function cleanupOldHistoryFiles() {
+    try {
+        if (!fs.existsSync(HISTORY_DIR)) return;
+        const files = fs.readdirSync(HISTORY_DIR);
+        const now = Date.now();
+        const twoDaysMs = 2 * 24 * 60 * 60 * 1000; // 2 days
+        
+        let deletedAny = false;
+        let deletedNames = [];
+        
+        files.forEach(file => {
+            if (!file.endsWith('.json')) return;
+            const filepath = path.join(HISTORY_DIR, file);
+            const stats = fs.statSync(filepath);
+            
+            if (now - stats.mtimeMs > twoDaysMs) {
+                fs.unlinkSync(filepath);
+                deletedAny = true;
+                deletedNames.push(file);
+                console.info(`[Historial] Archivo de historial viejo eliminado: ${file}`);
+            }
+        });
+        
+        if (deletedAny) {
+            setTimeout(() => {
+                io.emit('system', { 
+                    type: 'error', 
+                    message: `⚠️ [Espacio] Registros de usuarios con más de 2 días de antigüedad fueron eliminados automáticamente para liberar espacio (${deletedNames.join(', ')}).` 
+                });
+            }, 3000);
+        }
+    } catch (err) {
+        console.error('[Historial] Error limpiando historiales antiguos:', err);
+    }
+}
+
+// Process exit listeners to ensure saving viewer log on exit
+process.on('exit', () => {
+    saveViewerSessionHistory();
+});
+process.on('SIGINT', () => {
+    saveViewerSessionHistory();
+    process.exit();
+});
+process.on('SIGTERM', () => {
+    saveViewerSessionHistory();
+    process.exit();
+});
+
 function checkBattleRewardsRecursive(obj) {
     if (!obj || typeof obj !== 'object') return false;
     
@@ -4614,6 +4745,12 @@ function detectActiveBoosters(obj) {
 }
 
 function connectToTikTok(username) {
+    try {
+        saveViewerSessionHistory();
+    } catch (e) {}
+    sessionViewers = {};
+    currentConnectedCreator = username || 'stream';
+    
     if (username) {
         loadProfile(username);
     }
@@ -4633,6 +4770,11 @@ function connectToTikTok(username) {
     // Register auto-cleanup listeners
     connectionRef.on('disconnected', () => {
         console.info('[TikTok Connector] Conexión perdida/cerrada.');
+        try {
+            saveViewerSessionHistory();
+        } catch (e) {}
+        sessionViewers = {};
+        io.emit('viewer_log_updated', []);
         if (tiktokLiveConnection === connectionRef) {
             tiktokLiveConnection = null;
         }
@@ -4643,6 +4785,11 @@ function connectToTikTok(username) {
 
     connectionRef.on('streamEnd', () => {
         console.info('[TikTok Connector] Transmisión terminada.');
+        try {
+            saveViewerSessionHistory();
+        } catch (e) {}
+        sessionViewers = {};
+        io.emit('viewer_log_updated', []);
         if (tiktokLiveConnection === connectionRef) {
             tiktokLiveConnection = null;
         }
@@ -4742,6 +4889,11 @@ function connectToTikTok(username) {
 
     eventsToListen.forEach(eventType => {
         connectionRef.on(eventType, data => {
+            if (data && data.uniqueId) {
+                const count = parseInt(data.repeatCount || data.likeCount || 1) || 1;
+                const avatar = data.profilePictureUrl || '';
+                registerSessionViewer(data.uniqueId, data.nickname, avatar, eventType, count);
+            }
             if (eventType === 'gift' && data) {
                 const uniqueId = (data.uniqueId || '').toLowerCase().trim();
                 const giftId = String(data.giftId);
@@ -5817,9 +5969,19 @@ io.on('connection', (socket) => {
         socket.emit('chatbot_settings_updated', chatbotSettings);
     });
 
+    socket.on('get_viewer_log', () => {
+        socket.emit('viewer_log_updated', Object.values(sessionViewers));
+    });
+
     // Handle disconnect tiktok request
     socket.on('disconnect_tiktok', () => {
         console.log('Desconectando de TikTok...');
+        try {
+            saveViewerSessionHistory();
+        } catch (e) {}
+        sessionViewers = {};
+        io.emit('viewer_log_updated', []);
+        
         if (tiktokLiveConnection) {
             try {
                 tiktokLiveConnection.removeAllListeners();

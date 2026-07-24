@@ -6338,6 +6338,126 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.key === 'Enter') tryUnlockKey(pwdUnlockAi, lockScreenAi, unlockScreenAi);
         });
     }
+
+    // =========================================================================
+    // REGISTRO DE ESPECTADORES EN TIEMPO REAL
+    // =========================================================================
+    let currentViewerLog = [];
+    const viewersTableBody = document.getElementById('viewers-log-table-body');
+    const viewersCountEl = document.getElementById('viewer-log-count');
+    const searchViewersInput = document.getElementById('search-viewers');
+    const btnExportViewers = document.getElementById('btn-export-viewers');
+
+    function renderViewersTable(viewers) {
+        if (!viewersTableBody) return;
+        
+        const filterQuery = searchViewersInput ? searchViewersInput.value.toLowerCase().trim() : '';
+        const filtered = viewers.filter(v => {
+            return v.uniqueId.toLowerCase().includes(filterQuery) || 
+                   v.nickname.toLowerCase().includes(filterQuery);
+        });
+
+        if (viewersCountEl) {
+            viewersCountEl.textContent = `${filtered.length} espectadores ${filterQuery ? 'filtrados' : 'detectados'}`;
+        }
+
+        if (filtered.length === 0) {
+            viewersTableBody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center" style="color: var(--text-muted); padding: 30px; font-size: 13px; text-align: center;">
+                        ${filterQuery ? 'No se encontraron espectadores con ese nombre.' : 'Esperando datos de espectadores...'}
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        viewersTableBody.innerHTML = filtered.map(v => {
+            const avatarHtml = v.avatar 
+                ? `<img src="${v.avatar}" style="width: 28px; height: 28px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255,255,255,0.15); float: left; margin-right: 8px;">`
+                : `<div style="width: 28px; height: 28px; border-radius: 50%; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; float: left; margin-right: 8px; color: var(--text-muted);">@</div>`;
+
+            return `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); transition: background-color 0.2s;">
+                    <td style="padding: 10px; font-size: 13px; font-weight: 600; white-space: nowrap;">
+                        ${avatarHtml}
+                        <div style="display: inline-block; vertical-align: middle;">
+                            <span style="color: var(--text-main); font-weight: 800;">${v.nickname}</span><br>
+                            <span style="font-size: 10px; color: var(--text-muted); font-weight: 600;">@${v.uniqueId}</span>
+                        </div>
+                    </td>
+                    <td style="padding: 10px; font-size: 12px; color: var(--text-muted); vertical-align: middle;">${v.firstSeen}</td>
+                    <td style="padding: 10px; font-size: 12px; color: var(--text-muted); vertical-align: middle;">${v.lastSeen}</td>
+                    <td style="padding: 10px; font-size: 13px; font-weight: 800; color: #38bdf8; text-align: center; vertical-align: middle;">${v.chats}</td>
+                    <td style="padding: 10px; font-size: 13px; font-weight: 800; color: #ff3b30; text-align: center; vertical-align: middle;">${v.likes}</td>
+                    <td style="padding: 10px; font-size: 13px; font-weight: 800; color: #ffd700; text-align: center; vertical-align: middle;">${v.gifts}</td>
+                    <td style="padding: 10px; text-align: center; vertical-align: middle;">
+                        ${v.followed ? '<span style="color: #4caf50; font-weight: 800; font-size: 11px; background: rgba(76,175,80,0.15); padding: 2px 6px; border-radius: 4px;">SÍ</span>' : '<span style="color: rgba(255,255,255,0.2); font-size: 11px;">NO</span>'}
+                    </td>
+                    <td style="padding: 10px; text-align: center; vertical-align: middle;">
+                        ${v.shared ? '<span style="color: #00e5ff; font-weight: 800; font-size: 11px; background: rgba(0,229,255,0.15); padding: 2px 6px; border-radius: 4px;">SÍ</span>' : '<span style="color: rgba(255,255,255,0.2); font-size: 11px;">NO</span>'}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    if (searchViewersInput) {
+        searchViewersInput.addEventListener('input', () => {
+            renderViewersTable(currentViewerLog);
+        });
+    }
+
+    if (btnExportViewers) {
+        btnExportViewers.addEventListener('click', () => {
+            if (currentViewerLog.length === 0) {
+                showToast('❌ No hay datos de espectadores para exportar.', 'error');
+                return;
+            }
+
+            try {
+                let csvContent = '\uFEFF'; // BOM to support accents in Excel
+                csvContent += 'Usuario,Apodo,Hora Entrada,Ultima Actividad,Chats,Likes,Regalos,Seguidor,Compartio\n';
+                
+                currentViewerLog.forEach(v => {
+                    const row = [
+                        `"${v.uniqueId.replace(/"/g, '""')}"`,
+                        `"${v.nickname.replace(/"/g, '""')}"`,
+                        `"${v.firstSeen}"`,
+                        `"${v.lastSeen}"`,
+                        v.chats,
+                        v.likes,
+                        v.gifts,
+                        v.followed ? 'SI' : 'NO',
+                        v.shared ? 'SI' : 'NO'
+                    ].join(',');
+                    csvContent += row + '\n';
+                });
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.setAttribute('href', url);
+                link.setAttribute('download', `espectadores_GRLive_${new Date().toISOString().split('T')[0]}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                showToast('💾 Reporte de espectadores exportado con éxito.', 'success');
+            } catch (err) {
+                showToast('❌ Error al exportar CSV.', 'error');
+            }
+        });
+    }
+
+    // Listen to real-time socket events
+    socket.on('viewer_log_updated', (viewers) => {
+        currentViewerLog = viewers || [];
+        renderViewersTable(currentViewerLog);
+    });
+
+    // Request initial list on connection
+    socket.emit('get_viewer_log');
 });
 
 

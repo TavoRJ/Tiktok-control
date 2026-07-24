@@ -977,6 +977,50 @@
                             <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i> Reiniciar Rankings de la Sesión
                         </button>
                     </div>
+
+                    <!-- Sección de Registro de Espectadores de la Sesión -->
+                    <article class="card neon span-12" style="margin-top: 15px;">
+                        <div class="card-config-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 15px; flex-wrap: wrap;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <i data-lucide="users" class="icon-accent" style="color: #ff007f;"></i>
+                                <h3>Registro de Espectadores Activos</h3>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                                <span id="viewer-log-count" style="font-size: 12px; color: var(--text-muted);">0 espectadores</span>
+                                <button id="btn-export-viewers" class="btn secondary small" style="padding: 6px 12px; font-size: 12px; display: flex; align-items: center; gap: 6px;">
+                                    <i data-lucide="download" style="width: 14px; height: 14px;"></i> Exportar CSV
+                                </button>
+                                <div style="flex-grow: 1; max-width: 250px; position: relative;">
+                                    <input type="text" id="search-viewers" placeholder="Buscar espectador..." style="width: 100%; padding: 8px 15px; padding-left: 35px; border-radius: 8px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); color: var(--text-main); font-size: 13px; outline: none;">
+                                    <i data-lucide="search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--text-muted);"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 15px;">
+                            Lista de usuarios que se han unido o han interactuado durante la sesión actual (likes, comentarios, regalos, follow, compartir).
+                        </p>
+                        <div style="overflow-x: auto; max-height: 400px; overflow-y: auto;">
+                            <table class="config-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+                                <thead>
+                                    <tr style="border-bottom: 1px solid var(--border-color);">
+                                        <th style="padding: 10px; font-size: 12px; color: var(--text-muted);">Usuario</th>
+                                        <th style="padding: 10px; font-size: 12px; color: var(--text-muted); width: 120px;">Hora Entrada</th>
+                                        <th style="padding: 10px; font-size: 12px; color: var(--text-muted); width: 120px;">Última Actividad</th>
+                                        <th style="padding: 10px; font-size: 12px; color: var(--text-muted); text-align: center; width: 80px;">💬 Chats</th>
+                                        <th style="padding: 10px; font-size: 12px; color: var(--text-muted); text-align: center; width: 80px;">❤️ Likes</th>
+                                        <th style="padding: 10px; font-size: 12px; color: var(--text-muted); text-align: center; width: 80px;">🎁 Regalos</th>
+                                        <th style="padding: 10px; font-size: 12px; color: var(--text-muted); text-align: center; width: 85px;">🔔 Seguidor</th>
+                                        <th style="padding: 10px; font-size: 12px; color: var(--text-muted); text-align: center; width: 85px;">🔗 Compartió</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="viewers-log-table-body">
+                                    <tr>
+                                        <td colspan="8" class="text-center" style="color: var(--text-muted); padding: 30px; font-size: 13px; text-align: center;">Esperando que se conecte el live...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </article>
                 </div>
             </section>
 
