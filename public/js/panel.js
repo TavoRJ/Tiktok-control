@@ -1303,6 +1303,12 @@ function updateUIWithConfig(config) {
     document.body.setAttribute('data-user-role', themeName === 'neutral' ? 'standard' : themeName);
     const themeSelect = document.getElementById('setup-theme');
     if (themeSelect) themeSelect.value = themeName;
+
+    // Update visual rendering style
+    const visualStyle = config.visualStyle || 'glassmorphism';
+    document.body.setAttribute('data-visual-style', visualStyle);
+    const visualStyleSelect = document.getElementById('setup-visual-style');
+    if (visualStyleSelect) visualStyleSelect.value = visualStyle;
     const logoEl = document.querySelector('.brand-logo');
     const serverPort = window.location.port || '3000';
     if (themeName === 'neutral') {
@@ -1758,6 +1764,8 @@ function sendUpdatedSettings() {
         // New Settings fields
         tiktokUsername: document.getElementById('setup-tiktok-username').value.trim().replace('@', ''),
         autoConnect: document.getElementById('setup-auto-connect').checked,
+        themeName: document.getElementById('setup-theme') ? document.getElementById('setup-theme').value : 'neutral',
+        visualStyle: document.getElementById('setup-visual-style') ? document.getElementById('setup-visual-style').value : 'glassmorphism',
         geminiApiKey: (document.getElementById('bot-gemini-api-key-shortcut') && document.getElementById('bot-gemini-api-key-shortcut').value.trim()) 
             ? document.getElementById('bot-gemini-api-key-shortcut').value.trim() 
             : (document.getElementById('ai-api-key') ? document.getElementById('ai-api-key').value.trim() : ''),
@@ -1939,7 +1947,7 @@ const inputsToWatch = [
     'bot-follow-action', 'bot-follow-sound',
     'bot-gift-action', 'bot-gift-sound',
     'bot-like-action', 'bot-like-sound',
-    'setup-auto-connect', 'spotify-active', 'spotify-theme', 'spotify-position',
+    'setup-auto-connect', 'setup-theme', 'setup-visual-style', 'spotify-active', 'spotify-theme', 'spotify-position',
     'spotify-chat-queue-enabled', 'spotify-explicit-allowed', 'spotify-permission',
     'spotify-neon-color', 'spotify-vinyl-design', 'spotify-vinyl-speed',
     'spotify-monetization-active',

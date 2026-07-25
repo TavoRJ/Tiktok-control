@@ -15,6 +15,78 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
+        /* =========================================================================
+           ESTILOS DE INTERFAZ (RENDERING STYLES OVERRIDES)
+           ========================================================================= */
+        
+        /* 1. GLASSMORPHISM (Efecto Vidrio Translúcido - Predeterminado) */
+        body[data-visual-style="glassmorphism"] .card.neon {
+            background: rgba(15, 15, 20, 0.75) !important;
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4) !important;
+        }
+
+        /* 2. CLAYMORPHISM (Efecto Plastilina / 3D Suave) */
+        body[data-visual-style="claymorphism"] .card.neon {
+            background: rgba(25, 25, 35, 0.95) !important;
+            backdrop-filter: none !important;
+            border: 2px solid rgba(255, 255, 255, 0.1) !important;
+            border-radius: 16px !important;
+            box-shadow: 
+                8px 8px 16px rgba(0, 0, 0, 0.3), 
+                inset 4px 4px 8px rgba(255, 255, 255, 0.05), 
+                inset -4px -4px 8px rgba(0, 0, 0, 0.5) !important;
+        }
+
+        /* 3. MINIMALISMO (Plano, Limpio y Ligero) */
+        body[data-visual-style="minimalism"] .card.neon {
+            background: #111115 !important;
+            backdrop-filter: none !important;
+            border: 1px solid #222228 !important;
+            box-shadow: none !important;
+            border-radius: 8px !important;
+        }
+        body[data-visual-style="minimalism"] {
+            background-color: #08080a !important;
+        }
+
+        /* 4. BRUTALISMO (Monocromo y Bordes Sólidos) */
+        body[data-visual-style="brutalism"] .card.neon {
+            background: #000000 !important;
+            backdrop-filter: none !important;
+            border: 3px solid #ffffff !important;
+            border-radius: 0px !important;
+            box-shadow: 6px 6px 0px #ffffff !important;
+        }
+        body[data-visual-style="brutalism"] .btn {
+            border: 2px solid #ffffff !important;
+            border-radius: 0px !important;
+            background: #000000 !important;
+            box-shadow: 3px 3px 0px #ffffff !important;
+        }
+
+        /* 5. LIQUID GLASS (Cristal con Destello Sutil) */
+        body[data-visual-style="liquidglass"] .card.neon {
+            background: linear-gradient(135deg, rgba(25, 20, 35, 0.8), rgba(15, 10, 20, 0.85)) !important;
+            backdrop-filter: blur(16px) !important;
+            border: 1.5px solid rgba(255, 255, 255, 0.15) !important;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(255, 255, 255, 0.05) !important;
+            border-radius: 20px !important;
+        }
+
+        /* 6. UI ESPACIAL (Neón Brillante y Futurista) */
+        body[data-visual-style="spaceui"] .card.neon {
+            background: rgba(8, 8, 12, 0.95) !important;
+            backdrop-filter: none !important;
+            border: 1.5px solid var(--accent-red, #ff007f) !important;
+            box-shadow: 
+                0 0 15px rgba(255, 0, 127, 0.2), 
+                inset 0 0 10px rgba(255, 0, 127, 0.1) !important;
+            border-radius: 12px !important;
+        }
+
         /* Drag & Resize Canvas styling */
         .phone-frame {
             user-select: none;
@@ -2688,6 +2760,33 @@
                         </div>
                         <div style="font-size: 12px; color: var(--text-muted); margin-top: 5px;">
                             * Estos cambios se guardarán automáticamente en `chatbot_settings.json` y se aplicarán de inmediato.
+                        </div>
+                    </article>
+
+                    <!-- Diseño Estético y Temas -->
+                    <article class="card neon span-6">
+                        <div class="card-config-header">
+                            <i data-lucide="palette" class="icon-accent" style="color: #ff007f;"></i>
+                            <h3>Diseño Estético y Temas</h3>
+                        </div>
+                        <div class="form-group">
+                            <label for="setup-theme">Perfil de Streamer (Acento de Color):</label>
+                            <select id="setup-theme" style="background: var(--bg-dark-gray); border: 1px solid var(--border-color); color: var(--text-main); font-family: inherit; font-size: 13px; border-radius: 6px; padding: 8px 12px; width: 100%; outline: none;">
+                                <option value="neutral">Neutral (Púrpura / GR Logo)</option>
+                                <option value="naya">Naya (Rosa / Chibi)</option>
+                                <option value="majo">Majo (Azul / Telaraña)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-top: 15px;">
+                            <label for="setup-visual-style">Estilo de Interfaz (Efectos de Renderizado):</label>
+                            <select id="setup-visual-style" style="background: var(--bg-dark-gray); border: 1px solid var(--border-color); color: var(--text-main); font-family: inherit; font-size: 13px; border-radius: 6px; padding: 8px 12px; width: 100%; outline: none;">
+                                <option value="glassmorphism">Glassmorfismo (Vidrio Translúcido)</option>
+                                <option value="claymorphism">Claymorfismo (Efecto Plastilina / 3D Suave)</option>
+                                <option value="minimalism">Minimalismo (Plano, Limpio y Ligero)</option>
+                                <option value="brutalism">Brutalismo (Monocromo y Bordes Sólidos)</option>
+                                <option value="liquidglass">Liquid Glass (Cristal con Destello Sutil)</option>
+                                <option value="spaceui">UI Espacial (Neón Brillante y Futurista)</option>
+                            </select>
                         </div>
                     </article>
 
