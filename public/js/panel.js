@@ -481,6 +481,9 @@ socket.on('tiktok_disconnected', () => {
 
     stopUptimeCounter();
     accumulatedDiamonds = 0;
+    if (typeof updateLeagueDiamonds === 'function') {
+        updateLeagueDiamonds(0);
+    }
     const diamondsEl = document.getElementById('metrics-diamonds-count');
     if (diamondsEl) diamondsEl.textContent = '0';
     const viewersEl = document.getElementById('metrics-viewers-count');
@@ -499,6 +502,9 @@ socket.on('session_stats_updated', (data) => {
     if (diamondsEl && data.diamonds !== undefined) {
         diamondsEl.textContent = data.diamonds;
         accumulatedDiamonds = data.diamonds;
+        if (typeof updateLeagueDiamonds === 'function') {
+            updateLeagueDiamonds(data.diamonds);
+        }
     }
 });
 
@@ -1633,6 +1639,9 @@ function updateUIWithConfig(config) {
             renderApuestasVotersSummary(config.apuestas);
         }
     }
+    if (typeof updateLeagueUI === 'function') {
+        updateLeagueUI();
+    }
 }
 
 // Function to populate AI Inputs based on current config and theme profile
@@ -1764,6 +1773,10 @@ function sendUpdatedSettings() {
         autoConnect: document.getElementById('setup-auto-connect').checked,
         themeName: (chatbotConfig && chatbotConfig.themeName) || 'neutral',
         visualStyle: document.getElementById('setup-visual-style') ? document.getElementById('setup-visual-style').value : 'glassmorphism',
+        leagueDivision: document.getElementById('league-division-select') ? document.getElementById('league-division-select').value : 'D5',
+        leagueFragments: chatbotConfig && chatbotConfig.leagueFragments !== undefined ? chatbotConfig.leagueFragments : 0,
+        leagueShield: document.getElementById('league-shield-checkbox') ? document.getElementById('league-shield-checkbox').checked : false,
+        leagueDiamondTarget: document.getElementById('league-diamond-target') ? parseInt(document.getElementById('league-diamond-target').value) || 1000 : 1000,
         geminiApiKey: (document.getElementById('bot-gemini-api-key-shortcut') && document.getElementById('bot-gemini-api-key-shortcut').value.trim()) 
             ? document.getElementById('bot-gemini-api-key-shortcut').value.trim() 
             : (document.getElementById('ai-api-key') ? document.getElementById('ai-api-key').value.trim() : ''),
@@ -1945,7 +1958,7 @@ const inputsToWatch = [
     'bot-follow-action', 'bot-follow-sound',
     'bot-gift-action', 'bot-gift-sound',
     'bot-like-action', 'bot-like-sound',
-    'setup-auto-connect', 'setup-visual-style', 'spotify-active', 'spotify-theme', 'spotify-position',
+    'setup-auto-connect', 'setup-visual-style', 'league-division-select', 'league-shield-checkbox', 'league-diamond-target', 'spotify-active', 'spotify-theme', 'spotify-position',
     'spotify-chat-queue-enabled', 'spotify-explicit-allowed', 'spotify-permission',
     'spotify-neon-color', 'spotify-vinyl-design', 'spotify-vinyl-speed',
     'spotify-monetization-active',
@@ -6464,6 +6477,191 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Request initial list on connection
     socket.emit('get_viewer_log');
+});
+
+// =========================================================================
+// SEGUIMIENTO DE LIGA DE CREADORES Y FRAGMENTOS (TIKTOK LIVE)
+// =========================================================================
+const leagueTiers = [
+    'D5', 'D4', 'D3', 'D2', 'D1',
+    'C5', 'C4', 'C3', 'C2', 'C1',
+    'B5', 'B4', 'B3', 'B2', 'B1',
+    'A3', 'A2', 'A1'
+];
+
+const tierNames = {
+    'D5': 'Bronce V', 'D4': 'Bronce IV', 'D3': 'Bronce III', 'D2': 'Bronce II', 'D1': 'Bronce I',
+    'C5': 'Cobre V', 'C4': 'Cobre IV', 'C3': 'Cobre III', 'C2': 'Cobre II', 'C1': 'Cobre I',
+    'B5': 'Plata V', 'B4': 'Plata IV', 'B3': 'Plata III', 'B2': 'Plata II', 'B1': 'Plata I',
+    'A3': 'Oro III', 'A2': 'Oro II', 'A1': 'Oro I'
+};
+
+const tierGroups = {
+    'D5': 'D', 'D4': 'D', 'D3': 'D', 'D2': 'D', 'D1': 'D',
+    'C5': 'C', 'C4': 'C', 'C3': 'C', 'C2': 'C', 'C1': 'C',
+    'B5': 'B', 'B4': 'B', 'B3': 'B', 'B2': 'B', 'B1': 'B',
+    'A3': 'A', 'A2': 'A', 'A1': 'A'
+};
+
+const tierStyles = {
+    'D': { bg: 'linear-gradient(135deg, #804a00 0%, #b87333 100%)', shadow: 'rgba(184, 115, 51, 0.4)', group: 'División D (Bronce)' },
+    'C': { bg: 'linear-gradient(135deg, #a0522d 0%, #cd7f32 100%)', shadow: 'rgba(205, 127, 50, 0.4)', group: 'División C (Cobre)' },
+    'B': { bg: 'linear-gradient(135deg, #708090 0%, #c0c0c0 100%)', shadow: 'rgba(192, 192, 192, 0.4)', group: 'División B (Plata)' },
+    'A': { bg: 'linear-gradient(135deg, #d4af37 0%, #ffd700 100%)', shadow: 'rgba(255, 215, 0, 0.4)', group: 'División A (Oro)' }
+};
+
+let accumulatedLiveDiamonds = 0;
+
+function updateLeagueUI() {
+    const divSelect = document.getElementById('league-division-select');
+    const shieldChk = document.getElementById('league-shield-checkbox');
+    const fragCountEl = document.getElementById('league-fragments-count');
+    const fragBarEl = document.getElementById('league-fragments-bar');
+    const badgeEl = document.getElementById('league-badge-container');
+    const nameEl = document.getElementById('league-tier-name');
+    const groupEl = document.getElementById('league-division-group');
+    const liveDiamondsEl = document.getElementById('league-live-diamonds');
+    const targetInput = document.getElementById('league-diamond-target');
+    const targetBarEl = document.getElementById('league-target-progress-bar');
+    const targetPercentEl = document.getElementById('league-target-percent');
+
+    const division = (chatbotConfig && chatbotConfig.leagueDivision) || 'D5';
+    const fragments = parseInt(chatbotConfig && chatbotConfig.leagueFragments !== undefined ? chatbotConfig.leagueFragments : 0) || 0;
+    const shield = (chatbotConfig && chatbotConfig.leagueShield) === true;
+    const target = parseInt(chatbotConfig && chatbotConfig.leagueDiamondTarget !== undefined ? chatbotConfig.leagueDiamondTarget : 1000) || 1000;
+
+    // Sync input values if element exists
+    if (divSelect) divSelect.value = division;
+    if (shieldChk) shieldChk.checked = shield;
+    if (fragCountEl) fragCountEl.textContent = fragments;
+    
+    // Update fragments bar percentage
+    if (fragBarEl) {
+        fragBarEl.style.width = (fragments / 4 * 100) + '%';
+    }
+
+    // Badge visuals
+    if (badgeEl && nameEl && groupEl) {
+        const groupKey = tierGroups[division] || 'D';
+        const style = tierStyles[groupKey];
+        
+        badgeEl.textContent = division;
+        badgeEl.style.background = style.bg;
+        badgeEl.style.boxShadow = `0 0 15px ${style.shadow}`;
+        badgeEl.style.color = '#ffffff';
+
+        nameEl.textContent = tierNames[division] || division;
+        groupEl.textContent = style.group;
+    }
+
+    // Daily Goal progress
+    if (liveDiamondsEl) liveDiamondsEl.textContent = accumulatedLiveDiamonds;
+    if (targetInput) targetInput.value = target;
+    
+    if (targetBarEl && targetPercentEl) {
+        const pct = target > 0 ? Math.min(100, Math.round((accumulatedLiveDiamonds / target) * 100)) : 0;
+        targetBarEl.style.width = pct + '%';
+        targetPercentEl.textContent = pct + '%';
+    }
+}
+
+// Update diamonds metric in real time
+function updateLeagueDiamonds(diamonds) {
+    accumulatedLiveDiamonds = parseInt(diamonds) || 0;
+    updateLeagueUI();
+}
+
+// Handle League actions
+document.addEventListener('DOMContentLoaded', () => {
+    const divSelect = document.getElementById('league-division-select');
+    const shieldChk = document.getElementById('league-shield-checkbox');
+    const targetInput = document.getElementById('league-diamond-target');
+    const btnAdd = document.getElementById('btn-league-add-frag');
+    const btnSub = document.getElementById('btn-league-sub-frag');
+
+    if (divSelect) {
+        divSelect.addEventListener('change', () => {
+            chatbotConfig.leagueDivision = divSelect.value;
+            sendUpdatedSettings();
+            updateLeagueUI();
+        });
+    }
+
+    if (shieldChk) {
+        shieldChk.addEventListener('change', () => {
+            chatbotConfig.leagueShield = shieldChk.checked;
+            sendUpdatedSettings();
+            updateLeagueUI();
+        });
+    }
+
+    if (targetInput) {
+        targetInput.addEventListener('input', () => {
+            const val = parseInt(targetInput.value) || 0;
+            chatbotConfig.leagueDiamondTarget = val;
+            sendUpdatedSettings();
+            updateLeagueUI();
+        });
+    }
+
+    if (btnAdd) {
+        btnAdd.addEventListener('click', () => {
+            let division = (chatbotConfig && chatbotConfig.leagueDivision) || 'D5';
+            let fragments = parseInt(chatbotConfig && chatbotConfig.leagueFragments !== undefined ? chatbotConfig.leagueFragments : 0) || 0;
+
+            fragments++;
+            if (fragments >= 4) {
+                const idx = leagueTiers.indexOf(division);
+                if (idx < leagueTiers.length - 1) {
+                    division = leagueTiers[idx + 1];
+                    fragments = 0;
+                    showToast(`🎉 ¡Felicidades! Subiste a la liga ${tierNames[division]}`, 'success');
+                } else {
+                    fragments = 4; // Maxed out A1
+                }
+            } else {
+                showToast('✨ +1 Fragmento ganado', 'success');
+            }
+
+            chatbotConfig.leagueDivision = division;
+            chatbotConfig.leagueFragments = fragments;
+            sendUpdatedSettings();
+            updateLeagueUI();
+        });
+    }
+
+    if (btnSub) {
+        btnSub.addEventListener('click', () => {
+            let division = (chatbotConfig && chatbotConfig.leagueDivision) || 'D5';
+            let fragments = parseInt(chatbotConfig && chatbotConfig.leagueFragments !== undefined ? chatbotConfig.leagueFragments : 0) || 0;
+            let shield = (chatbotConfig && chatbotConfig.leagueShield) === true;
+
+            if (shield) {
+                shield = false;
+                showToast('🛡️ El escudo protegió tu progreso y se ha desactivado.', 'warning');
+            } else {
+                fragments--;
+                if (fragments < 0) {
+                    const idx = leagueTiers.indexOf(division);
+                    if (idx > 0) {
+                        division = leagueTiers[idx - 1];
+                        fragments = 3; // Reset to 3 in lower tier
+                        showToast(`📉 Descendiste a la liga ${tierNames[division]}`, 'error');
+                    } else {
+                        fragments = 0; // Clamp D5 to 0
+                    }
+                } else {
+                    showToast('⚠️ -1 Fragmento perdido', 'error');
+                }
+            }
+
+            chatbotConfig.leagueDivision = division;
+            chatbotConfig.leagueFragments = fragments;
+            chatbotConfig.leagueShield = shield;
+            sendUpdatedSettings();
+            updateLeagueUI();
+        });
+    }
 });
 
 
