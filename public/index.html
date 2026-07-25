@@ -1420,105 +1420,46 @@
                     </div>
 
                     <!-- Column: Liga de Creadores y Fragmentos (span-12) -->
-                    <div class="card stat-card span-12" style="padding: 25px;">
+                    <div class="card stat-card span-12" id="league-tracker-card" style="padding: 25px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
                             <div style="display: flex; align-items: center; gap: 10px;">
                                 <i data-lucide="trophy" class="icon-accent" style="color: #ffb703; width: 22px; height: 22px;"></i>
-                                <h3 style="margin: 0; font-size: 18px; font-weight: 800; color: var(--text-main);">Liga de Creadores de TikTok LIVE</h3>
+                                <h3 style="margin: 0; font-size: 17px; font-weight: 800; color: var(--text-main);">Liga de Creadores de TikTok LIVE (Auto-Detectado)</h3>
                             </div>
-                            <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
-                                <!-- Selector de Liga -->
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <span style="font-size: 12px; font-weight: 700; color: var(--text-muted);">Liga Actual:</span>
-                                    <select id="league-division-select" style="background: var(--bg-dark-gray); border: 1px solid var(--border-color); color: var(--text-main); font-family: inherit; font-size: 13px; font-weight: bold; border-radius: 6px; padding: 5px 10px; outline: none; width: auto;">
-                                        <option value="D5">Liga Bronce V (D5)</option>
-                                        <option value="D4">Liga Bronce IV (D4)</option>
-                                        <option value="D3">Liga Bronce III (D3)</option>
-                                        <option value="D2">Liga Bronce II (D2)</option>
-                                        <option value="D1">Liga Bronce I (D1)</option>
-                                        <option value="C5">Liga Cobre V (C5)</option>
-                                        <option value="C4">Liga Cobre IV (C4)</option>
-                                        <option value="C3">Liga Cobre III (C3)</option>
-                                        <option value="C2">Liga Cobre II (C2)</option>
-                                        <option value="C1">Liga Cobre I (C1)</option>
-                                        <option value="B5">Liga Plata V (B5)</option>
-                                        <option value="B4">Liga Plata IV (B4)</option>
-                                        <option value="B3">Liga Plata III (B3)</option>
-                                        <option value="B2">Liga Plata II (B2)</option>
-                                        <option value="B1">Liga Plata I (B1)</option>
-                                        <option value="A3">Liga Oro III (A3)</option>
-                                        <option value="A2">Liga Oro II (A2)</option>
-                                        <option value="A1">Liga Oro I (A1)</option>
-                                    </select>
-                                </div>
-                                <!-- Escudo -->
-                                <label class="switch-container" style="font-size: 12px; font-weight: 700;">
-                                    <span>Escudo de Protección Activo</span>
-                                    <input type="checkbox" id="league-shield-checkbox">
-                                    <span class="switch-slider"></span>
-                                </label>
+                            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                                <span id="league-shield-badge" style="font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 12px; background: rgba(0, 229, 255, 0.1); border: 1px solid rgba(0, 229, 255, 0.3); color: #00e5ff; display: none;">🛡️ ESCUDO ACTIVO</span>
+                                <span id="league-connection-badge" style="font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: var(--text-muted);">Esperando Conexión...</span>
                             </div>
                         </div>
 
                         <!-- Progress Section -->
-                        <div style="display: grid; grid-template-columns: 200px 1fr 200px; gap: 20px; align-items: center; background: rgba(255,255,255,0.02); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 20px;">
+                        <div style="display: grid; grid-template-columns: 200px 1fr; gap: 30px; align-items: center; background: rgba(255,255,255,0.01); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.03);">
                             <!-- Tier Visual Indicator -->
                             <div style="display: flex; align-items: center; gap: 15px; border-right: 1px solid rgba(255,255,255,0.08); padding-right: 15px;">
-                                <div id="league-badge-container" style="width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; text-shadow: 0 0 10px rgba(255,255,255,0.3);">
-                                    D5
+                                <div id="league-badge-container" style="width: 55px; height: 55px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 800; text-shadow: 0 0 10px rgba(255,255,255,0.3); background: rgba(255,255,255,0.05); color: var(--text-muted);">
+                                    --
                                 </div>
                                 <div>
-                                    <b id="league-tier-name" style="display: block; font-size: 15px; font-weight: 800; color: var(--text-main);">Bronce V</b>
-                                    <span id="league-division-group" style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">División D</span>
+                                    <b id="league-tier-name" style="display: block; font-size: 16px; font-weight: 800; color: var(--text-main);">Desconectado</b>
+                                    <span id="league-division-group" style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Inicia el Live para detectar</span>
                                 </div>
                             </div>
 
-                            <!-- Progress Bar -->
+                            <!-- Progress Bar & Details -->
                             <div>
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                    <span style="font-size: 12px; font-weight: 800; color: var(--text-muted);">Progreso de Fragmentos:</span>
+                                    <span style="font-size: 12px; font-weight: 800; color: var(--text-muted);">Progreso de Fragmentos en esta Liga:</span>
                                     <b style="font-size: 13px; font-weight: 800; color: var(--text-main);"><span id="league-fragments-count">0</span> / 4 Fragmentos</b>
                                 </div>
-                                <div style="width: 100%; height: 14px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); position: relative;">
-                                    <div id="league-fragments-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ffb703 0%, #ff4d6d 100%); transition: width 0.4s ease-out; box-shadow: 0 0 8px rgba(255, 183, 3, 0.4);"></div>
+                                <div style="width: 100%; height: 16px; background: rgba(255,255,255,0.04); border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.06); position: relative;">
+                                    <div id="league-fragments-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ffb703 0%, #ff4d6d 100%); transition: width 0.4s ease-out; box-shadow: 0 0 8px rgba(255, 183, 3, 0.3);"></div>
                                 </div>
-                                <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); margin-top: 5px; font-weight: 700;">
-                                    <span>Descender Liga</span>
-                                    <span>¡Siguiente Nivel!</span>
-                                </div>
-                            </div>
-
-                            <!-- Real-time Controls -->
-                            <div style="display: flex; flex-direction: column; gap: 8px; border-left: 1px solid rgba(255,255,255,0.08); padding-left: 15px;">
-                                <button class="btn primary small" id="btn-league-add-frag" style="width: 100%; font-size: 12px; padding: 8px; justify-content: center; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border: none;">
-                                    <i data-lucide="plus-circle" style="width: 14px; height: 14px; margin-right: 5px;"></i> +1 Fragmento
-                                </button>
-                                <button class="btn secondary small" id="btn-league-sub-frag" style="width: 100%; font-size: 12px; padding: 8px; justify-content: center; border-color: rgba(255, 255, 255, 0.15);">
-                                    <i data-lucide="minus-circle" style="width: 14px; height: 14px; margin-right: 5px;"></i> -1 Fragmento
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Diamond Target / Daily Status Estimator -->
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; font-size: 13px;">
-                            <div style="background: rgba(255,255,255,0.01); border: 1px solid rgba(255,255,255,0.03); padding: 12px 15px; border-radius: 8px;">
-                                <small style="display: block; font-size: 10px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 5px;">Meta diaria de diamantes</small>
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <input type="number" id="league-diamond-target" value="1000" style="padding: 4px 8px; font-size: 12px; width: 80px; text-align: center; background: var(--bg-dark-gray); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
-                                    <b style="color: #ffb703;">💎</b>
-                                </div>
-                            </div>
-                            <div style="background: rgba(255,255,255,0.01); border: 1px solid rgba(255,255,255,0.03); padding: 12px 15px; border-radius: 8px;">
-                                <small style="display: block; font-size: 10px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 5px;">Diamantes en este Live</small>
-                                <span id="league-live-diamonds" style="font-size: 16px; font-weight: 800; color: #ffb703;">0</span> <span style="font-size: 11px; color: var(--text-muted);">💎</span>
-                            </div>
-                            <div style="background: rgba(255,255,255,0.01); border: 1px solid rgba(255,255,255,0.03); padding: 12px 15px; border-radius: 8px; display: flex; flex-direction: column; justify-content: center;">
-                                <small style="display: block; font-size: 10px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 3px;">Progreso de la meta diaria</small>
-                                <div style="display: flex; align-items: center; gap: 10px;">
-                                    <div style="flex-grow: 1; height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden;">
-                                        <div id="league-target-progress-bar" style="width: 0%; height: 100%; background: #00ffcc; transition: width 0.4s ease-out;"></div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 12px;">
+                                    <span id="league-points-info" style="color: var(--text-muted); font-weight: 700;">Detección automática activa al recibir eventos.</span>
+                                    <div id="league-manual-adjusters" style="display: flex; gap: 8px; opacity: 0.15; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.15'">
+                                        <button class="btn secondary small" id="btn-league-sub-frag" style="padding: 2px 8px; font-size: 10px;">-1 Frag</button>
+                                        <button class="btn secondary small" id="btn-league-add-frag" style="padding: 2px 8px; font-size: 10px;">+1 Frag</button>
                                     </div>
-                                    <b id="league-target-percent" style="font-size: 11px; color: #00ffcc;">0%</b>
                                 </div>
                             </div>
                         </div>

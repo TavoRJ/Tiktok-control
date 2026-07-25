@@ -4866,7 +4866,24 @@ function connectToTikTok(username) {
         totalSessionDiamonds = diamonds;
         totalSessionLikes = likes;
         totalSessionViewers = viewers;
-        
+
+        try {
+            console.info('[Weekly League Detector] Running detection...');
+            const detected = detectLeagueFromRoomInfo(state.roomInfo || connectionRef.roomInfo);
+            if (detected) {
+                console.info('[Weekly League Detector] Success! Detected league info:', detected);
+                chatbotSettings.leagueDivision = detected.division;
+                chatbotSettings.leagueFragments = detected.fragments;
+                chatbotSettings.leagueShield = detected.shield;
+                fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
+                io.emit('weekly_league_detected', detected);
+            } else {
+                console.info('[Weekly League Detector] No league info found in roomInfo payload.');
+            }
+        } catch (e) {
+            console.error('[Weekly League Detector] Error running scan:', e);
+        }
+
         io.emit('tiktok_connected', { username, avatarUrl });
         broadcastSessionStats();
         broadcastRankings();
@@ -6446,6 +6463,75 @@ async function synthesizeSpeech(text, voice, rateStr, pitchStr, tempFile, custom
         });
         await tts.ttsPromise(text, tempFile);
     }
+}
+
+function detectLeagueFromRoomInfo(obj) {
+    if (!obj || typeof obj !== 'object') return null;
+    let result = null;
+
+    const search = (item) => {
+        if (!item || typeof item !== 'object') return;
+
+        // Try direct key matches
+        if (item.weekly_league_info || item.league_info || item.creator_league_info) {
+            const target = item.weekly_league_info || item.league_info || item.creator_league_info;
+            if (target && typeof target === 'object') {
+                let div = target.league_division || target.division || target.division_code;
+                let tier = target.league_tier || target.tier || target.tier_code;
+                let frags = target.fragment_count || target.fragments || target.score || target.points;
+                let hasShield = target.shield_status === 1 || target.has_shield === true || target.shield === true;
+
+                if (div !== undefined || tier !== undefined) {
+                    result = {
+                        division: formatDivisionTier(div, tier),
+                        fragments: parseInt(frags) || 0,
+                        shield: !!hasShield
+                    };
+                    return;
+                }
+            }
+        }
+
+        if (item.league_division !== undefined || item.league_tier !== undefined) {
+            let div = item.league_division;
+            let tier = item.league_tier;
+            let frags = item.fragment_count || item.fragments || item.league_score;
+            let hasShield = item.league_shield || item.shield_status === 1;
+
+            result = {
+                division: formatDivisionTier(div, tier),
+                fragments: parseInt(frags) || 0,
+                shield: !!hasShield
+            };
+            return;
+        }
+
+        for (let k in item) {
+            if (item.hasOwnProperty(k) && typeof item[k] === 'object') {
+                search(item[k]);
+                if (result) return;
+            }
+        }
+    };
+
+    search(obj);
+    return result;
+}
+
+function formatDivisionTier(div, tier) {
+    if (typeof div === 'string' && /^[A-D][1-5]$/.test(div)) {
+        return div;
+    }
+    let divLetter = 'D';
+    const dVal = String(div).toUpperCase();
+    if (dVal === '1' || dVal.includes('BRONZE') || dVal.includes('D')) divLetter = 'D';
+    else if (dVal === '2' || dVal.includes('COPPER') || dVal.includes('COBRE') || dVal.includes('C')) divLetter = 'C';
+    else if (dVal === '3' || dVal.includes('SILVER') || dVal.includes('PLATA') || dVal.includes('B')) divLetter = 'B';
+    else if (dVal === '4' || dVal.includes('GOLD') || dVal.includes('ORO') || dVal.includes('A')) divLetter = 'A';
+
+    let tierNum = parseInt(tier) || 5;
+    if (tierNum < 1 || tierNum > 5) tierNum = 5;
+    return divLetter + tierNum;
 }
 
 server.listen(PORT, () => {
