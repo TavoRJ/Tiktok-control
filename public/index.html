@@ -20,6 +20,9 @@
            ========================================================================= */
         
         /* 1. GLASSMORPHISM (Efecto Vidrio Translúcido - Predeterminado) */
+        body[data-visual-style="glassmorphism"] {
+            background: #08080c !important;
+        }
         body[data-visual-style="glassmorphism"] .card.neon {
             background: rgba(15, 15, 20, 0.75) !important;
             backdrop-filter: blur(12px) !important;
@@ -28,63 +31,310 @@
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4) !important;
         }
 
-        /* 2. CLAYMORPHISM (Efecto Plastilina / 3D Suave) */
+        /* 2. CLAYMORPHISM (Efecto Plastilina / 3D Suave - PUFFY 3D) */
+        body[data-visual-style="claymorphism"] {
+            background: linear-gradient(135deg, #141226, #22122b) !important;
+            color: #e0d5f0 !important;
+        }
+        body[data-visual-style="claymorphism"] .app-container {
+            background: transparent !important;
+        }
+        body[data-visual-style="claymorphism"] .sidebar {
+            background: rgba(22, 18, 38, 0.9) !important;
+            border-right: 2px solid rgba(255, 255, 255, 0.05) !important;
+            border-radius: 0 24px 24px 0 !important;
+        }
+        body[data-visual-style="claymorphism"] .sidebar .menu-item.active {
+            background: rgba(255, 255, 255, 0.07) !important;
+            border-radius: 12px !important;
+            box-shadow: inset 2px 2px 4px rgba(255,255,255,0.1), inset -2px -2px 4px rgba(0,0,0,0.4) !important;
+        }
+        body[data-visual-style="claymorphism"] .header {
+            background: rgba(22, 18, 38, 0.9) !important;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.05) !important;
+            border-radius: 0 0 24px 24px !important;
+        }
         body[data-visual-style="claymorphism"] .card.neon {
-            background: rgba(25, 25, 35, 0.95) !important;
+            background: rgba(30, 25, 45, 0.95) !important;
             backdrop-filter: none !important;
             border: 2px solid rgba(255, 255, 255, 0.1) !important;
-            border-radius: 16px !important;
+            border-radius: 20px !important;
             box-shadow: 
-                8px 8px 16px rgba(0, 0, 0, 0.3), 
+                10px 10px 25px rgba(0, 0, 0, 0.4), 
                 inset 4px 4px 8px rgba(255, 255, 255, 0.05), 
                 inset -4px -4px 8px rgba(0, 0, 0, 0.5) !important;
         }
 
-        /* 3. MINIMALISMO (Plano, Limpio y Ligero) */
+        /* 3. MINIMALISMO (Plano, Limpio y Ligero - MODO CLARO PREMIUM) */
+        body[data-visual-style="minimalism"] {
+            background: #f3f4f6 !important;
+            color: #1f2937 !important;
+        }
+        body[data-visual-style="minimalism"] .app-container {
+            background: #f3f4f6 !important;
+        }
+        body[data-visual-style="minimalism"] .sidebar {
+            background: #ffffff !important;
+            border-right: 1px solid #e5e7eb !important;
+        }
+        body[data-visual-style="minimalism"] .sidebar .menu-item {
+            color: #4b5563 !important;
+        }
+        body[data-visual-style="minimalism"] .sidebar .menu-item.active {
+            background: #f3f4f6 !important;
+            color: var(--accent-red, #ff007f) !important;
+        }
+        body[data-visual-style="minimalism"] .main-content {
+            background: #f3f4f6 !important;
+        }
+        body[data-visual-style="minimalism"] .header {
+            background: #ffffff !important;
+            border-bottom: 1px solid #e5e7eb !important;
+            color: #1f2937 !important;
+        }
+        body[data-visual-style="minimalism"] h1, 
+        body[data-visual-style="minimalism"] h2, 
+        body[data-visual-style="minimalism"] h3, 
+        body[data-visual-style="minimalism"] h4,
+        body[data-visual-style="minimalism"] .header-left-title h2 {
+            color: #111827 !important;
+        }
+        body[data-visual-style="minimalism"] p, 
+        body[data-visual-style="minimalism"] span, 
+        body[data-visual-style="minimalism"] label,
+        body[data-visual-style="minimalism"] small,
+        body[data-visual-style="minimalism"] .brand-logo {
+            color: #4b5563 !important;
+        }
         body[data-visual-style="minimalism"] .card.neon {
-            background: #111115 !important;
+            background: #ffffff !important;
             backdrop-filter: none !important;
-            border: 1px solid #222228 !important;
-            box-shadow: none !important;
+            border: 1px solid #e5e7eb !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
             border-radius: 8px !important;
         }
-        body[data-visual-style="minimalism"] {
-            background-color: #08080a !important;
+        body[data-visual-style="minimalism"] input, 
+        body[data-visual-style="minimalism"] select, 
+        body[data-visual-style="minimalism"] textarea {
+            background: #ffffff !important;
+            border: 1px solid #d1d5db !important;
+            color: #1f2937 !important;
+        }
+        body[data-visual-style="minimalism"] input::placeholder {
+            color: #9ca3af !important;
+        }
+        body[data-visual-style="minimalism"] .config-table th {
+            background: #f9fafb !important;
+            color: #4b5563 !important;
+            border-bottom: 1px solid #e5e7eb !important;
+        }
+        body[data-visual-style="minimalism"] .config-table td {
+            color: #1f2937 !important;
+            border-bottom: 1px solid #f3f4f6 !important;
+        }
+        body[data-visual-style="minimalism"] .btn {
+            background: #ffffff !important;
+            border: 1px solid #d1d5db !important;
+            color: #374151 !important;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+        }
+        body[data-visual-style="minimalism"] .btn.primary {
+            background: var(--accent-red, #ff007f) !important;
+            color: #ffffff !important;
+            border: none !important;
         }
 
-        /* 4. BRUTALISMO (Monocromo y Bordes Sólidos) */
-        body[data-visual-style="brutalism"] .card.neon {
-            background: #000000 !important;
-            backdrop-filter: none !important;
-            border: 3px solid #ffffff !important;
+        /* 4. BRUTALISMO (Monocromo y Bordes Sólidos - RETRO HIGH CONTRAST) */
+        body[data-visual-style="brutalism"] {
+            background: #fbf9f3 !important;
+            color: #000000 !important;
+            font-family: monospace, sans-serif !important;
+        }
+        body[data-visual-style="brutalism"] .app-container {
+            background: #fbf9f3 !important;
+        }
+        body[data-visual-style="brutalism"] .sidebar {
+            background: #fcfbfa !important;
+            border-right: 3px solid #000000 !important;
+        }
+        body[data-visual-style="brutalism"] .sidebar .menu-item {
+            color: #000000 !important;
+            border: 2px solid transparent !important;
             border-radius: 0px !important;
-            box-shadow: 6px 6px 0px #ffffff !important;
+        }
+        body[data-visual-style="brutalism"] .sidebar .menu-item.active {
+            background: #fbf9f3 !important;
+            border: 2px solid #000000 !important;
+            box-shadow: 2px 2px 0px #000000 !important;
+        }
+        body[data-visual-style="brutalism"] .main-content {
+            background: #fbf9f3 !important;
+        }
+        body[data-visual-style="brutalism"] .header {
+            background: #fcfbfa !important;
+            border-bottom: 3px solid #000000 !important;
+            color: #000000 !important;
+        }
+        body[data-visual-style="brutalism"] h1, 
+        body[data-visual-style="brutalism"] h2, 
+        body[data-visual-style="brutalism"] h3, 
+        body[data-visual-style="brutalism"] h4,
+        body[data-visual-style="brutalism"] .header-left-title h2 {
+            color: #000000 !important;
+            font-weight: 900 !important;
+            text-transform: uppercase !important;
+        }
+        body[data-visual-style="brutalism"] p, 
+        body[data-visual-style="brutalism"] span, 
+        body[data-visual-style="brutalism"] label,
+        body[data-visual-style="brutalism"] small {
+            color: #000000 !important;
+            font-weight: bold !important;
+        }
+        body[data-visual-style="brutalism"] .card.neon {
+            background: #ffffff !important;
+            backdrop-filter: none !important;
+            border: 3px solid #000000 !important;
+            border-radius: 0px !important;
+            box-shadow: 6px 6px 0px #000000 !important;
+        }
+        body[data-visual-style="brutalism"] input, 
+        body[data-visual-style="brutalism"] select, 
+        body[data-visual-style="brutalism"] textarea {
+            background: #ffffff !important;
+            border: 3px solid #000000 !important;
+            color: #000000 !important;
+            border-radius: 0px !important;
+            font-weight: bold !important;
+        }
+        body[data-visual-style="brutalism"] .config-table th {
+            background: #f3f4f6 !important;
+            color: #000000 !important;
+            border: 2px solid #000000 !important;
+            font-weight: 900 !important;
+        }
+        body[data-visual-style="brutalism"] .config-table td {
+            color: #000000 !important;
+            border: 1px solid #000000 !important;
         }
         body[data-visual-style="brutalism"] .btn {
-            border: 2px solid #ffffff !important;
+            border: 2px solid #000000 !important;
             border-radius: 0px !important;
-            background: #000000 !important;
-            box-shadow: 3px 3px 0px #ffffff !important;
+            background: #ffffff !important;
+            color: #000000 !important;
+            box-shadow: 3px 3px 0px #000000 !important;
+            font-weight: 900 !important;
+        }
+        body[data-visual-style="brutalism"] .btn:hover {
+            transform: translate(-2px, -2px) !important;
+            box-shadow: 5px 5px 0px #000000 !important;
+        }
+        body[data-visual-style="brutalism"] .btn:active {
+            transform: translate(1px, 1px) !important;
+            box-shadow: 1px 1px 0px #000000 !important;
         }
 
-        /* 5. LIQUID GLASS (Cristal con Destello Sutil) */
+        /* 5. LIQUID GLASS (Cristal con Destello Sutil - GLOSSY SHINE) */
+        body[data-visual-style="liquidglass"] {
+            background: radial-gradient(circle at 10% 20%, rgba(18, 16, 32, 1) 0%, rgba(8, 8, 14, 1) 90%) !important;
+            color: #ffffff !important;
+        }
+        body[data-visual-style="liquidglass"] .app-container {
+            background: transparent !important;
+        }
+        body[data-visual-style="liquidglass"] .sidebar {
+            background: rgba(12, 10, 22, 0.5) !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+        }
+        body[data-visual-style="liquidglass"] .header {
+            background: rgba(12, 10, 22, 0.5) !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+        }
         body[data-visual-style="liquidglass"] .card.neon {
-            background: linear-gradient(135deg, rgba(25, 20, 35, 0.8), rgba(15, 10, 20, 0.85)) !important;
-            backdrop-filter: blur(16px) !important;
+            background: linear-gradient(135deg, rgba(25, 20, 40, 0.55), rgba(15, 12, 25, 0.65)) !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
             border: 1.5px solid rgba(255, 255, 255, 0.15) !important;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(255, 255, 255, 0.05) !important;
+            box-shadow: 
+                0 15px 35px rgba(0, 0, 0, 0.5), 
+                inset 0 0 15px rgba(255, 255, 255, 0.05) !important;
             border-radius: 20px !important;
         }
 
-        /* 6. UI ESPACIAL (Neón Brillante y Futurista) */
+        /* 6. UI ESPACIAL (Neón Brillante y Futurista - CYBERTECH SPACE) */
+        body[data-visual-style="spaceui"] {
+            background: #020205 !important;
+            color: #00e5ff !important;
+        }
+        body[data-visual-style="spaceui"] .app-container {
+            background: #020205 !important;
+        }
+        body[data-visual-style="spaceui"] .sidebar {
+            background: #040409 !important;
+            border-right: 1.5px solid var(--accent-red, #ff007f) !important;
+            box-shadow: 0 0 10px rgba(255, 0, 127, 0.1) !important;
+        }
+        body[data-visual-style="spaceui"] .sidebar .menu-item {
+            color: #00e5ff !important;
+        }
+        body[data-visual-style="spaceui"] .sidebar .menu-item.active {
+            background: rgba(0, 229, 255, 0.1) !important;
+            color: #00e5ff !important;
+            border: 1px solid #00e5ff !important;
+            box-shadow: 0 0 10px rgba(0, 229, 255, 0.3) !important;
+        }
+        body[data-visual-style="spaceui"] .main-content {
+            background: #020205 !important;
+        }
+        body[data-visual-style="spaceui"] .header {
+            background: #040409 !important;
+            border-bottom: 1.5px solid var(--accent-red, #ff007f) !important;
+            box-shadow: 0 0 10px rgba(255, 0, 127, 0.1) !important;
+            color: #00e5ff !important;
+        }
+        body[data-visual-style="spaceui"] h1, 
+        body[data-visual-style="spaceui"] h2, 
+        body[data-visual-style="spaceui"] h3, 
+        body[data-visual-style="spaceui"] h4,
+        body[data-visual-style="spaceui"] .header-left-title h2 {
+            color: #ffffff !important;
+            text-shadow: 0 0 10px rgba(0, 229, 255, 0.4) !important;
+        }
+        body[data-visual-style="spaceui"] p, 
+        body[data-visual-style="spaceui"] span, 
+        body[data-visual-style="spaceui"] label,
+        body[data-visual-style="spaceui"] small {
+            color: #8da4be !important;
+        }
         body[data-visual-style="spaceui"] .card.neon {
-            background: rgba(8, 8, 12, 0.95) !important;
+            background: rgba(8, 8, 15, 0.95) !important;
             backdrop-filter: none !important;
             border: 1.5px solid var(--accent-red, #ff007f) !important;
             box-shadow: 
                 0 0 15px rgba(255, 0, 127, 0.2), 
                 inset 0 0 10px rgba(255, 0, 127, 0.1) !important;
             border-radius: 12px !important;
+        }
+        body[data-visual-style="spaceui"] input, 
+        body[data-visual-style="spaceui"] select, 
+        body[data-visual-style="spaceui"] textarea {
+            background: #06060c !important;
+            border: 1px solid #00e5ff !important;
+            color: #00e5ff !important;
+            box-shadow: 0 0 8px rgba(0, 229, 255, 0.15) !important;
+        }
+        body[data-visual-style="spaceui"] .config-table th {
+            background: #080812 !important;
+            color: #00e5ff !important;
+            border-bottom: 2px solid #00e5ff !important;
+        }
+        body[data-visual-style="spaceui"] .config-table td {
+            color: #ffffff !important;
+            border-bottom: 1px solid rgba(0, 229, 255, 0.1) !important;
         }
 
         /* Drag & Resize Canvas styling */
@@ -2770,14 +3020,6 @@
                             <h3>Diseño Estético y Temas</h3>
                         </div>
                         <div class="form-group">
-                            <label for="setup-theme">Perfil de Streamer (Acento de Color):</label>
-                            <select id="setup-theme" style="background: var(--bg-dark-gray); border: 1px solid var(--border-color); color: var(--text-main); font-family: inherit; font-size: 13px; border-radius: 6px; padding: 8px 12px; width: 100%; outline: none;">
-                                <option value="neutral">Neutral (Púrpura / GR Logo)</option>
-                                <option value="naya">Naya (Rosa / Chibi)</option>
-                                <option value="majo">Majo (Azul / Telaraña)</option>
-                            </select>
-                        </div>
-                        <div class="form-group" style="margin-top: 15px;">
                             <label for="setup-visual-style">Estilo de Interfaz (Efectos de Renderizado):</label>
                             <select id="setup-visual-style" style="background: var(--bg-dark-gray); border: 1px solid var(--border-color); color: var(--text-main); font-family: inherit; font-size: 13px; border-radius: 6px; padding: 8px 12px; width: 100%; outline: none;">
                                 <option value="glassmorphism">Glassmorfismo (Vidrio Translúcido)</option>
