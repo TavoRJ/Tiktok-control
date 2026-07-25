@@ -6558,6 +6558,9 @@ function updateLeagueUI() {
     const groupEl = document.getElementById('league-division-group');
     const shieldBadge = document.getElementById('league-shield-badge');
     const pointsInfo = document.getElementById('league-points-info');
+    const flowPrevEl = document.getElementById('league-flow-prev');
+    const flowCurrentEl = document.getElementById('league-flow-current');
+    const flowNextEl = document.getElementById('league-flow-next');
 
     const division = (chatbotConfig && chatbotConfig.leagueDivision) || '--';
     const fragments = parseInt(chatbotConfig && chatbotConfig.leagueFragments !== undefined ? chatbotConfig.leagueFragments : 0) || 0;
@@ -6574,6 +6577,31 @@ function updateLeagueUI() {
     if (shieldBadge) {
         shieldBadge.style.display = shield ? 'inline-block' : 'none';
     }
+
+    let prevName = '--';
+    let currentName = '--';
+    let nextName = '--';
+
+    if (division !== '--') {
+        const idx = leagueTiers.indexOf(division);
+        currentName = tierNames[division] || division;
+        
+        if (idx > 0) {
+            prevName = tierNames[leagueTiers[idx - 1]];
+        } else {
+            prevName = 'Mínima Liga';
+        }
+        
+        if (idx < leagueTiers.length - 1) {
+            nextName = tierNames[leagueTiers[idx + 1]];
+        } else {
+            nextName = 'Máxima Liga';
+        }
+    }
+
+    if (flowPrevEl) flowPrevEl.textContent = prevName;
+    if (flowCurrentEl) flowCurrentEl.textContent = currentName;
+    if (flowNextEl) flowNextEl.textContent = nextName;
 
     // Badge visuals
     if (badgeEl && nameEl && groupEl) {

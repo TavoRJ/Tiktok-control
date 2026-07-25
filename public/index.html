@@ -1454,6 +1454,14 @@
                                 <div style="width: 100%; height: 16px; background: rgba(255,255,255,0.04); border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.06); position: relative;">
                                     <div id="league-fragments-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ffb703 0%, #ff4d6d 100%); transition: width 0.4s ease-out; box-shadow: 0 0 8px rgba(255, 183, 3, 0.3);"></div>
                                 </div>
+
+                                <!-- League Flow: Prev / Next Info -->
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding: 6px 12px; background: rgba(255,255,255,0.02); border-radius: 6px; font-size: 11px; font-weight: 700; border: 1px solid rgba(255,255,255,0.03);">
+                                    <span style="color: var(--text-muted);">Si desciendes: <span id="league-flow-prev" style="color: #ff4d6d;">--</span></span>
+                                    <span style="color: var(--text-muted);">Liga Actual: <span id="league-flow-current" style="color: var(--text-main);">--</span></span>
+                                    <span style="color: var(--text-muted);">Si asciendes: <span id="league-flow-next" style="color: #10b981;">--</span></span>
+                                </div>
+
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 12px;">
                                     <span id="league-points-info" style="color: var(--text-muted); font-weight: 700;">Detección automática activa al recibir eventos.</span>
                                     <div id="league-manual-adjusters" style="display: flex; gap: 8px; opacity: 0.15; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.15'">

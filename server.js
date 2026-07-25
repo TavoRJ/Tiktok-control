@@ -4898,6 +4898,27 @@ function connectToTikTok(username) {
         io.emit('tiktok_disconnected');
     });
     
+    // Listen to raw messages to extract league information in real time
+    const rawEvents = ['websocketMessage', 'decoded', 'raw', 'room', 'weekly_league', 'weeklyLeague'];
+    rawEvents.forEach(evt => {
+        try {
+            connectionRef.on(evt, (data) => {
+                if (!data) return;
+                const detected = detectLeagueFromRoomInfo(data);
+                if (detected) {
+                    console.info(`[Weekly League Detector] Detected league info in real time from event [${evt}]:`, detected);
+                    chatbotSettings.leagueDivision = detected.division;
+                    chatbotSettings.leagueFragments = detected.fragments;
+                    chatbotSettings.leagueShield = detected.shield;
+                    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
+                    io.emit('weekly_league_detected', detected);
+                }
+            });
+        } catch (e) {
+            // Suppress warnings for unsupported events
+        }
+    });
+
     const eventsToListen = [
         'gift', 'chat', 'like', 'member', 'roomUserSeq', 'roomUser', 'social', 
         'envelope', 'questionNew', 'linkMicBattle', 'linkMicArmies', 
