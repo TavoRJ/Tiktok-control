@@ -234,35 +234,59 @@
             box-shadow: 1px 1px 0px #000000 !important;
         }
 
-        /* 5. LIQUID GLASS (Cristal con Destello Sutil - GLOSSY SHINE) */
+        /* 5. LIQUID GLASS (Cristal Transparente Real - ACRYLIC NATIVE) */
+        html[data-liquid-active], body[data-visual-style="liquidglass"] {
+            background: transparent !important;
+        }
         body[data-visual-style="liquidglass"] {
-            background: radial-gradient(circle at 10% 20%, rgba(18, 16, 32, 1) 0%, rgba(8, 8, 14, 1) 90%) !important;
             color: #ffffff !important;
         }
         body[data-visual-style="liquidglass"] .app-container {
             background: transparent !important;
         }
         body[data-visual-style="liquidglass"] .sidebar {
-            background: rgba(12, 10, 22, 0.5) !important;
-            backdrop-filter: blur(20px) !important;
-            -webkit-backdrop-filter: blur(20px) !important;
-            border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+            background: rgba(15, 12, 28, 0.45) !important;
+            backdrop-filter: blur(28px) saturate(180%) !important;
+            -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.12) !important;
+            box-shadow: inset -1px 0 0 rgba(255,255,255,0.05) !important;
         }
         body[data-visual-style="liquidglass"] .header {
-            background: rgba(12, 10, 22, 0.5) !important;
-            backdrop-filter: blur(20px) !important;
-            -webkit-backdrop-filter: blur(20px) !important;
+            background: rgba(12, 10, 22, 0.4) !important;
+            backdrop-filter: blur(28px) saturate(180%) !important;
+            -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+            box-shadow: 0 1px 0 rgba(255,255,255,0.05) !important;
+        }
+        body[data-visual-style="liquidglass"] .main-content {
+            background: rgba(10, 8, 20, 0.25) !important;
         }
         body[data-visual-style="liquidglass"] .card.neon {
-            background: linear-gradient(135deg, rgba(25, 20, 40, 0.55), rgba(15, 12, 25, 0.65)) !important;
-            backdrop-filter: blur(20px) !important;
-            -webkit-backdrop-filter: blur(20px) !important;
-            border: 1.5px solid rgba(255, 255, 255, 0.15) !important;
-            box-shadow: 
-                0 15px 35px rgba(0, 0, 0, 0.5), 
-                inset 0 0 15px rgba(255, 255, 255, 0.05) !important;
-            border-radius: 20px !important;
+            background: rgba(255, 255, 255, 0.06) !important;
+            backdrop-filter: blur(20px) saturate(160%) !important;
+            -webkit-backdrop-filter: blur(20px) saturate(160%) !important;
+            border: 1px solid rgba(255, 255, 255, 0.14) !important;
+            box-shadow:
+                0 8px 32px rgba(0, 0, 0, 0.35),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.2) !important;
+            border-radius: 18px !important;
+        }
+        body[data-visual-style="liquidglass"] input,
+        body[data-visual-style="liquidglass"] select,
+        body[data-visual-style="liquidglass"] textarea {
+            background: rgba(255, 255, 255, 0.08) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            color: #ffffff !important;
+        }
+        body[data-visual-style="liquidglass"] .btn {
+            background: rgba(255, 255, 255, 0.1) !important;
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            color: #ffffff !important;
+            backdrop-filter: blur(10px) !important;
+        }
+        body[data-visual-style="liquidglass"] .btn:hover {
+            background: rgba(255, 255, 255, 0.18) !important;
         }
 
         /* 6. UI ESPACIAL (Neón Brillante y Futurista - CYBERTECH SPACE) */

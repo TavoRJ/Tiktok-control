@@ -1290,6 +1290,20 @@ function updateUIWithConfig(config) {
     document.body.setAttribute('data-visual-style', visualStyle);
     const visualStyleSelect = document.getElementById('setup-visual-style');
     if (visualStyleSelect) visualStyleSelect.value = visualStyle;
+
+    // Toggle native acrylic/blur for Liquid Glass mode (Electron only)
+    if (window.electronBridge) {
+        if (visualStyle === 'liquidglass') {
+            document.documentElement.style.background = 'transparent';
+            document.documentElement.style.backgroundColor = 'transparent';
+            window.electronBridge.setBackgroundMaterial('acrylic');
+        } else {
+            document.documentElement.style.background = '';
+            document.documentElement.style.backgroundColor = '';
+            window.electronBridge.setBackgroundMaterial('none');
+        }
+    }
+
     const logoEl = document.querySelector('.brand-logo');
     const serverPort = window.location.port || '3000';
     if (themeName === 'neutral') {
@@ -1886,8 +1900,25 @@ inputsToWatch.forEach(id => {
                 const group = document.getElementById('spotify-monetization-coins-group');
                 if (group) group.style.display = el.checked ? 'block' : 'none';
             }
+            // Apply visual style and native acrylic in real-time
+            if (id === 'setup-visual-style') {
+                const newStyle = el.value;
+                document.body.setAttribute('data-visual-style', newStyle);
+                if (window.electronBridge) {
+                    if (newStyle === 'liquidglass') {
+                        document.documentElement.style.background = 'transparent';
+                        document.documentElement.style.backgroundColor = 'transparent';
+                        window.electronBridge.setBackgroundMaterial('acrylic');
+                    } else {
+                        document.documentElement.style.background = '';
+                        document.documentElement.style.backgroundColor = '';
+                        window.electronBridge.setBackgroundMaterial('none');
+                    }
+                }
+            }
             sendUpdatedSettings();
         });
+
     }
 });
 

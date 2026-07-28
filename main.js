@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, powerSaveBlocker } = require('electron');
+const { app, BrowserWindow, dialog, powerSaveBlocker, ipcMain } = require('electron');
 const path = require('path');
 
 // Limit V8 heap memory and enable Chrome's low end device mode to significantly reduce RAM usage
@@ -23,12 +23,20 @@ function createWindow() {
         minWidth: 800,
         minHeight: 600,
         title: "GRLive",
-        icon: path.join(__dirname, 'public', 'assets', 'app-icons', 'icon.png'), // Puedes crear un ícono luego
+        icon: path.join(__dirname, 'public', 'assets', 'app-icons', 'icon.png'),
         autoHideMenuBar: true,
+        show: false,
         webPreferences: {
             nodeIntegration: false,
-            contextIsolation: true
+            contextIsolation: true,
+            preload: path.join(__dirname, 'preload.js')
         }
+    });
+
+
+    // Show window only when ready to avoid white flash
+    mainWindow.once('ready-to-show', () => {
+        mainWindow.show();
     });
 
     // Cargamos la interfaz desde el servidor local
@@ -52,6 +60,18 @@ function createWindow() {
     // Buscar actualizaciones al mostrar la ventana
     mainWindow.once('ready-to-show', () => {
         autoUpdater.checkForUpdatesAndNotify();
+    });
+
+    // IPC: set/clear native acrylic blur for Liquid Glass mode
+    ipcMain.removeAllListeners('set-background-material');
+    ipcMain.on('set-background-material', (event, material) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            try {
+                mainWindow.setBackgroundMaterial(material);
+            } catch (e) {
+                // setBackgroundMaterial may not exist on older Electron builds – ignore
+            }
+        }
     });
 }
 
