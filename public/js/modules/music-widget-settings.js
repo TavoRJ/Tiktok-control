@@ -79,7 +79,7 @@ export function renderMusicSettings() {
                 <!-- Playlist/Spotify Link config -->
                 <div class="form-group" style="display: flex; flex-direction: column; gap:0.5rem;">
                     <label for="music-playlist-id" style="font-size:0.85rem; color: var(--text-muted); font-weight:500;">
-                        ID / Link de Playlist de Spotify o YouTube
+                        ID / Link de Playlist de Spotify
                     </label>
                     <input type="text" id="music-playlist-id" class="form-control" style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: var(--text-main); padding: 0.75rem; border-radius: 8px; font-size:0.95rem; width:100%;" value="${playlistId}" placeholder="Ej: 37i9dQZF1DX10zKzsJ2jva o URL completa">
                 </div>

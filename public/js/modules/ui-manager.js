@@ -5,7 +5,6 @@ export const UIManager = {
     // Keep track of internal drag coordinate shifts for each widget
     dragPositions: {
         spotify:  { x: 0, y: 0 },
-        youtube:  { x: 0, y: 0 },
         donors:   { x: 0, y: 0 },
         taps:     { x: 0, y: 0 },
         mvp:      { x: 0, y: 0 },
@@ -39,14 +38,12 @@ export const UIManager = {
             soundSelectorModal:    document.getElementById('sound-selector-modal'),
             canvas:                document.getElementById('stream-canvas-preview'),
             dragSpotify:           document.getElementById('drag-spotify'),
-            dragYoutube:           document.getElementById('drag-youtube'),
             dragDonors:            document.getElementById('drag-donors'),
             dragTaps:              document.getElementById('drag-taps'),
             dragMvp:               document.getElementById('drag-mvp'),
             dragSonglist:          document.getElementById('drag-songlist'),
             dragBanner:            document.getElementById('drag-banner'),
             switchSpotify:         document.getElementById('switch-widget-spotify'),
-            switchYoutube:         document.getElementById('switch-widget-youtube'),
             switchDonors:          document.getElementById('switch-widget-donors'),
             switchTaps:            document.getElementById('switch-widget-taps'),
             switchMvp:             document.getElementById('switch-widget-mvp'),
@@ -82,7 +79,6 @@ export const UIManager = {
         // Map of widgetName -> switch element
         const switchMap = {
             spotify:  this.elements.switchSpotify,
-            youtube:  this.elements.switchYoutube,
             donors:   this.elements.switchDonors,
             taps:     this.elements.switchTaps,
             mvp:      this.elements.switchMvp,
@@ -105,8 +101,8 @@ export const UIManager = {
             };
         });
 
-        // Setup Interact.js drag for all 7 widgets
-        ['spotify', 'youtube', 'donors', 'taps', 'mvp', 'songlist', 'banner'].forEach(widgetName => {
+        // Setup Interact.js drag for widgets
+        ['spotify', 'donors', 'taps', 'mvp', 'songlist', 'banner'].forEach(widgetName => {
             const el = document.getElementById(`drag-${widgetName}`);
             if (el) this.setupDragElement(`#drag-${widgetName}`, widgetName);
         });
@@ -178,7 +174,7 @@ export const UIManager = {
         };
 
         applyWidget('spotify',  this.elements.switchSpotify,  this.elements.dragSpotify);
-        applyWidget('youtube',  this.elements.switchYoutube,  this.elements.dragYoutube);
+
         applyWidget('donors',   this.elements.switchDonors,   this.elements.dragDonors);
         applyWidget('taps',     this.elements.switchTaps,     this.elements.dragTaps);
         applyWidget('mvp',      this.elements.switchMvp,      this.elements.dragMvp);

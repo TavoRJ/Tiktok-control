@@ -111,7 +111,7 @@ const filterGiftsCheckbox = document.getElementById('filter-gifts');
 function updateFloatingSaveButtonVisibility(targetId) {
     const floatingSaveBtn = document.getElementById('floating-save-btn');
     if (!floatingSaveBtn) return;
-    const configViews = ['music-view', 'youtube-view', 'chatbot-view', 'setup-view', 'dynamics-view', 'ai-view'];
+    const configViews = ['music-view', 'chatbot-view', 'setup-view', 'dynamics-view', 'ai-view'];
     if (configViews.includes(targetId)) {
         floatingSaveBtn.classList.add('visible');
     } else {
@@ -252,26 +252,6 @@ socket.on('app_version', (version) => {
 socket.on('remote_config_updated', (config) => {
     if (!config) return;
     latestRemoteConfig = config;
-    
-    const youtubeBtn = document.getElementById('menu-youtube-btn');
-    const youtubeOverlay = document.getElementById('youtube-blocked-overlay');
-    const youtubeText = document.getElementById('youtube-blocked-text');
-    
-    if (config.youtubeBlocked) {
-        if (youtubeBtn) youtubeBtn.classList.add('menu-item-blocked');
-        if (youtubeOverlay) youtubeOverlay.style.display = 'flex';
-        if (youtubeText) youtubeText.textContent = config.youtubeBlockMessage || "Esta función ha sido deshabilitada temporalmente de forma remota por mantenimiento.";
-        
-        // If the user is currently on the youtube-view tab, force switch them to overlays-view
-        const activeItem = document.querySelector('.menu-item.active');
-        if (activeItem && activeItem.getAttribute('data-target') === 'youtube-view') {
-            const overlaysItem = document.querySelector('.menu-item[data-target="overlays-view"]');
-            if (overlaysItem) overlaysItem.click();
-        }
-    } else {
-        if (youtubeBtn) youtubeBtn.classList.remove('menu-item-blocked');
-        if (youtubeOverlay) youtubeOverlay.style.display = 'none';
-    }
 });
 
 let isTiktokConnected = false;
@@ -1414,75 +1394,7 @@ function updateUIWithConfig(config) {
         spotSkipAllowedUsersEl.value = config.spotifySkipAllowedUsers || '';
     }
     
-    // YouTube settings sync
-    const ytActiveEl = document.getElementById('youtube-active');
-    const ytVolEl = document.getElementById('youtube-volume-slider');
-    const ytVolVal = document.getElementById('youtube-volume-val');
-    const ytQueueEnabledEl = document.getElementById('youtube-chat-queue-enabled');
-    const ytPermEl = document.getElementById('youtube-permission');
-    const ytPrefixEl = document.getElementById('youtube-command-prefix');
-    const ytVoteLimitEl = document.getElementById('youtube-voteskip-limit');
-    
-    if (ytActiveEl) ytActiveEl.checked = !!config.youtubeEnabled;
-    if (ytVolEl) {
-        ytVolEl.value = config.youtubeVolume !== undefined ? config.youtubeVolume : 80;
-        if (ytVolVal) ytVolVal.textContent = `${ytVolEl.value}%`;
-    }
-    if (ytQueueEnabledEl) ytQueueEnabledEl.checked = config.youtubeChatQueueEnabled !== false;
-    if (ytPermEl) ytPermEl.value = config.youtubePermission || 'all';
-    if (ytPrefixEl) ytPrefixEl.value = config.youtubeCommandPrefix || '!yt';
-    if (ytVoteLimitEl) ytVoteLimitEl.value = config.youtubeVoteSkipLimit || 3;
-    const ytSearchEngineEl = document.getElementById('youtube-search-engine');
-    if (ytSearchEngineEl) {
-        ytSearchEngineEl.value = config.youtubeSearchEngine || 'youtube';
-    }
-    
-    // YouTube visualization settings sync
-    const ytThemeEl = document.getElementById('youtube-theme');
-    const ytPosEl = document.getElementById('youtube-position');
-    const ytNeonColorEl = document.getElementById('youtube-neon-color');
-    const ytVinylDesignEl = document.getElementById('youtube-vinyl-design');
-    const ytVinylSpeedEl = document.getElementById('youtube-vinyl-speed');
 
-    if (ytThemeEl) {
-        let selectedValue = config.youtubeTheme || 'apple-music';
-        let isSelectedValueVisible = true;
-        const options = ytThemeEl.options;
-        for (let i = 0; i < options.length; i++) {
-            const opt = options[i];
-            if (themeName === 'majo') {
-                if (opt.value === 'naya-chibi' || opt.value === 'coquette-hearts') {
-                    opt.style.display = 'none';
-                    if (selectedValue === opt.value) isSelectedValueVisible = false;
-                } else {
-                    opt.style.display = '';
-                }
-            } else if (themeName === 'naya') {
-                if (opt.value === 'anime-gojo' || opt.value === 'majo-spider') {
-                    opt.style.display = 'none';
-                    if (selectedValue === opt.value) isSelectedValueVisible = false;
-                } else {
-                    opt.style.display = '';
-                }
-            } else {
-                if (opt.value === 'naya-chibi' || opt.value === 'anime-gojo' || opt.value === 'majo-spider') {
-                    opt.style.display = 'none';
-                    if (selectedValue === opt.value) isSelectedValueVisible = false;
-                } else {
-                    opt.style.display = '';
-                }
-            }
-        }
-        if (!isSelectedValueVisible) {
-            selectedValue = themeName === 'majo' ? 'majo-spider' : (themeName === 'naya' ? 'naya-chibi' : 'apple-music');
-        }
-        ytThemeEl.value = selectedValue;
-        updateMockupThemeClassYouTube(selectedValue);
-    }
-    if (ytPosEl) ytPosEl.value = config.youtubePosition || 'bottom-left';
-    if (ytNeonColorEl) ytNeonColorEl.value = config.youtubeNeonColor || 'pink';
-    if (ytVinylDesignEl) ytVinylDesignEl.value = config.youtubeVinylDesign || 'classic';
-    if (ytVinylSpeedEl) ytVinylSpeedEl.value = config.youtubeVinylSpeed || 'normal';
     
     // Spotify OAuth connection profile UI
     const spotifyProfileContainer = document.getElementById('spotify-profile-container');
@@ -1568,25 +1480,17 @@ function updateUIWithConfig(config) {
         valRateEl.textContent = parseFloat(rateEl.value).toFixed(1);
     }
     
-    // Spotify and YouTube monetization sync
+    // Spotify monetization sync
     const spotMonetizationEl = document.getElementById('spotify-monetization-active');
     const spotMonetizationCoinsEl = document.getElementById('spotify-monetization-coins');
-    const ytMonetizationEl = document.getElementById('youtube-monetization-active');
-    const ytMonetizationCoinsEl = document.getElementById('youtube-monetization-coins');
     
     if (spotMonetizationEl) spotMonetizationEl.checked = !!config.spotifyMonetizationEnabled;
     if (spotMonetizationCoinsEl) spotMonetizationCoinsEl.value = config.spotifyMinCoins || 5;
-    if (ytMonetizationEl) ytMonetizationEl.checked = !!config.youtubeMonetizationEnabled;
-    if (ytMonetizationCoinsEl) ytMonetizationCoinsEl.value = config.youtubeMinCoins || 5;
     
     // Toggle coins group visibility based on checkbox status
     const spotCoinsGroup = document.getElementById('spotify-monetization-coins-group');
     if (spotCoinsGroup && spotMonetizationEl) {
         spotCoinsGroup.style.display = spotMonetizationEl.checked ? 'block' : 'none';
-    }
-    const ytCoinsGroup = document.getElementById('youtube-monetization-coins-group');
-    if (ytCoinsGroup && ytMonetizationEl) {
-        ytCoinsGroup.style.display = ytMonetizationEl.checked ? 'block' : 'none';
     }
 
     // Sound alerts general active switch sync
@@ -1789,25 +1693,9 @@ function sendUpdatedSettings() {
         spotifyVoteSkipLimit: document.getElementById('spotify-voteskip-limit') ? parseInt(document.getElementById('spotify-voteskip-limit').value) || 3 : 3,
         spotifySkipAllowedUsers: document.getElementById('spotify-skip-allowed-users') ? document.getElementById('spotify-skip-allowed-users').value.trim() : '',
         
-        // YouTube interactive settings
-        youtubeEnabled: document.getElementById('youtube-active') ? document.getElementById('youtube-active').checked : false,
-        youtubeVolume: document.getElementById('youtube-volume-slider') ? parseInt(document.getElementById('youtube-volume-slider').value) || 80 : 80,
-        youtubeChatQueueEnabled: document.getElementById('youtube-chat-queue-enabled') ? document.getElementById('youtube-chat-queue-enabled').checked : true,
-        youtubePermission: document.getElementById('youtube-permission') ? document.getElementById('youtube-permission').value : 'all',
-        youtubeCommandPrefix: document.getElementById('youtube-command-prefix') ? document.getElementById('youtube-command-prefix').value.trim() : '!yt',
-        youtubeVoteSkipLimit: document.getElementById('youtube-voteskip-limit') ? parseInt(document.getElementById('youtube-voteskip-limit').value) || 3 : 3,
-        youtubeTheme: document.getElementById('youtube-theme') ? document.getElementById('youtube-theme').value : 'apple-music',
-        youtubePosition: document.getElementById('youtube-position') ? document.getElementById('youtube-position').value : 'bottom-left',
-        youtubeNeonColor: document.getElementById('youtube-neon-color') ? document.getElementById('youtube-neon-color').value : 'red',
-        youtubeVinylDesign: document.getElementById('youtube-vinyl-design') ? document.getElementById('youtube-vinyl-design').value : 'classic',
-        youtubeVinylSpeed: document.getElementById('youtube-vinyl-speed') ? document.getElementById('youtube-vinyl-speed').value : 'normal',
-        youtubeSearchEngine: document.getElementById('youtube-search-engine') ? document.getElementById('youtube-search-engine').value : 'youtube',
-        
         // Music Request Monetization settings
         spotifyMonetizationEnabled: document.getElementById('spotify-monetization-active').checked,
         spotifyMinCoins: parseInt(document.getElementById('spotify-monetization-coins').value) || 5,
-        youtubeMonetizationEnabled: document.getElementById('youtube-monetization-active').checked,
-        youtubeMinCoins: parseInt(document.getElementById('youtube-monetization-coins').value) || 5,
         
         // Sound alerts setting
         soundAlertsEnabled: document.getElementById('sound-alerts-active').checked,
@@ -1953,10 +1841,6 @@ const inputsToWatch = [
     'spotify-chat-queue-enabled', 'spotify-explicit-allowed', 'spotify-permission',
     'spotify-neon-color', 'spotify-vinyl-design', 'spotify-vinyl-speed',
     'spotify-monetization-active',
-    'youtube-active', 'youtube-chat-queue-enabled', 'youtube-permission',
-    'youtube-command-prefix', 'youtube-voteskip-limit', 'youtube-monetization-active',
-    'youtube-theme', 'youtube-position', 'youtube-neon-color', 'youtube-vinyl-design', 'youtube-vinyl-speed',
-    'youtube-search-engine',
     'sound-alerts-active',
     'wheel-enabled', 'overlay-music-enabled', 'overlay-chat-enabled', 'overlay-chat-premium', 'tts-effects-enabled',
     'recipe-goal-color-input',
@@ -1998,15 +1882,8 @@ inputsToWatch.forEach(id => {
             if (id === 'spotify-theme') {
                 updateMockupThemeClass(el.value);
             }
-            if (id === 'youtube-theme') {
-                updateMockupThemeClassYouTube(el.value);
-            }
             if (id === 'spotify-monetization-active') {
                 const group = document.getElementById('spotify-monetization-coins-group');
-                if (group) group.style.display = el.checked ? 'block' : 'none';
-            }
-            if (id === 'youtube-monetization-active') {
-                const group = document.getElementById('youtube-monetization-coins-group');
                 if (group) group.style.display = el.checked ? 'block' : 'none';
             }
             sendUpdatedSettings();
@@ -2021,7 +1898,7 @@ const textInputsToWatch = [
     'bot-thank-share-phrase', 'bot-thank-follow-phrase', 'bot-thank-gift-phrase', 'bot-thank-like-phrase',
     'setup-tiktok-username', 'spotify-client-id', 'spotify-client-secret',
     'spotify-command-prefix', 'spotify-voteskip-limit', 'spotify-skip-allowed-users',
-    'spotify-monetization-coins', 'youtube-monetization-coins',
+    'spotify-monetization-coins',
     'wheel-trigger-gift', 'wheel-trigger-coins',
     'banner-slide1-input', 'banner-slide2-input', 'banner-slide3-input'
 ];
@@ -2678,25 +2555,7 @@ function updateMockupThemeClass(themeName) {
     player.classList.add(`theme-${themeName}`);
 }
 
-function updateMockupThemeClassYouTube(themeName) {
-    const player = document.getElementById('youtube-mockup-player');
-    if (!player) return;
-    
-    player.classList.remove(
-        'theme-apple-music', 
-        'theme-spotify-classic', 
-        'theme-neon-gradient', 
-        'theme-transparent',
-        'theme-coquette-hearts',
-        'theme-anime-luffy',
-        'theme-naya-chibi',
-        'theme-anime-gojo',
-        'theme-majo-spider'
-    );
-    
-    // Add new theme class
-    player.classList.add(`theme-${themeName}`);
-}
+
 
 // Copy Buttons listeners
 const setupCopyUrlBtn = document.getElementById('btn-copy-obs-url');
@@ -2806,19 +2665,7 @@ if (copyObsMusicBtn) {
     });
 }
 
-const copyObsYoutubeBtn = document.getElementById('btn-copy-obs-youtube');
-if (copyObsYoutubeBtn) {
-    copyObsYoutubeBtn.addEventListener('click', () => {
-        const input = document.getElementById('obs-youtube-url');
-        if (input) {
-            navigator.clipboard.writeText(input.value).then(() => {
-                const originalText = copyObsYoutubeBtn.textContent;
-                copyObsYoutubeBtn.textContent = '¡Copiado!';
-                setTimeout(() => copyObsYoutubeBtn.textContent = originalText, 1500);
-            });
-        }
-    });
-}
+
 
 const copyObsMusicHorizontalBtn = document.getElementById('btn-copy-obs-music-horizontal');
 if (copyObsMusicHorizontalBtn) {
@@ -2854,19 +2701,7 @@ if (copyObsSonglistBtn) {
     });
 }
 
-const copyObsYoutubeHorizontalBtn = document.getElementById('btn-copy-obs-youtube-horizontal');
-if (copyObsYoutubeHorizontalBtn) {
-    copyObsYoutubeHorizontalBtn.addEventListener('click', () => {
-        const input = document.getElementById('obs-youtube-horizontal-url');
-        if (input) {
-            navigator.clipboard.writeText(input.value).then(() => {
-                const originalText = copyObsYoutubeHorizontalBtn.textContent;
-                copyObsYoutubeHorizontalBtn.textContent = '¡Copiado!';
-                setTimeout(() => copyObsYoutubeHorizontalBtn.textContent = originalText, 1500);
-            });
-        }
-    });
-}
+
 
 const copyObsBannerBtn = document.getElementById('btn-copy-obs-banner');
 if (copyObsBannerBtn) {
@@ -2952,8 +2787,7 @@ const urlInputsToUpdate = [
     'obs-music-url',
     'obs-music-horizontal-url',
     'obs-songlist-url',
-    'obs-youtube-url',
-    'obs-youtube-horizontal-url',
+
     'obs-donors-url',
     'obs-taps-url',
     'obs-mvp-url',
@@ -4188,250 +4022,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    // ==========================================
-    // YOUTUBE TRACK & COLA CONTROLS & LISTENERS
-    // ==========================================
 
-    socket.on('youtube_queue_updated', (queue) => {
-        renderYoutubeQueue(queue);
-    });
-
-    socket.on('youtube_monetized_users_updated', (users) => {
-        renderYoutubeMonetizedUsers(users);
-    });
-
-    function renderYoutubeQueue(queue) {
-        const tbody = document.getElementById('youtube-queue-body');
-        if (!tbody) return;
-        
-        tbody.innerHTML = '';
-        
-        if (!queue || queue.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 30px 15px;">
-                        La cola de reproducción de YouTube está vacía.
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-        
-        queue.forEach((track, index) => {
-            const tr = document.createElement('tr');
-            const albumArtSrc = track.albumArt || 'data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2240%22%20height%3D%2240%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%2523222%22%2F%3E%3C%2Fsvg%3E';
-            
-            tr.innerHTML = `
-                <td>
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <img src="${albumArtSrc}" class="queue-thumb" alt="Cover" style="width: 40px; height: 40px; border-radius: 4px; object-fit: cover;">
-                        <div class="track-details" style="display: flex; flex-direction: column;">
-                            <span class="track-title" style="font-weight: bold; font-size: 13px; color: var(--text-main);">${escapeHtml(track.title)}</span>
-                            <span class="track-artist" style="font-size: 11px; color: var(--text-muted);">${escapeHtml(track.artist)}</span>
-                        </div>
-                    </div>
-                </td>
-                <td>
-                    <span class="requester-badge" style="background: rgba(255, 0, 0, 0.1); color: #ff0000; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold;">@${track.requester}</span>
-                </td>
-                <td class="text-right">
-                    <div class="queue-actions">
-                        <button class="btn-queue-play" onclick="playYoutubeQueueItem(${index})" title="Reproducir ahora" style="background: none; border: none; color: var(--text-main); cursor: pointer; padding: 4px;">
-                            <i data-lucide="play" class="icon-small"></i>
-                        </button>
-                        <button class="btn-queue-delete" onclick="deleteYoutubeQueueItem(${index})" title="Eliminar de la cola" style="background: none; border: none; color: var(--accent-red); cursor: pointer; padding: 4px;">
-                            <i data-lucide="trash-2" class="icon-small"></i>
-                        </button>
-                    </div>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-        
-        if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
-        }
-    }
-
-    function renderYoutubeMonetizedUsers(users) {
-        const tbody = document.getElementById('youtube-monetized-users-body');
-        if (!tbody) return;
-        
-        tbody.innerHTML = '';
-        
-        if (!users || users.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 15px 15px; font-size: 12px;">
-                        Sin usuarios premium en esta sesión.
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-        
-        users.forEach((user, index) => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>
-                    <span class="requester-badge" style="background: rgba(255, 0, 0, 0.1); color: #ff0000; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold;">@${user.userId}</span>
-                </td>
-                <td>
-                    <span style="font-weight: 500; color: #ff0000;">💰 ${user.totalCoins}</span>
-                </td>
-                <td class="text-right">
-                    <span style="font-size: 12px; color: var(--text-muted);">${user.creditsAvailable} crédito${user.creditsAvailable !== 1 ? 's' : ''}</span>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-        
-        if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
-        }
-    }
-
-    window.playYoutubeQueueItem = function(index) {
-        socket.emit('play_youtube_queue_item', index);
-    };
-
-    window.deleteYoutubeQueueItem = function(index) {
-        socket.emit('delete_youtube_queue_item', index);
-    };
-
-    // Bind clear YouTube queue button
-    const btnClearYoutubeQueue = document.getElementById('btn-clear-youtube-queue');
-    if (btnClearYoutubeQueue) {
-        btnClearYoutubeQueue.addEventListener('click', () => {
-            if (confirm('¿Estás seguro de que deseas vaciar toda la cola de YouTube?')) {
-                socket.emit('clear_youtube_queue');
-            }
-        });
-    }
-
-    // Bind clear YouTube monetized users button
-    const btnClearYoutubeMonetized = document.getElementById('btn-clear-youtube-monetized');
-    if (btnClearYoutubeMonetized) {
-        btnClearYoutubeMonetized.addEventListener('click', () => {
-            if (confirm('¿Estás seguro de que deseas limpiar los créditos y monedas acumulados de todos los usuarios en esta sesión?')) {
-                socket.emit('clear_monetized_users');
-            }
-        });
-    }
-
-    // Listen to actual YouTube playback for live preview mockup
-    socket.on('youtube_track', (track) => {
-        const titleEl = document.getElementById('youtube-mockup-title');
-        const artistEl = document.getElementById('youtube-mockup-artist');
-        const imgEl = document.getElementById('youtube-mockup-album-img');
-        const bgArtEl = document.getElementById('youtube-mockup-bg-art');
-        const playIconEl = document.getElementById('youtube-mockup-play-icon');
-        const fillEl = document.getElementById('youtube-mockup-progress-fill');
-        const currentEl = document.getElementById('youtube-mockup-time-current');
-        const totalEl = document.getElementById('youtube-mockup-time-total');
-        
-        if (track && track.title) {
-            if (titleEl) titleEl.textContent = track.title;
-            if (artistEl) artistEl.textContent = track.artist || 'YouTube';
-            if (imgEl && track.albumArt) {
-                imgEl.src = track.albumArt;
-                imgEl.style.animationPlayState = track.isPlaying ? 'running' : 'paused';
-            }
-            if (bgArtEl && track.albumArt) {
-                bgArtEl.style.backgroundImage = `url('${track.albumArt}')`;
-                bgArtEl.style.backgroundSize = 'cover';
-            }
-            
-            const ytPlayBtn = document.getElementById('youtube-mockup-btn-play');
-            if (ytPlayBtn) {
-                ytPlayBtn.innerHTML = `<i data-lucide="${track.isPlaying ? 'pause' : 'play'}"></i>`;
-            }
-            
-            // Progress display
-            if (fillEl && track.durationMs) {
-                const percent = (track.progressMs / track.durationMs) * 100;
-                fillEl.style.width = `${percent}%`;
-            } else if (fillEl && !track.isPlaying) {
-                fillEl.style.width = '0%';
-            }
-            if (currentEl) {
-                currentEl.textContent = track.progressMs ? formatTime(track.progressMs / 1000) : '0:00';
-            }
-            if (totalEl) {
-                totalEl.textContent = track.durationMs ? formatTime(track.durationMs / 1000) : '0:00';
-            }
-            
-            if (typeof lucide !== 'undefined') {
-                lucide.createIcons();
-            }
-        } else {
-            if (titleEl) titleEl.textContent = 'Sin reproducción';
-            if (artistEl) artistEl.textContent = 'Cola de YouTube vacía';
-            if (imgEl) {
-                imgEl.src = "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231a1a1a%22%2F%3E%3Ccircle%20cx%3D%22100%22%20cy%3D%22100%22%20r%3D%2230%22%20fill%3D%22%23ff0000%22%2F%3E%3Cpolygon%20points%3D%2295%2C90%2095%2C110%20112%2C100%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E";
-                imgEl.style.animationPlayState = 'paused';
-            }
-            const ytPlayBtn = document.getElementById('youtube-mockup-btn-play');
-            if (ytPlayBtn) {
-                ytPlayBtn.innerHTML = `<i data-lucide="play"></i>`;
-            }
-            if (fillEl) fillEl.style.width = '0%';
-            if (currentEl) currentEl.textContent = '0:00';
-            if (totalEl) totalEl.textContent = '0:00';
-            if (typeof lucide !== 'undefined') {
-                lucide.createIcons();
-            }
-        }
-    });
-
-    // Sync progress update in real-time from YouTube widget player status
-    socket.on('youtube_track_progress', (status) => {
-        const fillEl = document.getElementById('youtube-mockup-progress-fill');
-        const currentEl = document.getElementById('youtube-mockup-time-current');
-        const totalEl = document.getElementById('youtube-mockup-time-total');
-        
-        if (fillEl && status.durationMs) {
-            const percent = (status.progressMs / status.durationMs) * 100;
-            fillEl.style.width = `${percent}%`;
-        }
-        if (currentEl) {
-            currentEl.textContent = formatTime(status.progressMs / 1000);
-        }
-        if (totalEl) {
-            totalEl.textContent = formatTime(status.durationMs / 1000);
-        }
-    });
-
-    // YouTube mockup play/pause control action
-    const ytMockupPlayBtn = document.getElementById('youtube-mockup-btn-play');
-    if (ytMockupPlayBtn) {
-        ytMockupPlayBtn.addEventListener('click', () => {
-            const imgEl = document.getElementById('youtube-mockup-album-img');
-            const isPlayingNow = imgEl && imgEl.style.animationPlayState === 'running';
-            socket.emit('youtube_toggle_play', !isPlayingNow);
-        });
-    }
-
-    const ytMockupNextBtn = document.getElementById('youtube-mockup-btn-next');
-    if (ytMockupNextBtn) {
-        ytMockupNextBtn.addEventListener('click', () => {
-            socket.emit('skip_youtube_track');
-        });
-    }
-
-    const ytVolSlider = document.getElementById('youtube-volume-slider');
-    if (ytVolSlider) {
-        ytVolSlider.addEventListener('input', () => {
-            const val = ytVolSlider.value;
-            const valLabel = document.getElementById('youtube-volume-val');
-            if (valLabel) valLabel.textContent = `${val}%`;
-        });
-        
-        ytVolSlider.addEventListener('change', () => {
-            const val = parseInt(ytVolSlider.value) || 80;
-            socket.emit('youtube_volume_change', val);
-        });
-    }
 
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();

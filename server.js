@@ -25,7 +25,7 @@ let workingCobaltApis = [
 
 async function updateCobaltApis() {
     try {
-        console.log('[YouTube Audio] Actualizando instancias de Cobalt desde cobalt.directory...');
+        console.log('[Cobalt Audio] Actualizando instancias de Cobalt desde cobalt.directory...');
         const res = await fetch('https://cobalt.directory/api/working?type=api', {
             signal: AbortSignal.timeout(5000)
         });
@@ -33,14 +33,14 @@ async function updateCobaltApis() {
             const data = await res.json();
             if (data && data.youtube && Array.isArray(data.youtube) && data.youtube.length > 0) {
                 workingCobaltApis = data.youtube;
-                console.log('[YouTube Audio] Lista de Cobalt APIs actualizada con éxito:', workingCobaltApis);
+                console.log('[Cobalt Audio] Lista de Cobalt APIs actualizada con éxito:', workingCobaltApis);
             } else if (data && data.Frontend && Array.isArray(data.Frontend) && data.Frontend.length > 0) {
                 workingCobaltApis = data.Frontend;
-                console.log('[YouTube Audio] Lista de Cobalt APIs actualizada (Frontend fallback):', workingCobaltApis);
+                console.log('[Cobalt Audio] Lista de Cobalt APIs actualizada (Frontend fallback):', workingCobaltApis);
             }
         }
     } catch (err) {
-        console.error('[YouTube Audio] Error al actualizar las Cobalt APIs:', err.message);
+        console.error('[Cobalt Audio] Error al actualizar las Cobalt APIs:', err.message);
     }
 }
 
@@ -336,21 +336,9 @@ let chatbotSettings = {
     likeAction: "read",
     likeSound: "",
     thankYouLikePhrase: "",
-    // YouTube settings
-    youtubeEnabled: false,
-    youtubeVolume: 80,
-    youtubeChatQueueEnabled: true,
-    youtubePermission: "all",
-    youtubeCommandPrefix: "!yt",
-    youtubeVoteSkipLimit: 3,
-    youtubeTheme: "red-neon",
-    youtubePosition: "bottom-left",
-    youtubeSearchEngine: "youtube",
     // Music request monetization settings
     spotifyMonetizationEnabled: false,
     spotifyMinCoins: 5,
-    youtubeMonetizationEnabled: false,
-    youtubeMinCoins: 5,
     // Sound alerts multimedia settings
     soundAlertsEnabled: true,
     soundAlerts: [],
@@ -371,7 +359,6 @@ let chatbotSettings = {
     bannerSlide3: "Meta de Regalos Activa (Calculada automáticamente)",
     widgets: {
         spotify: { active: true, x: 5, y: 70, width: 90, height: 15 },
-        youtube: { active: false, x: 5, y: 70, width: 90, height: 15 },
         banner: { active: true, x: 0, y: 0, width: 100, height: 8 },
         donors: { active: true, x: 5, y: 10, width: 90, height: 10 },
         taps: { active: true, x: 5, y: 22, width: 90, height: 10 },
@@ -437,11 +424,7 @@ let totalSessionDiamonds = 0;
 let totalSessionLikes = 0;
 let totalSessionViewers = 0;
 
-// YouTube Queue & Variables for active stream session
-let youtubeQueue = [];
-let currentYoutubeTrack = { isPlaying: false };
-let youtubeVoteSkips = new Set();
-let currentActiveQueueYoutubeTrack = null;
+
 
 // User credits for request monetization (in-memory)
 let userMusicCredits = {};
@@ -584,45 +567,7 @@ function getLocalIPs() {
     return addresses;
 }
 
-// Parse YouTube video ID from URL
-function parseYoutubeId(url) {
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
-}
 
-// Fetch info using YouTube oEmbed
-async function getYoutubeOEmbedInfo(videoId) {
-    try {
-        const url = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
-        const res = await fetch(url);
-        if (!res.ok) return null;
-        const data = await res.json();
-        return {
-            id: videoId,
-            title: data.title || 'Video de YouTube',
-            artist: data.author_name || 'YouTube',
-            albumArt: data.thumbnail_url || `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-            uri: `https://www.youtube.com/watch?v=${videoId}`,
-            durationText: '0:00'
-        };
-    } catch (e) {
-        console.error('Error fetching oEmbed info:', e);
-        return null;
-    }
-}
-
-function findFirstVideoRenderer(obj) {
-    if (!obj || typeof obj !== 'object') return null;
-    if (obj.videoRenderer) return obj.videoRenderer;
-    for (const key in obj) {
-        if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            const found = findFirstVideoRenderer(obj[key]);
-            if (found) return found;
-        }
-    }
-    return null;
-}
 
 // Helper to parse duration string (like "2:24") to milliseconds
 function parseDurationToMs(durationStr) {
@@ -692,69 +637,7 @@ async function searchSoundCloud(query) {
     }
 }
 
-// Scrape YouTube search results to get first video
-async function searchYouTube(query) {
-    const videoId = parseYoutubeId(query);
-    if (videoId) {
-        const info = await getYoutubeOEmbedInfo(videoId);
-        if (info) return info;
-    }
 
-    try {
-        const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAQ%253D%253D`; // filter to videos only
-        const response = await fetch(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-                'Accept-Language': 'es-ES,es;q=0.9'
-            }
-        });
-        if (!response.ok) return null;
-        const html = await response.text();
-        
-        // Try parsing ytInitialData
-        const ytInitialDataMatch = html.match(/var ytInitialData\s*=\s*({.+?});/);
-        if (ytInitialDataMatch) {
-            const data = JSON.parse(ytInitialDataMatch[1]);
-            const video = findFirstVideoRenderer(data);
-            if (video) {
-                const vId = video.videoId;
-                const title = video.title?.runs?.[0]?.text || '';
-                const artist = video.ownerText?.runs?.[0]?.text || 'YouTube';
-                const durationText = video.lengthText?.simpleText || '0:00';
-                const albumArt = video.thumbnail?.thumbnails?.[0]?.url || `https://img.youtube.com/vi/${vId}/hqdefault.jpg`;
-                
-                return {
-                    id: vId,
-                    title,
-                    artist,
-                    albumArt,
-                    uri: `https://www.youtube.com/watch?v=${vId}`,
-                    durationText
-                };
-            }
-        }
-        
-        // Fallback regex search
-        const videoIdMatch = html.match(/"videoId":"([^"]+)"/);
-        if (videoIdMatch) {
-            const vId = videoIdMatch[1];
-            const info = await getYoutubeOEmbedInfo(vId);
-            if (info) return info;
-            return {
-                id: vId,
-                title: 'Video de YouTube',
-                artist: 'YouTube',
-                albumArt: `https://img.youtube.com/vi/${vId}/hqdefault.jpg`,
-                uri: `https://www.youtube.com/watch?v=${vId}`,
-                durationText: '0:00'
-            };
-        }
-        return null;
-    } catch (err) {
-        console.error('Error scraping YouTube:', err);
-        return null;
-    }
-}
 
 // Helper to strip emojis and symbols from names to prevent TTS from spelling them out
 function stripEmojis(text) {
@@ -866,9 +749,7 @@ try {
         }
         
         chatbotSettings.spotifyVoteSkipLimit = parseInt(chatbotSettings.spotifyVoteSkipLimit) || 3;
-        chatbotSettings.youtubeVoteSkipLimit = parseInt(chatbotSettings.youtubeVoteSkipLimit) || 3;
         if (chatbotSettings.spotifyVoteSkipLimit < 1) chatbotSettings.spotifyVoteSkipLimit = 3;
-        if (chatbotSettings.youtubeVoteSkipLimit < 1) chatbotSettings.youtubeVoteSkipLimit = 3;
 
         let settingsModified = false;
         if (!chatbotSettings.bannedWords || chatbotSettings.bannedWords.length === 0) {
@@ -924,7 +805,6 @@ try {
         chatbotSettings.widgets = chatbotSettings.widgets || {};
         // Ensure each widget key exists with defaults if missing
         chatbotSettings.widgets.spotify  = chatbotSettings.widgets.spotify  || { active: true,  x: 80, y: 10 };
-        chatbotSettings.widgets.youtube  = chatbotSettings.widgets.youtube  || { active: false, x: 10, y: 10 };
         chatbotSettings.widgets.donors   = chatbotSettings.widgets.donors   || { active: true,  x: 5,  y: 30 };
         chatbotSettings.widgets.taps     = chatbotSettings.widgets.taps     || { active: true,  x: 5,  y: 55 };
         chatbotSettings.widgets.mvp      = chatbotSettings.widgets.mvp      || { active: true,  x: 5,  y: 80 };
@@ -1045,7 +925,6 @@ try {
         chatbotSettings.wheelOptions = chatbotSettings.wheelOptions || ["5 Sentadillas", "Cantar un fragmento", "Contar un chiste", "Saludar como ardilla", "Omitir canción gratis", "Hacer una mueca graciosa"];
         chatbotSettings.widgets = chatbotSettings.widgets || {};
         chatbotSettings.widgets.spotify  = chatbotSettings.widgets.spotify  || { active: true,  x: 80, y: 10 };
-        chatbotSettings.widgets.youtube  = chatbotSettings.widgets.youtube  || { active: false, x: 10, y: 10 };
         chatbotSettings.widgets.donors   = chatbotSettings.widgets.donors   || { active: true,  x: 5,  y: 30 };
         chatbotSettings.widgets.taps     = chatbotSettings.widgets.taps     || { active: true,  x: 5,  y: 55 };
         chatbotSettings.widgets.mvp      = chatbotSettings.widgets.mvp      || { active: true,  x: 5,  y: 80 };
@@ -1628,403 +1507,7 @@ async function generateAndPlayTTS(data) {
 
 
 
-// ==========================================
-// YOUTUBE PLAYLIST, CONTROLS & COMMANDS
-// ==========================================
 
-async function playNextYoutubeInQueue() {
-    if (youtubeQueue.length === 0) {
-        currentYoutubeTrack = { isPlaying: false };
-        io.emit('youtube_track', currentYoutubeTrack);
-        currentActiveQueueYoutubeTrack = null;
-        return false;
-    }
-    
-    const nextTrack = youtubeQueue.shift();
-    io.emit('youtube_queue_updated', youtubeQueue);
-    emitMonetizedUsersUpdate(false);
-    
-    youtubeVoteSkips.clear();
-    io.emit('youtube_votes_updated', { votes: 0, limit: chatbotSettings.youtubeVoteSkipLimit });
-    
-    console.info(`Reproduciendo siguiente en cola de YouTube: ${nextTrack.title} (Pedido por @${nextTrack.requester})`);
-    
-    currentActiveQueueYoutubeTrack = nextTrack;
-    currentYoutubeTrack = {
-        isPlaying: true,
-        title: nextTrack.title,
-        artist: nextTrack.artist,
-        albumArt: nextTrack.albumArt,
-        id: nextTrack.id,
-        uri: nextTrack.uri,
-        requester: nextTrack.requester,
-        progressMs: 0,
-        durationMs: nextTrack.durationMs || 0,
-        mediaUrl: nextTrack.mediaUrl || '',
-        source: nextTrack.source || 'youtube'
-    };
-    
-    io.emit('youtube_track', currentYoutubeTrack);
-    return true;
-}
-
-function addYoutubeTrackToQueue(track) {
-    youtubeQueue.push(track);
-    io.emit('youtube_queue_updated', youtubeQueue);
-    emitMonetizedUsersUpdate(false);
-    console.info(`Agregado a cola de YouTube: ${track.title} (Pedido por @${track.requester})`);
-    
-    if (youtubeQueue.length === 1 && (!currentYoutubeTrack || !currentYoutubeTrack.isPlaying)) {
-        playNextYoutubeInQueue();
-    }
-}
-
-function handleYoutubeVoteSkip(requester, isStaff) {
-    // !ytskip SIEMPRE requiere votos para TODOS (incluyendo moderadores)
-    // Los moderadores pueden usar !ytskipforce o !ytskipsong para saltar sin votos
-    
-    if (!currentYoutubeTrack || !currentYoutubeTrack.isPlaying) {
-        return;
-    }
-    
-    if (youtubeVoteSkips.has(requester)) {
-        io.emit('system', { type: 'warning', message: `@${requester} ya votó para omitir este video.` });
-        return;
-    }
-    
-    youtubeVoteSkips.add(requester);
-    const votesNeeded = chatbotSettings.youtubeVoteSkipLimit || 3;
-    const currentVotes = youtubeVoteSkips.size;
-    
-    io.emit('youtube_votes_updated', { votes: currentVotes, limit: votesNeeded });
-    io.emit('system', { type: 'info', message: `@${requester} votó para omitir el video. (${currentVotes}/${votesNeeded})` });
-    
-    if (currentVotes >= votesNeeded) {
-        console.log(`Límite de votos YouTube alcanzado (${currentVotes}/${votesNeeded}). Omitiendo video...`);
-        io.emit('system', { type: 'info', message: `🎬 Límite de votos alcanzado. Omitiendo video de YouTube...` });
-        playNextYoutubeInQueue();
-    }
-}
-
-async function handleYoutubeSongRequest(query, requester) {
-    const engine = chatbotSettings.youtubeSearchEngine || 'youtube';
-    console.log(`Procesando solicitud de música (${engine}): "${query}" por @${requester}`);
-    
-    let track = null;
-    if (engine === 'soundcloud') {
-        io.emit('system', { type: 'info', message: `Buscando en SoundCloud: "${query}"...` });
-        const scInfo = await searchSoundCloud(query);
-        if (scInfo) {
-            track = { ...scInfo };
-            
-            let extractedUrl = null;
-            let connectionErrors = 0;
-            // Loop through working Cobalt instances to find a working stream URL
-            for (const apiBase of workingCobaltApis) {
-                try {
-                    console.log(`[SoundCloud Audio] Intentando extraer con instancia Cobalt: ${apiBase}`);
-                    const cobaltRes = await fetch(apiBase, {
-                        method: 'POST',
-                        headers: {
-                            'Accept': 'application/json',
-                            'Content-Type': 'application/json',
-                            'User-Agent': 'Mozilla/5.0'
-                        },
-                        body: JSON.stringify({
-                            url: scInfo.uri,
-                            downloadMode: 'audio',
-                            audioFormat: 'mp3'
-                        }),
-                        signal: AbortSignal.timeout(5000)
-                    });
-                    
-                    if (cobaltRes.ok) {
-                        const data = await cobaltRes.json();
-                        if (data && data.url) {
-                            extractedUrl = data.url;
-                            console.log(`[SoundCloud Audio] Éxito con ${apiBase}! URL extraída.`);
-                            break;
-                        }
-                    } else {
-                        console.warn(`[SoundCloud Audio] Instancia ${apiBase} respondió con estado ${cobaltRes.status}`);
-                        connectionErrors++;
-                    }
-                } catch (e) {
-                    console.warn(`[SoundCloud Audio] Error con ${apiBase}:`, e.message);
-                    connectionErrors++;
-                }
-            }
-
-            if (extractedUrl) {
-                track.mediaUrl = `/api/stream-audio?url=${encodeURIComponent(extractedUrl)}`;
-                track.source = 'soundcloud';
-            } else {
-                console.warn(`[SoundCloud Audio] No se pudo extraer audio en ninguna de las ${workingCobaltApis.length} APIs.`);
-                if (connectionErrors >= workingCobaltApis.length) {
-                    io.emit('system', { 
-                        type: 'warning', 
-                        message: '⚠️ Error de conexión en SoundCloud: Todos los servidores de extracción (Cobalt) fallaron. El cortafuegos corporativo podría estar bloqueando el acceso. En tu WiFi de hogar debería funcionar.' 
-                    });
-                } else {
-                    io.emit('system', { type: 'warning', message: `No se pudo extraer audio directo para "${scInfo.title}".` });
-                }
-                track = null; // force search failure since soundcloud doesn't have an iframe fallback
-            }
-        }
-    } else if (engine === 'youtube_audio') {
-        io.emit('system', { type: 'info', message: `Buscando audio de YouTube sin restricciones: "${query}"...` });
-        const ytInfo = await searchYouTube(query);
-        if (ytInfo) {
-            track = { ...ytInfo };
-            
-            const durationMs = parseDurationToMs(ytInfo.durationText || '0:00');
-            if (durationMs > 0) {
-                track.durationMs = durationMs;
-            }
-
-            let extractedUrl = null;
-            let connectionErrors = 0;
-            const videoUrl = `https://www.youtube.com/watch?v=${ytInfo.id}`;
-            
-            // Loop through working Cobalt instances to find a working stream URL
-            for (const apiBase of workingCobaltApis) {
-                try {
-                    console.log(`[YouTube Audio] Intentando extraer con instancia Cobalt: ${apiBase}`);
-                    const cobaltRes = await fetch(apiBase, {
-                        method: 'POST',
-                        headers: {
-                            'Accept': 'application/json',
-                            'Content-Type': 'application/json',
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
-                        },
-                        body: JSON.stringify({
-                            url: videoUrl,
-                            downloadMode: 'audio',
-                            audioFormat: 'mp3'
-                        }),
-                        signal: AbortSignal.timeout(5000)
-                    });
-                    
-                    if (cobaltRes.ok) {
-                        const data = await cobaltRes.json();
-                        if (data && data.url) {
-                            extractedUrl = data.url;
-                            console.log(`[YouTube Audio] Éxito con ${apiBase}! URL extraída.`);
-                            break;
-                        }
-                    } else {
-                        // Fallback to v7 format check
-                        const cobaltResV7 = await fetch(apiBase, {
-                            method: 'POST',
-                            headers: {
-                                'Accept': 'application/json',
-                                'Content-Type': 'application/json',
-                                'User-Agent': 'Mozilla/5.0'
-                            },
-                            body: JSON.stringify({
-                                url: videoUrl,
-                                isAudioOnly: true,
-                                aFormat: 'mp3'
-                            }),
-                            signal: AbortSignal.timeout(5000)
-                        });
-                        if (cobaltResV7.ok) {
-                            const data = await cobaltResV7.json();
-                            if (data && data.url) {
-                                extractedUrl = data.url;
-                                console.log(`[YouTube Audio] Éxito con ${apiBase} (v7 fallback)! URL extraída.`);
-                                break;
-                            }
-                        } else {
-                            console.warn(`[YouTube Audio] Instancia ${apiBase} y fallback v7 respondieron sin éxito.`);
-                            connectionErrors++;
-                        }
-                    }
-                } catch (e) {
-                    console.warn(`[YouTube Audio] Error con ${apiBase}:`, e.message);
-                    connectionErrors++;
-                }
-            }
-
-            if (extractedUrl) {
-                // Route through our local proxy to prevent any CORS block and keep it robust
-                track.mediaUrl = `/api/stream-audio?url=${encodeURIComponent(extractedUrl)}`;
-                track.source = 'youtube_audio';
-            } else {
-                console.warn(`[YouTube Audio] No se pudo extraer audio en ninguna de las ${workingCobaltApis.length} APIs. Revirtiendo a reproductor estándar.`);
-                if (connectionErrors >= workingCobaltApis.length) {
-                    io.emit('system', { 
-                        type: 'warning', 
-                        message: '⚠️ Error de conexión en YouTube Audio: Todos los servidores de extracción (Cobalt) fallaron. El cortafuegos corporativo podría estar bloqueándolos. Se usará el reproductor de YouTube estándar (puede no sonar en la empresa).' 
-                    });
-                } else {
-                    io.emit('system', { type: 'warning', message: `No se pudo extraer audio directo para "${ytInfo.title}". Usando reproductor de YouTube estándar.` });
-                }
-                track.source = 'youtube'; // Fallback a iframe
-            }
-        }
-    } else {
-        io.emit('system', { type: 'info', message: `Buscando en YouTube: "${query}"...` });
-        track = await searchYouTube(query);
-    }
-
-    if (!track) {
-        const engineLabel = engine === 'soundcloud' ? 'SoundCloud' : (engine === 'youtube_audio' ? 'YouTube Audio' : 'YouTube');
-        io.emit('system', { type: 'warning', message: `No se encontraron canciones en ${engineLabel} para "${query}".` });
-        return;
-    }
-    
-    const trackItem = {
-        id: track.id,
-        title: track.title,
-        artist: track.artist,
-        albumArt: track.albumArt,
-        uri: track.uri,
-        requester: requester,
-        durationText: track.durationText,
-        durationMs: track.durationMs || 0,
-        mediaUrl: track.mediaUrl || '',
-        source: track.source || 'youtube'
-    };
-    
-    addYoutubeTrackToQueue(trackItem);
-    const engineLabel = engine === 'soundcloud' ? 'SoundCloud' : (engine === 'youtube_audio' ? 'YouTube Audio' : 'YouTube');
-    io.emit('system', { type: 'success', message: `@${requester} añadió a la cola de ${engineLabel}: "${trackItem.title}"` });
-}
-
-function sendCurrentYoutubeTrackToChatInfo() {
-    if (currentYoutubeTrack && currentYoutubeTrack.isPlaying) {
-        io.emit('system', { 
-            type: 'info', 
-            message: `YouTube actual: "${currentYoutubeTrack.title}" (Pedido por @${currentYoutubeTrack.requester || 'Anfitrión'})` 
-        });
-    } else {
-        io.emit('system', { 
-            type: 'info', 
-            message: `No hay ningún video de YouTube reproduciéndose.` 
-        });
-    }
-}
-
-function sendYoutubeQueueToChatInfo() {
-    if (youtubeQueue.length === 0) {
-        io.emit('system', { type: 'info', message: `La cola de YouTube está vacía.` });
-        return;
-    }
-    const nextVideos = youtubeQueue.slice(0, 3).map((v, idx) => `${idx + 1}. "${v.title}" (@${v.requester})`).join(', ');
-    io.emit('system', { 
-        type: 'info', 
-        message: `Cola YouTube (total ${youtubeQueue.length}): ${nextVideos}${youtubeQueue.length > 3 ? '...' : ''}` 
-    });
-}
-
-function sendYoutubeVoteStatusToChatInfo() {
-    const votesNeeded = chatbotSettings.youtubeVoteSkipLimit || 3;
-    const currentVotes = youtubeVoteSkips.size;
-    io.emit('system', { 
-        type: 'info', 
-        message: `Votos para omitir YouTube: ${currentVotes}/${votesNeeded}` 
-    });
-}
-
-async function handleYoutubeChatCommand(data) {
-    if (!chatbotSettings.youtubeEnabled || !chatbotSettings.youtubeChatQueueEnabled) {
-        return;
-    }
-
-    const comment = (data.comment || '').trim();
-    const uniqueId = data.uniqueId;
-    const nickname = data.nickname || uniqueId;
-    
-    const isAnchor = (data.userIdentity && typeof data.userIdentity.isAnchor !== 'undefined')
-        ? data.userIdentity.isAnchor
-        : (uniqueId && chatbotSettings.tiktokUsername && uniqueId.toLowerCase() === chatbotSettings.tiktokUsername.toLowerCase());
-        
-    const isModerator = isAnchor || ((data.userIdentity && typeof data.userIdentity.isModeratorOfAnchor !== 'undefined')
-        ? data.userIdentity.isModeratorOfAnchor
-        : !!data.isModerator);
-        
-    const isSubscriber = isAnchor || ((data.userIdentity && typeof data.userIdentity.isSubscriberOfAnchor !== 'undefined')
-        ? data.userIdentity.isSubscriberOfAnchor
-        : !!data.isSubscriber);
-    
-    const prefix = (chatbotSettings.youtubeCommandPrefix || '!yt').trim();
-    const lowerComment = comment.toLowerCase();
-    
-    if (lowerComment === '!ytcurrent' || lowerComment === '!ytcancion') {
-        sendCurrentYoutubeTrackToChatInfo();
-    } else if (lowerComment === '!ytqueue' || lowerComment === '!ytcola') {
-        sendYoutubeQueueToChatInfo();
-    } else if (lowerComment === '!skipyt' || lowerComment === '!ytskip' || lowerComment === '!ytomitir') {
-        handleYoutubeVoteSkip(uniqueId, isModerator || isAnchor);
-    } else if (lowerComment === '!ytvotos') {
-        sendYoutubeVoteStatusToChatInfo();
-    } else if (lowerComment === '!skipytforce' || lowerComment === '!ytskipforce' || lowerComment === '!ytskipsong') {
-        if (isModerator || isAnchor) {
-            console.log(`Force YouTube skip por @${uniqueId}`);
-            io.emit('system', { type: 'info', message: `@${uniqueId} omitió el video de YouTube.` });
-            playNextYoutubeInQueue();
-        }
-    } else if (lowerComment === '!ytclearqueue' || lowerComment === '!ytlimpiarcola') {
-        if (isModerator || isAnchor) {
-            console.log(`Cola de YouTube vaciada por @${uniqueId}`);
-            youtubeQueue = [];
-            io.emit('youtube_queue_updated', youtubeQueue);
-            emitMonetizedUsersUpdate(false);
-            io.emit('system', { type: 'info', message: `@${uniqueId} vació la cola de YouTube.` });
-        }
-    } else if (lowerComment.startsWith(prefix.toLowerCase())) {
-        const query = comment.substring(prefix.length).trim();
-        if (query.length > 0) {
-            const perm = chatbotSettings.youtubePermission || 'all';
-            if (perm === 'mods' && !isModerator && !isAnchor) {
-                io.emit('system', { type: 'warning', message: `@${uniqueId} intentó pedir video de YouTube sin permisos (Mods).` });
-                return;
-            }
-            if (perm === 'subs' && !isSubscriber && !isModerator && !isAnchor) {
-                io.emit('system', { type: 'warning', message: `@${uniqueId} intentó pedir video de YouTube sin permisos (Subs).` });
-                return;
-            }
-
-            // Monetization credit check
-            if (chatbotSettings.youtubeMonetizationEnabled) {
-                if (!isModerator && !isAnchor) {
-                    const minCoins = chatbotSettings.youtubeMinCoins || 5;
-                    const sessionCoins = sessionGiftCoins[uniqueId.toLowerCase()] || 0;
-                    const credits = userMusicCredits[uniqueId.toLowerCase()] || 0;
-                    const hasPermission = (sessionCoins >= minCoins) || (credits >= 1);
-                    
-                    if (!hasPermission) {
-                        io.emit('system', { 
-                            type: 'warning', 
-                            message: `@${uniqueId} no tiene permiso para pedir video de YouTube. Requiere enviar un regalo de al menos ${minCoins} monedas.` 
-                        });
-                        return;
-                    }
-                    
-                    // Deduct credit (prefer session coins first)
-                    if (sessionCoins >= minCoins) {
-                        sessionGiftCoins[uniqueId.toLowerCase()] -= minCoins;
-                        io.emit('system', { 
-                            type: 'info', 
-                            message: `@${uniqueId} usó ${minCoins} monedas de regalos para pedir video. Monedas restantes en sesión: ${sessionGiftCoins[uniqueId.toLowerCase()]}` 
-                        });
-                    } else if (credits >= 1) {
-                        userMusicCredits[uniqueId.toLowerCase()] = credits - 1;
-                        io.emit('system', { 
-                            type: 'info', 
-                            message: `@${uniqueId} usó 1 crédito de música. Créditos restantes: ${userMusicCredits[uniqueId.toLowerCase()]}` 
-                        });
-                    }
-                }
-            }
-
-            await handleYoutubeSongRequest(query, uniqueId);
-        } else {
-            sendCurrentYoutubeTrackToChatInfo();
-        }
-    }
-}
 
 // ==========================================
 // SPOTIFY REAL-TIME PLAYER API & POLLING
@@ -2486,8 +1969,8 @@ function sendVoteStatusToChatInfo() {
     });
 }
 
-function getMonetizedUsersData(isSpotify = true) {
-    const minCoins = isSpotify ? (chatbotSettings.spotifyMinCoins || 5) : (chatbotSettings.youtubeMinCoins || 5);
+function getMonetizedUsersData() {
+    const minCoins = chatbotSettings.spotifyMinCoins || 5;
     const monetizedUsers = [];
     
     for (const [userId, coins] of Object.entries(sessionGiftCoins)) {
@@ -2505,13 +1988,9 @@ function getMonetizedUsersData(isSpotify = true) {
     return monetizedUsers.sort((a, b) => b.totalCoins - a.totalCoins);
 }
 
-function emitMonetizedUsersUpdate(isSpotify = true) {
-    const users = getMonetizedUsersData(isSpotify);
-    if (isSpotify) {
-        io.emit('spotify_monetized_users_updated', users);
-    } else {
-        io.emit('youtube_monetized_users_updated', users);
-    }
+function emitMonetizedUsersUpdate() {
+    const users = getMonetizedUsersData();
+    io.emit('spotify_monetized_users_updated', users);
 }
 
 // Function to emit AI queue updates to frontend
@@ -2973,11 +2452,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Remote config details (Client-Server Configuration Toggles)
-let remoteConfig = {
-    youtubeBlocked: false,
-    youtubeBlockMessage: "Esta función se encuentra deshabilitada temporalmente por mantenimiento remoto."
-};
+let remoteConfig = {};
 
 async function loadRemoteConfig() {
     try {
@@ -3246,7 +2721,7 @@ app.get('/api/version', (req, res) => {
     res.json({ version: packageJson.version });
 });
 
-// API: Stream YouTube audio locally to bypass CORS and rights blocks
+// API: Stream audio locally to bypass CORS and rights blocks
 app.get('/api/stream-audio', (req, res) => {
     const streamUrl = req.query.url;
     if (!streamUrl) {
@@ -3846,10 +3321,7 @@ app.get('/music-widget', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'music-widget.html'));
 });
 
-// Route for YouTube Overlay Widget
-app.get('/youtube-widget', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'youtube-widget.html'));
-});
+
 
 // Route for Banner Cocina Widget
 app.get('/banner-cocina', (req, res) => {
@@ -4114,33 +3586,24 @@ function processAccumulatedGift(data, repeatCount) {
     }
     
     // 1. Grant music credits and track session coins
-    if (totalCoins > 0 && (chatbotSettings.spotifyMonetizationEnabled || chatbotSettings.youtubeMonetizationEnabled)) {
-        let minCoins = Infinity;
-        if (chatbotSettings.spotifyMonetizationEnabled) {
-            minCoins = Math.min(minCoins, chatbotSettings.spotifyMinCoins || 5);
-        }
-        if (chatbotSettings.youtubeMonetizationEnabled) {
-            minCoins = Math.min(minCoins, chatbotSettings.youtubeMinCoins || 5);
+    if (totalCoins > 0 && chatbotSettings.spotifyMonetizationEnabled) {
+        const minCoins = chatbotSettings.spotifyMinCoins || 5;
+        
+        // Track session coins for current user
+        sessionGiftCoins[uniqueId] = (sessionGiftCoins[uniqueId] || 0) + totalCoins;
+        
+        const creditsEarned = Math.floor(totalCoins / minCoins);
+        if (creditsEarned > 0) {
+            userMusicCredits[uniqueId] = (userMusicCredits[uniqueId] || 0) + creditsEarned;
+            console.info(`@${uniqueId} earned ${creditsEarned} music credits. Total: ${userMusicCredits[uniqueId]}. Session coins: ${sessionGiftCoins[uniqueId]}`);
+            io.emit('system', { 
+                type: 'success', 
+                message: `@${nickname} ganó ${creditsEarned} crédito(s) de música por enviar ${totalCoins} monedas. ¡Tiene ${userMusicCredits[uniqueId]} créditos en total!` 
+            });
         }
         
-        if (minCoins !== Infinity) {
-            // Track session coins for current user
-            sessionGiftCoins[uniqueId] = (sessionGiftCoins[uniqueId] || 0) + totalCoins;
-            
-            const creditsEarned = Math.floor(totalCoins / minCoins);
-            if (creditsEarned > 0) {
-                userMusicCredits[uniqueId] = (userMusicCredits[uniqueId] || 0) + creditsEarned;
-                console.info(`@${uniqueId} earned ${creditsEarned} music credits. Total: ${userMusicCredits[uniqueId]}. Session coins: ${sessionGiftCoins[uniqueId]}`);
-                io.emit('system', { 
-                    type: 'success', 
-                    message: `@${nickname} ganó ${creditsEarned} crédito(s) de música por enviar ${totalCoins} monedas. ¡Tiene ${userMusicCredits[uniqueId]} créditos en total!` 
-                });
-            }
-            
-            // Broadcast the updated premium/monetized user lists to panel clients
-            emitMonetizedUsersUpdate(true);  // Spotify
-            emitMonetizedUsersUpdate(false); // YouTube
-        }
+        // Broadcast the updated premium/monetized user lists to panel clients
+        emitMonetizedUsersUpdate();  // Spotify
     }
 
     // 2. Grant AI credits
@@ -4462,10 +3925,7 @@ function loadProfile(username) {
                 chatbotSettings.spotifySkipAllowedUsers = "";
                 needsWrite = true;
             }
-            if (chatbotSettings.youtubeSearchEngine === undefined) {
-                chatbotSettings.youtubeSearchEngine = "youtube";
-                needsWrite = true;
-            }
+
 
             // Enforce theme strictly based on connected username to prevent data leakage and manual overrides
             const lowerUsername = sanitized.toLowerCase();
@@ -4809,7 +4269,6 @@ function connectToTikTok(username) {
         messagesToProcess.forEach(msg => {
             handleCloudTTS(msg);
             handleSpotifyChatCommand(msg);
-            handleYoutubeChatCommand(msg);
             handleAiChatCommand(msg);
         });
         backlogChatMessages = [];
@@ -4986,7 +4445,6 @@ function connectToTikTok(username) {
                 } else {
                     handleCloudTTS(data);
                     handleSpotifyChatCommand(data);
-                    handleYoutubeChatCommand(data);
                     handleAiChatCommand(data);
                 }
             }
@@ -5561,13 +5019,7 @@ io.on('connection', (socket) => {
     // Send Spotify queue and votes on connection
     socket.emit('spotify_queue_updated', spotifyQueue);
     socket.emit('spotify_votes_updated', { votes: spotifyVoteSkips.size, limit: chatbotSettings.spotifyVoteSkipLimit });
-    socket.emit('spotify_monetized_users_updated', getMonetizedUsersData(true));
-
-    // Send YouTube queue and votes on connection
-    socket.emit('youtube_queue_updated', youtubeQueue);
-    socket.emit('youtube_votes_updated', { votes: youtubeVoteSkips.size, limit: chatbotSettings.youtubeVoteSkipLimit });
-    socket.emit('youtube_monetized_users_updated', getMonetizedUsersData(false));
-    socket.emit('youtube_track', currentYoutubeTrack);
+    socket.emit('spotify_monetized_users_updated', getMonetizedUsersData());
     socket.emit('remote_config_updated', remoteConfig);
 
     // Handle updates check request
@@ -5630,7 +5082,7 @@ io.on('connection', (socket) => {
         io.emit('overlay_command', data);
     });
 
-    // Toggle active state of widgets (Spotify / YouTube)
+    // Toggle active state of widgets
     socket.on('toggle_widget', (data) => {
         const { widget, active } = data;
         if (widget && chatbotSettings.widgets && chatbotSettings.widgets[widget]) {
@@ -6140,59 +5592,12 @@ io.on('connection', (socket) => {
         }, 600);
     });
 
-    // YouTube Queue socket events
-    socket.on('get_youtube_queue', () => {
-        socket.emit('youtube_queue_updated', youtubeQueue);
-    });
-    
-    socket.on('delete_youtube_queue_item', (index) => {
-        if (index >= 0 && index < youtubeQueue.length) {
-            const removed = youtubeQueue.splice(index, 1);
-            io.emit('youtube_queue_updated', youtubeQueue);
-            console.info(`Eliminado de la cola de YouTube por el anfitrión: ${removed[0].title}`);
-        }
-    });
-    
-    socket.on('play_youtube_queue_item', async (index) => {
-        if (index >= 0 && index < youtubeQueue.length) {
-            const track = youtubeQueue.splice(index, 1)[0];
-            io.emit('youtube_queue_updated', youtubeQueue);
-            
-            youtubeVoteSkips.clear();
-            io.emit('youtube_votes_updated', { votes: 0, limit: chatbotSettings.youtubeVoteSkipLimit });
-            
-            currentActiveQueueYoutubeTrack = track;
-            currentYoutubeTrack = {
-                isPlaying: true,
-                title: track.title,
-                artist: track.artist,
-                albumArt: track.albumArt,
-                id: track.id,
-                uri: track.uri,
-                requester: track.requester,
-                progressMs: 0,
-                durationMs: 0
-            };
-            io.emit('youtube_track', currentYoutubeTrack);
-        }
-    });
-    
-    socket.on('skip_youtube_track', () => {
-        console.info('Skip manual de YouTube solicitado desde el panel.');
-        playNextYoutubeInQueue();
-    });
-    
-    socket.on('clear_youtube_queue', () => {
-        console.info('Cola de YouTube vaciada desde el panel.');
-        youtubeQueue = [];
-        io.emit('youtube_queue_updated', youtubeQueue);
-    });
+
 
     socket.on('clear_monetized_users', () => {
         console.info('Limpieza manual de usuarios premium solicitada.');
         sessionGiftCoins = {};
-        emitMonetizedUsersUpdate(true);  // spotify
-        emitMonetizedUsersUpdate(false); // youtube
+        emitMonetizedUsersUpdate();  // spotify
         io.emit('system', { type: 'info', message: 'Se han limpiado los créditos y monedas acumulados de la sesión.' });
     });
 
@@ -6203,45 +5608,7 @@ io.on('connection', (socket) => {
         io.emit('system', { type: 'info', message: 'Se han reiniciado los rankings de la sesión.' });
     });
 
-    socket.on('youtube_toggle_play', (playingState) => {
-        console.info(`YouTube Play/Pause solicitado desde el panel: ${playingState}`);
-        if (currentYoutubeTrack && currentYoutubeTrack.id) {
-            currentYoutubeTrack.isPlaying = playingState;
-            io.emit('youtube_track', currentYoutubeTrack);
-        } else if (playingState) {
-            // Si queremos reproducir pero no hay track actual cargado, intentamos reproducir la siguiente canción de la cola
-            playNextYoutubeInQueue();
-        }
-    });
 
-    socket.on('youtube_player_error', (data) => {
-        console.warn(`YouTube Player Error for video ${data.id || 'unknown'}: ${data.message || 'unknown error'}`);
-        io.emit('system', { type: 'warning', message: `⚠️ YouTube: No se pudo reproducir el video. ${data.message || 'Error de reproducción.'}` });
-    });
-
-    socket.on('youtube_volume_change', (volume) => {
-        chatbotSettings.youtubeVolume = volume;
-        io.emit('youtube_volume_updated', volume);
-        try {
-            fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
-        } catch (err) {
-            console.error('Error saving settings after YouTube volume change:', err);
-        }
-    });
-
-    socket.on('youtube_player_ended', () => {
-        console.info('El widget de YouTube reportó finalización de video.');
-        playNextYoutubeInQueue();
-    });
-
-    socket.on('youtube_player_status', (status) => {
-        if (currentYoutubeTrack) {
-            currentYoutubeTrack.progressMs = status.progressMs;
-            currentYoutubeTrack.durationMs = status.durationMs;
-            currentYoutubeTrack.isPlaying = status.isPlaying;
-            io.emit('youtube_track_progress', status);
-        }
-    });
 
     // Simulated TikTok events handler for testing
     socket.on('simulate_tiktok_event', (data) => {
@@ -6276,7 +5643,6 @@ io.on('connection', (socket) => {
         if (eventType === 'chat') {
             handleCloudTTS(eventData);
             handleSpotifyChatCommand(eventData);
-            handleYoutubeChatCommand(eventData);
             handleAiChatCommand(eventData);
         } else if (eventType === 'gift') {
             const uniqueId = (eventData.uniqueId || '').toLowerCase();

@@ -37,7 +37,6 @@ export class CanvasEditorManager {
         this.lastWidgetId = null;
         this.cardMapping = {
             spotify: 'spotify-widget-custom-card',
-            youtube: 'youtube-widget-custom-card',
             banner: 'banner-widget-custom-card',
             recetas: 'recetas-widget-custom-card',
             dinamicas: 'dinamicas-widget-custom-card',
@@ -47,7 +46,6 @@ export class CanvasEditorManager {
 
         this.widgets = {
             spotify: { name: 'Spotify / Music', icon: 'music', url: '/music-widget.html', default: { active: true, x: 5, y: 73, width: 90, height: 15, zoom: 100 } },
-            youtube: { name: 'YouTube Player', icon: 'video', url: '/youtube-widget.html', default: { active: false, x: 5, y: 73, width: 90, height: 15, zoom: 100 } },
             banner: { name: 'Banner Cocina', icon: 'image', url: '/banner-cocina.html', default: { active: true, x: 0, y: 0, width: 100, height: 8, zoom: 100 } },
             donors: { name: 'Historial Donaciones', icon: 'heart', url: '/donors-overlay.html', default: { active: true, x: 5, y: 10, width: 42.5, height: 20, zoom: 100 } },
             taps: { name: 'Historial Taps', icon: 'thumbs-up', url: '/taps-overlay.html', default: { active: true, x: 52.5, y: 10, width: 42.5, height: 20, zoom: 100 } },

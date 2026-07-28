@@ -3,7 +3,6 @@ let chatbotConfig = null;
 
 const dynamicWidgets = {
     spotify: { url: '/music-widget.html' },
-    youtube: { url: '/youtube-widget.html' },
     banner: { url: '/banner-cocina.html' },
     donors: { url: '/donors-overlay.html' },
     taps: { url: '/taps-overlay.html' },
@@ -22,7 +21,7 @@ function updateWidgetScale(key, wConfig) {
     let designWidth = 320;
     let designHeight = 400;
 
-    if (key === 'spotify' || key === 'youtube') {
+    if (key === 'spotify') {
         if (wConfig.width > wConfig.height) {
             designWidth = 440;
             designHeight = 100;
@@ -96,7 +95,7 @@ socket.on('chatbot_settings_updated', (config) => {
         if (wConfig.active) {
             // Determine if horizontal layout is appropriate based on aspect ratio
             let finalUrl = info.url;
-            if (key === 'spotify' || key === 'youtube') {
+            if (key === 'spotify') {
                 if (wConfig.width > wConfig.height) {
                     finalUrl += '?layout=horizontal';
                 }

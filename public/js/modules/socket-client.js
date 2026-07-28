@@ -32,9 +32,7 @@ export const SocketClient = {
             'chatbot_settings_updated',
             'system_sounds_updated',
             'goals_updated',
-            'youtube_track',
-            'youtube_queue_updated',
-            'youtube_votes_updated',
+
             'spotify_track',
             'spotify_queue_updated',
             'spotify_votes_updated',
