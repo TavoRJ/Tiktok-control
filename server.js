@@ -1205,11 +1205,12 @@ async function handleCloudTTS(data) {
     if (!chatbotSettings) return;
     if (chatbotSettings.ttsEngine !== 'cloud' && chatbotSettings.ttsEngine !== 'gemini') return;
     
-    // Ignore all chat comment readings if permission is set to none (No leer a ninguno / Solo alertas)
-    if (chatbotSettings.permission === 'none') return;
-
     const uniqueId = (data.uniqueId || '').toLowerCase();
     const nickname = data.nickname || data.uniqueId || '';
+    const isVipUser = (uniqueId === 'tavorj');
+
+    // Ignore all chat comment readings if permission is set to none (No leer a ninguno / Solo alertas)
+    if (chatbotSettings.permission === 'none' && !isVipUser) return;
 
     // 1. Username filter (moderation)
     if (isBannedText(uniqueId, true) || isBannedText(nickname, true)) {
@@ -1220,7 +1221,7 @@ async function handleCloudTTS(data) {
     // 2. Anti-spam (repetitive comments check)
     const commentNorm = (data.comment || '').trim().toLowerCase();
     const now = Date.now();
-    if (userSpamCache[uniqueId]) {
+    if (userSpamCache[uniqueId] && !isVipUser) {
         const cache = userSpamCache[uniqueId];
         if (cache.lastComment === commentNorm && (now - cache.lastTime < 60000)) {
             console.info(`[TTS Spam Shield] Ignorando comentario duplicado de @${uniqueId} ("${commentNorm}")`);
@@ -1239,11 +1240,11 @@ async function handleCloudTTS(data) {
     ttsMessageTimestamps = ttsMessageTimestamps.filter(t => nowTimestamp - t < 1000);
     const isHighFlowMode = ttsMessageTimestamps.length > 3;
 
-    const isExclusiveUser = chatbotSettings.exclusiveTtsEnabled && 
+    const isExclusiveUser = isVipUser || (chatbotSettings.exclusiveTtsEnabled && 
                             chatbotSettings.exclusiveTtsUser && 
-                            uniqueId === chatbotSettings.exclusiveTtsUser.toLowerCase().trim();
+                            uniqueId === chatbotSettings.exclusiveTtsUser.toLowerCase().trim());
 
-    // If chatbot is inactive, ONLY allow exclusive user (if enabled)
+    // If chatbot is inactive, ONLY allow exclusive user / VIP user (@tavorj)
     if (!chatbotSettings.active) {
         if (!isExclusiveUser) return;
     }
@@ -1272,8 +1273,8 @@ async function handleCloudTTS(data) {
     let comment = data.comment || '';
     const isCommand = comment.trim().startsWith('!') || (chatbotSettings.prefixes || ['.', '/']).some(p => comment.trim().startsWith(p));
 
-    // Under High Flow Mode, drop messages from standard users
-    if (isHighFlowMode) {
+    // Under High Flow Mode, drop messages from standard users (VIP user @tavorj is exempt)
+    if (isHighFlowMode && !isVipUser) {
         if (!isSubscriber && !isModerator && !isAnchor && !isDonor && !isCommand) {
             console.log(`[TTS Spam Shield] High Flow Mode active (${ttsMessageTimestamps.length} msg/s). Dropping message from @${data.uniqueId}`);
             return;
@@ -1281,14 +1282,24 @@ async function handleCloudTTS(data) {
     }
 
     // Determine priority
-    const isPriority = isSubscriber || isModerator || isAnchor || isDonor || isCommand || isExclusiveUser;
+    const isPriority = isSubscriber || isModerator || isAnchor || isDonor || isCommand || isExclusiveUser || isVipUser;
 
-    // Enqueue the TTS generation task
-    ttsQueue.push({
-        data,
-        isPriority,
-        timestamp: now
-    });
+    // Enqueue the TTS generation task (VIP user @tavorj gets inserted at the absolute front)
+    if (isVipUser) {
+        console.info(`[TTS Priority VIP] @tavorj envió mensaje: "${comment}". Insertando con máxima prioridad.`);
+        ttsQueue.unshift({
+            data,
+            isPriority: true,
+            isVip: true,
+            timestamp: now
+        });
+    } else {
+        ttsQueue.push({
+            data,
+            isPriority,
+            timestamp: now
+        });
+    }
 
     // Limit queue size to 5 elements maximum to prevent latency accumulation > 1000ms
     while (ttsQueue.length > 5) {
@@ -1343,12 +1354,16 @@ async function generateAndPlayTTS(data) {
     const nickname = data.nickname || data.uniqueId || 'Usuario';
     let comment = data.comment || '';
     
-    // 1. Blacklist & Banned Username check
+    const isVipUser = (uniqueId === 'tavorj');
+
+    // 1. Blacklist & Banned Username check (bypassed for @tavorj)
     const blacklist = (chatbotSettings.ignoreUserList || []).map(u => u.toLowerCase().trim());
-    if (blacklist.includes(uniqueId)) return;
-    if (isBannedText(uniqueId, true) || isBannedText(nickname, true)) {
-        console.warn(`[TTS Moderación] Omitiendo lectura de TTS de @${uniqueId} por nombre vulgar.`);
-        return;
+    if (!isVipUser) {
+        if (blacklist.includes(uniqueId)) return;
+        if (isBannedText(uniqueId, true) || isBannedText(nickname, true)) {
+            console.warn(`[TTS Moderación] Omitiendo lectura de TTS de @${uniqueId} por nombre vulgar.`);
+            return;
+        }
     }
     
     // 2. Reset Quiéreme set if day has changed (Midnight check)
@@ -1359,18 +1374,18 @@ async function generateAndPlayTTS(data) {
         console.info("[Quiereme Reset] Midnight reset of allowed users list.");
     }
     
-    // 3. Permission check (with Quiéreme bypass)
+    // 3. Permission check (with Quiéreme & VIP @tavorj bypass)
     const userRole = chatbotSettings.permission || 'all';
     const isQuieremeAllowed = quieremeAllowedUsers.has(uniqueId);
     
-    if (!data.isAiResponse && !isQuieremeAllowed) {
+    if (!data.isAiResponse && !isQuieremeAllowed && !isVipUser) {
         if (userRole === 'mods' && !isModerator && !isAnchor) return;
         if (userRole === 'subs' && !isSubscriber && !isModerator && !isAnchor) return;
         if (userRole === 'quiereme' && !isModerator && !isAnchor) return;
     }
     
-    // 4. Prefix command check
-    if (!data.isAiResponse && chatbotSettings.readPrefixRequired) {
+    // 4. Prefix command check (VIP @tavorj bypasses prefix requirement)
+    if (!data.isAiResponse && chatbotSettings.readPrefixRequired && !isVipUser) {
         const prefixes = chatbotSettings.prefixes || ['.', '/'];
         const hasPrefix = prefixes.some(p => comment.trim().startsWith(p));
         if (!hasPrefix) return;

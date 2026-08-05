@@ -696,65 +696,7 @@
                         </div>
                     </article>
 
-                    <!-- MVP Entrances Section -->
-                    <article class="card neon span-12">
-                        <div class="card-config-header">
-                            <i data-lucide="crown" class="icon-accent"></i>
-                            <h3>Entradas Especiales para MVP</h3>
-                        </div>
-                        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">
-                            Asigna animaciones únicas a usuarios específicos para cuando entren a tu transmisión en vivo. Si un MVP entra y sale repetidamente, puedes desactivar temporalmente su entrada para evitar spam visual.
-                        </p>
-                        
-                        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                            <!-- MVP Register Form -->
-                            <div style="flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 15px; background: rgba(0,0,0,0.15); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <form id="register-mvp-form" style="display: flex; flex-direction: column; gap: 15px;">
-                                    <h4 style="margin: 0; font-size: 15px; color: var(--text-main);">Registrar Nuevo MVP</h4>
-                                    
-                                    <div class="form-group">
-                                        <label for="mvp-username">Usuario de TikTok (Sin @):</label>
-                                        <input type="text" id="mvp-username" placeholder="Ej. usuario_tiktok" required>
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label for="mvp-animation">Animación a Reproducir:</label>
-                                        <select id="mvp-animation" required>
-                                            <option value="trigger_glove">Guante Pro (Default)</option>
-                                            <option value="trigger_quiereme">Quiéreme (Default)</option>
-                                            <option value="trigger_x2">X2 Battle (Default)</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <button type="submit" class="btn" style="justify-content: center; background-color: var(--accent-red); font-weight: 800;">
-                                        <i data-lucide="plus-circle" style="width: 16px; height: 16px;"></i> Registrar MVP
-                                    </button>
-                                </form>
-                            </div>
-                            
-                            <!-- List of MVP Entrances -->
-                            <div style="flex: 2; min-width: 400px; display: flex; flex-direction: column; gap: 15px;">
-                                <h4 style="margin: 0; font-size: 15px; color: var(--text-main);">Listado de MVPs Registrados</h4>
-                                <div class="queue-table-container" style="max-height: 250px;">
-                                    <table class="queue-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Usuario</th>
-                                                <th>Animación</th>
-                                                <th style="text-align: center;">Activo</th>
-                                                <th>Acciones</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="mvp-list">
-                                            <tr>
-                                                <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 20px;">Cargando MVPs...</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </article>
+
                 </div>
             </section>
 
