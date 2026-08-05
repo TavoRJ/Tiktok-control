@@ -571,29 +571,6 @@
                             </div>
                         </div>
 
-                        <!-- Card: Level Up -->
-                        <div class="card" data-event="trigger_levelup">
-                            <div class="card-menu-container">
-                                <button class="card-menu-btn" onclick="toggleCardMenu(event, 'trigger_levelup')">
-                                    <i data-lucide="more-vertical" class="icon-small"></i>
-                                </button>
-                                <div class="card-menu-dropdown" id="dropdown-trigger_levelup">
-                                    <button onclick="uploadMasterAnimationFile(event, 'trigger_levelup')">Subir archivo</button>
-                                    <button onclick="deleteMasterAnimationFile(event, 'trigger_levelup')" class="danger">Borrar archivo actual</button>
-                                </div>
-                            </div>
-                            <div class="card-image bg-glow-red">
-                                <img src="assets/levelup.png" alt="Level Up"
-                                    onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiMzMyMiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZmlsbD0iI2ZmZiIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+TEVWRUwgVVA8L3RleHQ+PC9zdmc+'">
-                            </div>
-                            <div class="card-info">
-                                <h3>LEVEL UP</h3>
-                                <div class="card-meta">
-                                    <span class="badge pro">PRO</span>
-                                    <span class="position">BACK + FRONT</span>
-                                </div>
-                            </div>
-                        </div>
 
                         <!-- Card: Quiereme -->
                         <div class="card" data-event="trigger_quiereme">
@@ -744,7 +721,6 @@
                                         <label for="mvp-animation">Animación a Reproducir:</label>
                                         <select id="mvp-animation" required>
                                             <option value="trigger_glove">Guante Pro (Default)</option>
-                                            <option value="trigger_levelup">Level Up (Default)</option>
                                             <option value="trigger_quiereme">Quiéreme (Default)</option>
                                             <option value="trigger_x2">X2 Battle (Default)</option>
                                         </select>

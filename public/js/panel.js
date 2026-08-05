@@ -3552,7 +3552,6 @@ function populateMvpAnimationsDropdown() {
     let html = `
         <optgroup label="Animaciones Predeterminadas">
             <option value="trigger_glove">Guante Pro (Predet.)</option>
-            <option value="trigger_levelup">Level Up (Predet.)</option>
             <option value="trigger_quiereme">Quiéreme (Predet.)</option>
             <option value="trigger_x2">X2 Battle Mode (Predet.)</option>
         </optgroup>
@@ -3639,7 +3638,6 @@ function renderMvpList() {
         if (mvp.animationId.startsWith('trigger_')) {
             const defaultNames = {
                 'trigger_glove': 'Guante Pro (Predet.)',
-                'trigger_levelup': 'Level Up (Predet.)',
                 'trigger_quiereme': 'Quiéreme (Predet.)',
                 'trigger_x2': 'X2 Battle (Predet.)'
             };
@@ -3908,7 +3906,7 @@ window.deleteMasterAnimationFile = async function(event, key) {
 // Update master custom badges on the cards
 function updateMasterAnimationsUI(settings) {
     if (!settings) return;
-    const keys = ['trigger_glove', 'trigger_levelup', 'trigger_quiereme', 'trigger_x2'];
+    const keys = ['trigger_glove', 'trigger_quiereme', 'trigger_x2'];
     keys.forEach(key => {
         const card = document.querySelector(`[data-event="${key}"]`);
         if (!card) return;
