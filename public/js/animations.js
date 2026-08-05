@@ -165,10 +165,15 @@ function playCustomAnimation(layerType, fileUrl, textTemplate, durationMs, nickn
         const video = document.createElement('video');
         video.src = fileUrl;
         video.autoplay = true;
-        video.muted = true; // El sonido se reproduce en la app/panel de control
+        video.muted = true;
+        video.setAttribute('autoplay', '');
+        video.setAttribute('muted', '');
+        video.setAttribute('playsinline', '');
+        video.playsInline = true;
         video.style.maxWidth = '500px';
         video.style.maxHeight = '500px';
         container.appendChild(video);
+        video.play().catch(err => console.warn('Animations video play caught:', err));
         
         if (!durationMs) {
             video.onloadedmetadata = function() {

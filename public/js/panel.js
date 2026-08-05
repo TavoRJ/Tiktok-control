@@ -2830,7 +2830,11 @@ urlInputsToUpdate.forEach(id => {
         try {
             const url = new URL(input.value);
             const origin = window.location.origin.replace('localhost', '127.0.0.1');
-            input.value = origin + url.pathname + url.search;
+            let pathname = url.pathname;
+            if (!pathname.endsWith('.html')) {
+                pathname += '.html';
+            }
+            input.value = origin + pathname + url.search;
         } catch (e) {
             // Ignore malformed URLs or other errors
         }

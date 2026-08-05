@@ -36,43 +36,81 @@ socket.on('chatbot_settings_updated', (config) => {
 socket.on('overlay_trigger', (data) => {
     if (filterAnimationId && data.action === 'play_custom_animation' && filterAnimationId !== data.animation.id) return;
 
-    if (data.type === 'battle_rewards_available') {
+    if (data.type === 'gift') {
+        const giftId = (data.giftId || '').toString();
+        const giftName = (data.giftName || '').toLowerCase();
+        
+        // 1. Quiéreme (Heart Me / Quiéreme / ID 7934)
+        if (giftId === '7934' || giftName.includes('quiéreme') || giftName.includes('quiereme') || giftName.includes('heart me')) {
+            triggerMasterAnimation('trigger_quiereme', 'front', 'quiereme-anim', `http://127.0.0.1:${serverPort}/assets/quiereme.png`, `💖 ¡@${data.sender || 'Usuario'} activó el Quiéreme! 💖`, data.sender);
+        }
+        // 2. Guante
+        else if (giftName.includes('glove') || giftName.includes('guante')) {
+            triggerMasterAnimation('trigger_glove', 'front', 'glove-anim', `http://127.0.0.1:${serverPort}/assets/glove.png`, `🥊 ¡@${data.sender || 'Usuario'} envió un Guante! 🥊`, data.sender);
+        }
+    } else if (data.type === 'battle_rewards_available') {
         showBattleRewardsAlert(data.message);
     } else if (data.type === 'glove_activated') {
         showGloveCountdownAlert(data.duration);
     } else if (data.type === 'animation_event') {
         switch (data.action) {
             case 'glove':
-                triggerMasterAnimation('trigger_glove', 'back', 'glove-anim', `http://127.0.0.1:${serverPort}/gift-assets/Guante.png`, `🥊 ¡@${data.nickname} activó el Guante Multiplicador! 🥊`, data.nickname);
+                triggerMasterAnimation('trigger_glove', 'front', 'glove-anim', `http://127.0.0.1:${serverPort}/assets/glove.png`, `🥊 ¡@${data.nickname || 'Usuario'} activó el Guante Multiplicador! 🥊`, data.nickname);
                 break;
             case 'quiereme':
-                triggerMasterAnimation('trigger_quiereme', 'back', 'quiereme-anim', `http://127.0.0.1:${serverPort}/gift-assets/Quiereme.png`, `💖 ¡@${data.nickname} activó el Quiéreme! 💖`, data.nickname);
-                break;
-            case 'levelup':
-                triggerMasterAnimation('trigger_levelup', 'front', 'levelup-anim', `http://127.0.0.1:${serverPort}/gift-assets/LevelUp.png`, `⚡ ¡Subimos de nivel! ⚡`, data.nickname);
+                triggerMasterAnimation('trigger_quiereme', 'front', 'quiereme-anim', `http://127.0.0.1:${serverPort}/assets/quiereme.png`, `💖 ¡@${data.nickname || 'Usuario'} activó el Quiéreme! 💖`, data.nickname);
                 break;
             case 'x2':
-                triggerMasterAnimation('trigger_x2', 'front', 'x2-anim', `http://127.0.0.1:${serverPort}/gift-assets/X2.png`, `⚔️ ¡Modo Batalla X2 Activado! ⚔️`, data.nickname);
+                triggerMasterAnimation('trigger_x2', 'front', 'x2-anim', `http://127.0.0.1:${serverPort}/assets/x2.png`, `⚔️ ¡Modo Batalla X2 Activado! ⚔️`, data.nickname);
                 break;
             case 'join':
-                triggerMasterAnimation('trigger_join', 'front', 'join-anim', `http://127.0.0.1:${serverPort}/gift-assets/Confeti.png`, `✨ ¡@${data.nickname} se unió al Live! ✨`, data.nickname);
+                triggerMasterAnimation('trigger_join', 'front', 'join-anim', `http://127.0.0.1:${serverPort}/assets/neutral-logo.jpg`, `✨ ¡@${data.nickname} se unió al Live! ✨`, data.nickname);
                 break;
         }
     } else if (data.action === 'play_custom_animation') {
-        playCustomAnimation(
-            data.animation.layer,
-            data.animation.filepath,
-            data.animation.text,
-            data.animation.duration,
-            data.nickname
-        );
+        if (data.animation) {
+            playCustomAnimation(
+                data.animation.layer || 'front',
+                data.animation.filepath,
+                data.animation.text,
+                data.animation.duration,
+                data.nickname
+            );
+        }
     }
 });
 
 socket.on('overlay_command', (data) => {
-    if (data.command === 'clear_overlay') {
+    if (data.command === 'clear_overlay' || data.action === 'stop_all') {
         if (layerFront) layerFront.innerHTML = '';
         if (layerBack) layerBack.innerHTML = '';
+    } else if (data.action === 'stop_front') {
+        if (layerFront) layerFront.innerHTML = '';
+    } else if (data.action === 'stop_back') {
+        if (layerBack) layerBack.innerHTML = '';
+    } else if (data.action === 'test_trigger') {
+        const displayName = data.nickname ? `¡@${data.nickname} entró!` : 'TEST';
+        switch (data.event) {
+            case 'trigger_glove':
+                triggerMasterAnimation('trigger_glove', 'front', 'glove-anim', `http://127.0.0.1:${serverPort}/assets/glove.png`, data.nickname ? `${displayName}\nENVIÓ UN GUANTE!` : 'TEST: GUANTE!', data.nickname);
+                break;
+            case 'trigger_quiereme':
+                triggerMasterAnimation('trigger_quiereme', 'front', 'quiereme-anim', `http://127.0.0.1:${serverPort}/assets/quiereme.png`, data.nickname ? `${displayName}\nENVIÓ QUIÉREME!` : 'TEST: QUIÉREME!', data.nickname);
+                break;
+            case 'trigger_x2':
+                triggerMasterAnimation('trigger_x2', 'front', 'x2-anim', `http://127.0.0.1:${serverPort}/assets/x2.png`, data.nickname ? `${displayName}\nMODO BATALLA X2!` : 'TEST: X2 BATTLE!', data.nickname);
+                break;
+        }
+    } else if (data.action === 'play_custom_animation') {
+        if (data.animation) {
+            playCustomAnimation(
+                data.animation.layer || 'front',
+                data.animation.filepath,
+                data.animation.text,
+                data.animation.duration,
+                data.nickname
+            );
+        }
     }
 });
 
@@ -176,9 +214,14 @@ function playCustomAnimation(layerType, fileUrl, textTemplate, durationMs, nickn
         video.src = fileUrl;
         video.autoplay = true;
         video.muted = true;
+        video.setAttribute('autoplay', '');
+        video.setAttribute('muted', '');
+        video.setAttribute('playsinline', '');
+        video.playsInline = true;
         video.style.maxWidth = '400px';
         video.style.maxHeight = '400px';
         container.appendChild(video);
+        video.play().catch(err => console.warn('Overlay video play caught:', err));
         
         if (!durationMs) {
             isDynamicVideo = true;
