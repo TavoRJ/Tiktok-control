@@ -63,7 +63,8 @@ export class CanvasEditorManager {
             recetas: { name: 'Lista Recetas', icon: 'utensils', url: '/recetas.html', default: { active: true, x: 52.5, y: 31, width: 42.5, height: 15, zoom: 100 } },
             dinamicas: { name: 'Metas Dinámicas', icon: 'target', url: '/dinamicas.html', default: { active: true, x: 5, y: 60, width: 90, height: 12, zoom: 100 } },
             ruleta: { name: 'Ruleta Desafíos', icon: 'help-circle', url: '', default: { active: true, x: 10, y: 30, width: 80, height: 40, zoom: 100 } },
-            socials: { name: 'Socials Rotator', icon: 'share-2', url: '/social-rotator.html', default: { active: true, x: 5, y: 89, width: 90, height: 8, zoom: 100 } }
+            socials: { name: 'Socials Rotator', icon: 'share-2', url: '/social-rotator.html', default: { active: true, x: 5, y: 89, width: 90, height: 8, zoom: 100 } },
+            tts: { name: 'Ondas Voz / IA Asistente', icon: 'mic', url: '/tts-widget.html', default: { active: true, x: 25, y: 5, width: 50, height: 12, zoom: 100 } }
         };
 
         this.init();

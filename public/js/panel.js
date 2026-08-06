@@ -1379,10 +1379,12 @@ function updateUIWithConfig(config) {
     
     const spotNeonColorEl = document.getElementById('spotify-neon-color');
     const songlistColorEl = document.getElementById('songlist-color');
+    const ttsWaveColorEl = document.getElementById('tts-wave-color');
     const spotVinylDesignEl = document.getElementById('spotify-vinyl-design');
     const spotVinylSpeedEl = document.getElementById('spotify-vinyl-speed');
     if (spotNeonColorEl) spotNeonColorEl.value = config.spotifyNeonColor || 'cyan';
     if (songlistColorEl) songlistColorEl.value = config.songlistColor || 'cyan';
+    if (ttsWaveColorEl) ttsWaveColorEl.value = config.ttsWaveColor || 'cyan';
     if (spotVinylDesignEl) spotVinylDesignEl.value = config.spotifyVinylDesign || 'classic';
     if (spotVinylSpeedEl) spotVinylSpeedEl.value = config.spotifyVinylSpeed || 'normal';
 
@@ -1698,6 +1700,7 @@ function sendUpdatedSettings() {
         spotifyPosition: document.getElementById('spotify-position') ? document.getElementById('spotify-position').value : 'bottom-left',
         spotifyNeonColor: document.getElementById('spotify-neon-color') ? document.getElementById('spotify-neon-color').value : 'cyan',
         songlistColor: document.getElementById('songlist-color') ? document.getElementById('songlist-color').value : 'cyan',
+        ttsWaveColor: document.getElementById('tts-wave-color') ? document.getElementById('tts-wave-color').value : 'cyan',
         spotifyVinylDesign: document.getElementById('spotify-vinyl-design') ? document.getElementById('spotify-vinyl-design').value : 'classic',
         spotifyVinylSpeed: document.getElementById('spotify-vinyl-speed') ? document.getElementById('spotify-vinyl-speed').value : 'normal',
         
@@ -2826,7 +2829,8 @@ const urlInputsToUpdate = [
     'obs-taps-url',
     'obs-mvp-url',
     'obs-social-rotator-url',
-    'obs-custom-animations-url'
+    'obs-custom-animations-url',
+    'obs-tts-url'
 ];
 urlInputsToUpdate.forEach(id => {
     const input = document.getElementById(id);

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GRLive - TTS / IA Soundwave Visualizer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Outfit:wght@600;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --widget-accent-color: #00f0ff;
+            --widget-accent-glow: rgba(0, 240, 255, 0.35);
+            --widget-border-color: #00f0ff;
+            --widget-bg: rgba(15, 10, 25, 0.45);
+            --widget-font: 'Outfit', 'Inter', sans-serif;
+            --widget-scale: 1;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body, html {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: transparent !important;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: var(--widget-font);
+        }
+
+        .tts-widget-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 16px 24px;
+            border-radius: 28px;
+            background: var(--widget-bg);
+            border: 1px solid var(--widget-border-color);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25), inset 0 0 1px rgba(255, 255, 255, 0.2);
+            transform: scale(var(--widget-scale));
+            transform-origin: center center;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            max-width: 90vw;
+            text-align: center;
+        }
+
+        .tts-widget-container.active {
+            opacity: 1;
+            pointer-events: auto;
+            transform: scale(var(--widget-scale)) translateY(0);
+        }
+
+        .tts-header-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border-radius: 50px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--widget-accent-glow);
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+            text-shadow: 0 0 10px var(--widget-accent-glow);
+            box-shadow: 0 0 15px var(--widget-accent-glow);
+        }
+
+        .tts-header-badge.ai-badge {
+            background: linear-gradient(135deg, rgba(0, 240, 255, 0.2) 0%, rgba(153, 0, 255, 0.3) 100%);
+            border-color: rgba(0, 240, 255, 0.6);
+            color: #00f0ff;
+        }
+
+        .wave-visualizer {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            height: 36px;
+            margin: 6px 0;
+        }
+
+        .wave-bar {
+            width: 5px;
+            height: 12px;
+            background: var(--widget-accent-color);
+            border-radius: 10px;
+            box-shadow: 0 0 12px var(--widget-accent-color);
+            animation: wavePulse 1.2s ease-in-out infinite alternate;
+        }
+
+        .wave-bar:nth-child(1) { animation-delay: 0.0s; height: 16px; }
+        .wave-bar:nth-child(2) { animation-delay: 0.2s; height: 28px; }
+        .wave-bar:nth-child(3) { animation-delay: 0.4s; height: 36px; }
+        .wave-bar:nth-child(4) { animation-delay: 0.2s; height: 26px; }
+        .wave-bar:nth-child(5) { animation-delay: 0.1s; height: 18px; }
+
+        @keyframes wavePulse {
+            0% {
+                transform: scaleY(0.3);
+                opacity: 0.5;
+            }
+            100% {
+                transform: scaleY(1.3);
+                opacity: 1;
+                box-shadow: 0 0 20px var(--widget-accent-color);
+            }
+        }
+
+        .tts-comment-text {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1.4;
+            margin-top: 8px;
+            max-width: 320px;
+            word-break: break-word;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+        }
+    </style>
+</head>
+<body>
+    <div class="tts-widget-container" id="tts-container">
+        <div class="tts-header-badge" id="tts-badge">
+            <span id="badge-icon">🎙️</span>
+            <span id="badge-username">@usuario</span>
+        </div>
+        <div class="wave-visualizer">
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+        </div>
+        <div class="tts-comment-text" id="tts-text"></div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const container = document.getElementById('tts-container');
+        const badge = document.getElementById('tts-badge');
+        const badgeIcon = document.getElementById('badge-icon');
+        const badgeUsername = document.getElementById('badge-username');
+        const ttsText = document.getElementById('tts-text');
+
+        let hideTimer = null;
+        let audioPlayer = new Audio();
+
+        audioPlayer.onended = () => {
+            stopVisualizer();
+        };
+
+        socket.on('play_tts_audio', (data) => {
+            if (!data) return;
+            startVisualizer(data);
+
+            if (data.base64Audio) {
+                audioPlayer.src = 'data:audio/mp3;base64,' + data.base64Audio;
+                audioPlayer.play().catch(e => console.warn('Audio play catch:', e));
+            }
+        });
+
+        socket.on('tts_speaking_start', (data) => {
+            if (!data) return;
+            startVisualizer(data);
+        });
+
+        socket.on('tts_speaking_stop', () => {
+            stopVisualizer();
+        });
+
+        function startVisualizer(data) {
+            if (hideTimer) clearTimeout(hideTimer);
+
+            const isAI = !!data.isAI;
+            const rawUser = data.username || data.uniqueId || 'Usuario';
+            const userStr = rawUser.startsWith('@') ? rawUser : `@${rawUser}`;
+
+            if (isAI) {
+                badge.className = 'tts-header-badge ai-badge';
+                badgeIcon.innerText = '🤖';
+                badgeUsername.innerText = 'IA Asistente';
+            } else {
+                badge.className = 'tts-header-badge';
+                badgeIcon.innerText = '🗣️';
+                badgeUsername.innerText = userStr;
+            }
+
+            if (data.comment && data.comment.trim()) {
+                ttsText.innerText = data.comment;
+                ttsText.style.display = 'block';
+            } else {
+                ttsText.style.display = 'none';
+            }
+
+            container.classList.add('active');
+
+            // Fallback timeout after 10s if onended doesn't trigger
+            hideTimer = setTimeout(() => {
+                stopVisualizer();
+            }, 10000);
+        }
+
+        function stopVisualizer() {
+            if (hideTimer) clearTimeout(hideTimer);
+            container.classList.remove('active');
+        }
+
+        socket.on('chatbot_settings_updated', (config) => {
+            if (config) applyGlobalStyles(config);
+        });
+
+        function applyGlobalStyles(config) {
+            const root = document.documentElement;
+            const widgetCfg = (config.widgets && config.widgets.tts) || {};
+            const styles = config.globalWidgetStyles || {};
+
+            const colorMap = {
+                'cyan': '#00f0ff',
+                'purple': '#9900ff',
+                'pink': '#ff0077',
+                'mint': '#00ffaa',
+                'gold': '#ffd700',
+                'white': '#ffffff'
+            };
+
+            const waveColor = config.ttsWaveColor ? (colorMap[config.ttsWaveColor] || config.ttsWaveColor) : '#00f0ff';
+            const borderColor = widgetCfg.borderColor || styles.borderColor || waveColor;
+            const bgHex = widgetCfg.bgColor || styles.bgColor || '#0f0a19';
+            const opacityVal = widgetCfg.bgOpacity !== undefined ? widgetCfg.bgOpacity : (styles.bgOpacity !== undefined ? styles.bgOpacity : 45);
+            const opacity = opacityVal / 100;
+
+            root.style.setProperty('--widget-border-color', borderColor);
+            root.style.setProperty('--widget-accent-color', waveColor);
+            root.style.setProperty('--widget-accent-glow', hexToRgba(waveColor, 0.35));
+
+            if (opacity === 0) {
+                container.style.background = 'transparent';
+                container.style.border = 'none';
+                container.style.boxShadow = 'none';
+                container.style.backdropFilter = 'none';
+                container.style.webkitBackdropFilter = 'none';
+            } else {
+                container.style.background = hexToRgba(bgHex, opacity);
+                container.style.border = `1px solid ${borderColor}`;
+                container.style.boxShadow = `0 10px 30px rgba(0, 0, 0, ${Math.min(0.35, opacity)})`;
+                container.style.backdropFilter = 'blur(16px)';
+                container.style.webkitBackdropFilter = 'blur(16px)';
+            }
+
+            if (widgetCfg.zoom || styles.textScale !== undefined) {
+                const scaleVal = widgetCfg.zoom !== undefined ? widgetCfg.zoom : styles.textScale;
+                root.style.setProperty('--widget-scale', scaleVal / 100);
+            }
+        }
+
+        function hexToRgba(hex, alpha) {
+            hex = hex.replace('#', '');
+            if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+            const num = parseInt(hex, 16);
+            return `rgba(${(num >> 16) & 255}, ${(num >> 8) & 255}, ${num & 255}, ${alpha})`;
+        }
+
+        socket.emit('get_chatbot_settings');
+    </script>
+</body>
+</html>

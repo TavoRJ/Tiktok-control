@@ -11,7 +11,8 @@ const dynamicWidgets = {
     recetas: { url: '/recetas.html' },
     dinamicas: { url: '/dinamicas.html' },
     ruleta: { url: '/ruleta-widget.html' },
-    socials: { url: '/social-rotator.html' }
+    socials: { url: '/social-rotator.html' },
+    tts: { url: '/tts-widget.html' }
 };
 
 function updateWidgetScale(key, wConfig) {
@@ -47,6 +48,9 @@ function updateWidgetScale(key, wConfig) {
     } else if (key === 'socials') {
         designWidth = 360;
         designHeight = 80;
+    } else if (key === 'tts') {
+        designWidth = 340;
+        designHeight = 140;
     }
 
     // Get container dimensions in pixels relative to 1080x1920

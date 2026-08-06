@@ -317,6 +317,7 @@ let chatbotSettings = {
     spotifySkipAllowedUsers: "",
     spotifyNeonColor: "cyan",
     songlistColor: "cyan",
+    ttsWaveColor: "cyan",
     spotifyVinylSpeed: "normal",
     spotifyVinylDesign: "classic",
     themeName: "neutral",
@@ -2659,6 +2660,11 @@ app.get('/custom-animations', (req, res) => {
 // Route for isolated social rotator widget
 app.get('/social-rotator', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'social-rotator.html'));
+});
+
+// Route for isolated TTS & IA soundwave visualizer widget
+app.get('/tts-widget', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'tts-widget.html'));
 });
 
 // Route for Spotify Authorization Redirect

@@ -2195,6 +2195,17 @@
                             </select>
                         </div>
                         <div class="form-group">
+                            <label for="tts-wave-color">Color de Ondas Voz / IA Asistente:</label>
+                            <select id="tts-wave-color">
+                                <option value="cyan">Celeste Neón (Predeterminado)</option>
+                                <option value="purple">Morado Mágico</option>
+                                <option value="pink">Rosa Dulce</option>
+                                <option value="mint">Verde Menta</option>
+                                <option value="gold">Dorado Sunset</option>
+                                <option value="white">Blanco Cristal</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
                             <label for="spotify-vinyl-design">Diseño del Vinilo:</label>
                             <select id="spotify-vinyl-design">
                                 <option value="classic">Vinilo Clásico Negro</option>
@@ -2418,6 +2429,13 @@
                                     <div style="display: flex; gap: 10px;">
                                         <input type="text" id="obs-widgets-url" value="http://127.0.0.1:3000/widgets.html" readonly style="flex-grow: 1; background: rgba(255,255,255,0.05); color: var(--text-main); font-family: monospace; border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 6px; font-size: 13px;">
                                         <button class="btn secondary small" id="btn-copy-obs-widgets" onclick="navigator.clipboard.writeText('http://127.0.0.1:3000/widgets.html'); showToast('¡Enlace de Widgets copiado!', 'success')">Copiar</button>
+                                    </div>
+                                </div>
+                                <div class="span-6">
+                                    <strong style="color: #9900ff; display: block; margin-bottom: 5px;">3. Widget Ondas Voz TTS / IA Asistente (.html):</strong>
+                                    <div style="display: flex; gap: 10px;">
+                                        <input type="text" id="obs-tts-url" value="http://127.0.0.1:3000/tts-widget.html" readonly style="flex-grow: 1; background: rgba(255,255,255,0.05); color: var(--text-main); font-family: monospace; border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 6px; font-size: 13px;">
+                                        <button class="btn secondary small" id="btn-copy-obs-tts" onclick="navigator.clipboard.writeText('http://127.0.0.1:3000/tts-widget.html'); showToast('¡Enlace de Ondas IA copiado!', 'success')">Copiar</button>
                                     </div>
                                 </div>
                             </div>
