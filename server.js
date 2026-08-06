@@ -2651,6 +2651,11 @@ app.get('/animations', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'animations.html'));
 });
 
+// Route for dedicated custom uploaded animations overlay
+app.get('/custom-animations', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'custom-animations.html'));
+});
+
 // Route for isolated social rotator widget
 app.get('/social-rotator', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'social-rotator.html'));

@@ -630,12 +630,19 @@
                         <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">
                             Sube tus archivos de animación (WebM, MP4, GIF, PNG, MP3). Podrás probarlos directamente, asignarlos a las entradas MVP o utilizarlos como fuentes de navegador individuales en tu OBS o TikTok Live Studio copiando su URL.
                         </p>
-                        
+                                      <div style="margin-bottom: 20px; background: rgba(0, 255, 204, 0.05); border: 1px solid rgba(0, 255, 204, 0.2); padding: 15px; border-radius: 8px; width: 100%;">
+                            <strong style="color: #00ffcc; display: block; margin-bottom: 8px; font-size: 13px;">URL Exclusiva OBS / TikTok Studio para Animaciones y Videos Personalizados (.html):</strong>
+                            <div style="display: flex; gap: 10px;">
+                                <input type="text" id="obs-custom-animations-url" value="http://127.0.0.1:3000/custom-animations.html" readonly style="flex-grow: 1; background: rgba(0,0,0,0.3); color: var(--text-main); font-family: monospace; border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 6px; font-size: 13px;">
+                                <button class="btn secondary small" onclick="navigator.clipboard.writeText('http://127.0.0.1:3000/custom-animations.html'); showToast('¡Enlace de Animaciones Personalizadas copiado!', 'success')">Copiar URL</button>
+                            </div>
+                        </div>
+
                         <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                            <!-- Upload Form -->
+                            <!-- Form Custom Animations -->
                             <div style="flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 15px; background: rgba(0,0,0,0.15); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color);">
                                 <form id="upload-animation-form" style="display: flex; flex-direction: column; gap: 15px;">
-                                    <h4 style="margin: 0; font-size: 15px; color: var(--text-main);">Subir Nueva Animación</h4>
+                                    <h4 style="margin: 0; font-size: 15px; color: var(--text-main);">Subir Nueva Animación / Video</h4>
                                     
                                     <div class="form-group">
                                         <label for="anim-name">Nombre de la Animación:</label>
@@ -647,22 +654,16 @@
                                         <input type="text" id="anim-text" placeholder="Ej. ¡Llegó el MVP!">
                                     </div>
                                     
-                                    <div style="display: flex; gap: 15px;">
-                                        <div class="form-group flex-1">
-                                            <label for="anim-layer">Capa de Renderizado:</label>
-                                            <select id="anim-layer">
-                                                <option value="front">Frente (Frente del avatar)</option>
-                                                <option value="back">Atrás (Detrás del avatar)</option>
-                                            </select>
-                                        </div>
-                                        <div class="form-group flex-1">
-                                            <label for="anim-duration">Duración (segundos):</label>
-                                            <input type="number" id="anim-duration" value="5" min="1" max="60" required>
-                                        </div>
+                                    <div class="form-group">
+                                        <label for="anim-layer">Capa de Renderizado:</label>
+                                        <select id="anim-layer">
+                                            <option value="front">Frente (Frente del avatar)</option>
+                                            <option value="back">Atrás (Detrás del avatar)</option>
+                                        </select>
                                     </div>
                                     
                                     <div class="form-group">
-                                        <label for="anim-file">Seleccionar Archivo (Video, Audio, Imagen):</label>
+                                        <label for="anim-file">Seleccionar Archivo (WebM, MP4, GIF, PNG):</label>
                                         <input type="file" id="anim-file" accept="image/*,video/*,audio/*" required style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 6px; border: 1px dashed var(--border-color); font-size: 13px;">
                                     </div>
                                     
@@ -680,7 +681,7 @@
                                         <thead>
                                             <tr>
                                                 <th>Nombre</th>
-                                                <th>Duración</th>
+                                                <th>Tipo</th>
                                                 <th>Capa</th>
                                                 <th>Acciones</th>
                                             </tr>

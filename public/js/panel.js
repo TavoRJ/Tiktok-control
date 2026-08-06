@@ -2825,7 +2825,8 @@ const urlInputsToUpdate = [
     'obs-donors-url',
     'obs-taps-url',
     'obs-mvp-url',
-    'obs-social-rotator-url'
+    'obs-social-rotator-url',
+    'obs-custom-animations-url'
 ];
 urlInputsToUpdate.forEach(id => {
     const input = document.getElementById(id);
@@ -3520,11 +3521,12 @@ function renderCustomAnimationsList() {
     }
     
     list.innerHTML = customAnimations.map(anim => {
-        const obsUrl = `${window.location.origin}/overlay.html?animation=${anim.id}`;
+        const obsUrl = `${window.location.origin}/custom-animations.html?animation=${anim.id}`;
+        const ext = anim.filename ? anim.filename.split('.').pop().toUpperCase() : 'MEDIA';
         return `
             <tr>
                 <td style="font-weight: 600; color: var(--text-main);">${escapeHtml(anim.name)}</td>
-                <td>${anim.duration / 1000}s</td>
+                <td><span class="badge" style="background: rgba(0,240,255,0.1); color: #00f0ff; font-weight: bold;">${ext}</span></td>
                 <td><span class="badge" style="background: rgba(255,255,255,0.05); color: var(--text-muted);">${anim.layer === 'front' ? 'Frente' : 'Atrás'}</span></td>
                 <td>
                     <div style="display: flex; gap: 8px;">
@@ -3748,7 +3750,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const name = document.getElementById('anim-name').value.trim();
             const text = document.getElementById('anim-text').value.trim();
             const layer = document.getElementById('anim-layer').value;
-            const duration = document.getElementById('anim-duration').value;
             const fileInput = document.getElementById('anim-file');
             
             if (fileInput.files.length === 0) {
@@ -3776,7 +3777,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             name,
                             text,
                             layer,
-                            duration,
                             filename: file.name,
                             fileData: base64Data
                         })
