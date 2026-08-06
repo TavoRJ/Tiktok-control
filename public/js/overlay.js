@@ -218,8 +218,8 @@ function playCustomAnimation(layerType, fileUrl, textTemplate, durationMs, nickn
         video.setAttribute('muted', '');
         video.setAttribute('playsinline', '');
         video.playsInline = true;
-        video.style.maxWidth = '400px';
-        video.style.maxHeight = '400px';
+        video.style.maxWidth = '85%';
+        video.style.maxHeight = '70vh';
         container.appendChild(video);
         video.play().catch(err => console.warn('Overlay video play caught:', err));
         
@@ -248,8 +248,8 @@ function playCustomAnimation(layerType, fileUrl, textTemplate, durationMs, nickn
     } else {
         const img = document.createElement('img');
         img.src = fileUrl;
-        img.style.maxWidth = '400px';
-        img.style.maxHeight = '400px';
+        img.style.maxWidth = '85%';
+        img.style.maxHeight = '70vh';
         img.onerror = function() {
             this.style.display = 'none';
             const fallbackLabel = document.createElement('div');

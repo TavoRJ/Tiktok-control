@@ -170,8 +170,8 @@ function playCustomAnimation(layerType, fileUrl, textTemplate, durationMs, nickn
         video.setAttribute('muted', '');
         video.setAttribute('playsinline', '');
         video.playsInline = true;
-        video.style.maxWidth = '500px';
-        video.style.maxHeight = '500px';
+        video.style.maxWidth = '85%';
+        video.style.maxHeight = '70vh';
         container.appendChild(video);
         video.play().catch(err => console.warn('Animations video play caught:', err));
         
@@ -197,8 +197,8 @@ function playCustomAnimation(layerType, fileUrl, textTemplate, durationMs, nickn
     } else if (!isAudio) {
         const img = document.createElement('img');
         img.src = fileUrl;
-        img.style.maxWidth = '500px';
-        img.style.maxHeight = '500px';
+        img.style.maxWidth = '85%';
+        img.style.maxHeight = '70vh';
         img.onerror = function() {
             this.style.display = 'none';
         };
