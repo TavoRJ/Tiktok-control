@@ -78,8 +78,8 @@
         }
 
         .tts-header-badge.ai-badge {
-            background: linear-gradient(135deg, rgba(0, 240, 255, 0.2) 0%, rgba(153, 0, 255, 0.3) 100%);
-            border-color: rgba(0, 240, 255, 0.6);
+            background: linear-gradient(135deg, rgba(0, 240, 255, 0.25) 0%, rgba(153, 0, 255, 0.35) 100%);
+            border-color: rgba(0, 240, 255, 0.7);
             color: #00f0ff;
         }
 
@@ -134,7 +134,7 @@
 <body>
     <div class="tts-widget-container" id="tts-container">
         <div class="tts-header-badge" id="tts-badge">
-            <span id="badge-icon">🎙️</span>
+            <span id="badge-icon">🗣️</span>
             <span id="badge-username">@usuario</span>
         </div>
         <div class="wave-visualizer">
@@ -157,20 +157,13 @@
         const ttsText = document.getElementById('tts-text');
 
         let hideTimer = null;
-        let audioPlayer = new Audio();
 
-        audioPlayer.onended = () => {
-            stopVisualizer();
-        };
+        // NOTE: NO AUDIO PLAYBACK IN THIS WIDGET TO PREVENT DOUBLE AUDIO / ECHO!
+        // THIS WIDGET ONLY VISUALIZES THE SOUNDWAVES VISUALLY.
 
         socket.on('play_tts_audio', (data) => {
             if (!data) return;
             startVisualizer(data);
-
-            if (data.base64Audio) {
-                audioPlayer.src = 'data:audio/mp3;base64,' + data.base64Audio;
-                audioPlayer.play().catch(e => console.warn('Audio play catch:', e));
-            }
         });
 
         socket.on('tts_speaking_start', (data) => {
@@ -187,15 +180,15 @@
 
             const isAI = !!data.isAI;
             const rawUser = data.username || data.uniqueId || 'Usuario';
-            const userStr = rawUser.startsWith('@') ? rawUser : `@${rawUser}`;
-
-            if (isAI) {
+            
+            if (isAI || rawUser.toLowerCase() === 'ia asistente' || rawUser.toLowerCase() === 'ia' || rawUser.toLowerCase() === 'gemini') {
                 badge.className = 'tts-header-badge ai-badge';
                 badgeIcon.innerText = '🤖';
                 badgeUsername.innerText = 'IA Asistente';
             } else {
                 badge.className = 'tts-header-badge';
                 badgeIcon.innerText = '🗣️';
+                const userStr = rawUser.startsWith('@') ? rawUser : `@${rawUser}`;
                 badgeUsername.innerText = userStr;
             }
 
@@ -208,10 +201,13 @@
 
             container.classList.add('active');
 
-            // Fallback timeout after 10s if onended doesn't trigger
+            // Estimate reading time dynamically (approx 70ms per character, min 3.5s, max 15s)
+            const textLen = (data.comment || '').length;
+            const estimatedMs = Math.min(15000, Math.max(3500, textLen * 70 + 1000));
+
             hideTimer = setTimeout(() => {
                 stopVisualizer();
-            }, 10000);
+            }, estimatedMs);
         }
 
         function stopVisualizer() {
@@ -237,7 +233,7 @@
                 'white': '#ffffff'
             };
 
-            const waveColor = config.ttsWaveColor ? (colorMap[config.ttsWaveColor] || config.ttsWaveColor) : '#00f0ff';
+            const waveColor = widgetCfg.borderColor || config.ttsWaveColor ? (colorMap[config.ttsWaveColor] || config.ttsWaveColor) : '#00f0ff';
             const borderColor = widgetCfg.borderColor || styles.borderColor || waveColor;
             const bgHex = widgetCfg.bgColor || styles.bgColor || '#0f0a19';
             const opacityVal = widgetCfg.bgOpacity !== undefined ? widgetCfg.bgOpacity : (styles.bgOpacity !== undefined ? styles.bgOpacity : 45);
@@ -248,17 +244,17 @@
             root.style.setProperty('--widget-accent-glow', hexToRgba(waveColor, 0.35));
 
             if (opacity === 0) {
-                container.style.background = 'transparent';
-                container.style.border = 'none';
-                container.style.boxShadow = 'none';
-                container.style.backdropFilter = 'none';
-                container.style.webkitBackdropFilter = 'none';
+                container.style.setProperty('background', 'transparent', 'important');
+                container.style.setProperty('border', 'none', 'important');
+                container.style.setProperty('box-shadow', 'none', 'important');
+                container.style.setProperty('backdrop-filter', 'none', 'important');
+                container.style.setProperty('-webkit-backdrop-filter', 'none', 'important');
             } else {
-                container.style.background = hexToRgba(bgHex, opacity);
-                container.style.border = `1px solid ${borderColor}`;
-                container.style.boxShadow = `0 10px 30px rgba(0, 0, 0, ${Math.min(0.35, opacity)})`;
-                container.style.backdropFilter = 'blur(16px)';
-                container.style.webkitBackdropFilter = 'blur(16px)';
+                container.style.setProperty('background', hexToRgba(bgHex, opacity), 'important');
+                container.style.setProperty('border', `1px solid ${borderColor}`, 'important');
+                container.style.setProperty('box-shadow', `0 10px 30px rgba(0, 0, 0, ${Math.min(0.35, opacity)})`, 'important');
+                container.style.setProperty('backdrop-filter', 'blur(16px)', 'important');
+                container.style.setProperty('-webkit-backdrop-filter', 'blur(16px)', 'important');
             }
 
             if (widgetCfg.zoom || styles.textScale !== undefined) {

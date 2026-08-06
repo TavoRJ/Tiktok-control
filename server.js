@@ -1496,9 +1496,16 @@ async function generateAndPlayTTS(data) {
             let audioBuffer = fs.readFileSync(tempFile);
             let base64Audio = audioBuffer.toString('base64');
             
+            const isAiResponse = !!data.isAiResponse || (uniqueId === 'ia') || (uniqueId === 'gemini_ai');
+            const displayName = isAiResponse ? 'IA Asistente' : (data.nickname || data.uniqueId || 'Usuario');
+            
             io.emit('play_tts_audio', {
                 base64Audio,
                 playLocation: 'panel',
+                username: displayName,
+                uniqueId: uniqueId,
+                isAI: isAiResponse,
+                comment: data.comment || '',
                 isModerator,
                 isSubscriber
             });

@@ -176,6 +176,13 @@ export class CanvasEditorManager {
             this.saveAllWidgets();
         };
 
+        ['input', 'change'].forEach(evtType => {
+            if (this.inputTitle) this.inputTitle.addEventListener(evtType, applyInspectorChanges);
+            if (this.inputBgOpacity) this.inputBgOpacity.addEventListener(evtType, applyInspectorChanges);
+            if (this.inputBorderColor) this.inputBorderColor.addEventListener(evtType, applyInspectorChanges);
+            if (this.inputBgColor) this.inputBgColor.addEventListener(evtType, applyInspectorChanges);
+        });
+
         if (this.btnSaveInspector) {
             this.btnSaveInspector.addEventListener('click', applyInspectorChanges);
         }
