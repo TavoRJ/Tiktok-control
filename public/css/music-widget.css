@@ -2,6 +2,16 @@
     --accent-color: #ff0077;
     --accent-glow: rgba(255, 0, 119, 0.4);
     --accent-glow-light: rgba(255, 0, 119, 0.15);
+    
+    /* Global customizable styles with dynamic fallbacks */
+    --widget-bg: rgba(10, 5, 15, 0.65);
+    --widget-border-color: rgba(255, 0, 119, 0.4);
+    --widget-font: 'Outfit', 'Inter', sans-serif;
+    --widget-scale: 1;
+    
+    /* Adaptable text colors */
+    --widget-text-main: #ffffff;
+    --widget-text-muted: rgba(255, 255, 255, 0.7);
 }
 
 /* Accent Color Overrides */
@@ -48,7 +58,7 @@ body, html {
     height: 100vh;
     overflow: hidden;
     background-color: transparent; /* Transparente para OBS */
-    font-family: 'Outfit', 'Inter', sans-serif;
+    font-family: var(--widget-font);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -58,28 +68,32 @@ body, html {
 .widget-wrapper {
     position: relative;
     width: 350px;
-    padding: 20px;
+    padding: 18px 20px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: rgba(10, 5, 15, 0.65);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid var(--accent-glow);
-    border-radius: 28px;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 30px var(--accent-glow-light);
+    background: var(--widget-bg);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--widget-border-color);
+    border-radius: 24px;
+    font-family: var(--widget-font);
+    transform: scale(var(--widget-scale));
+    transform-origin: center center;
+    /* Soft clean glow without dark rectangular corner box artifacts */
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), inset 0 0 1px rgba(255, 255, 255, 0.2);
     animation: fadeIn 0.8s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
     transition: all 0.5s ease-in-out;
 }
 
 /* Letrero Neón */
 .neon-sign {
-    margin-bottom: 20px;
+    margin-bottom: 15px;
     text-align: center;
 }
 
 .glowing-text {
-    font-size: 24px;
+    font-size: 20px;
     font-weight: 900;
     letter-spacing: 2px;
     text-transform: uppercase;
@@ -87,24 +101,21 @@ body, html {
     text-shadow: 
         0 0 5px #fff,
         0 0 10px var(--accent-color),
-        0 0 20px var(--accent-color),
-        0 0 40px var(--accent-color);
+        0 0 20px var(--accent-color);
     animation: pulseNeon 2s infinite alternate;
 }
 
 /* Cuerpo del Tocadiscos */
 .tocadiscos {
     position: relative;
-    width: 220px;
-    height: 220px;
-    background: linear-gradient(135deg, var(--accent-glow-light) 0%, rgba(20, 10, 30, 0.85) 100%);
+    width: 200px;
+    height: 200px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(15, 10, 25, 0.45) 100%);
     border: 1px solid var(--accent-glow);
     border-radius: 20px;
-    box-shadow: 
-        inset 0 0 20px var(--accent-glow-light),
-        0 15px 35px rgba(0, 0, 0, 0.5);
+    box-shadow: inset 0 0 15px var(--accent-glow-light);
     overflow: visible; /* Permitir que el brazo salga del cuadro */
-    margin-bottom: 20px;
+    margin-bottom: 18px;
     transition: all 0.5s ease-in-out;
 }
 
@@ -395,18 +406,18 @@ body, html {
 #song-title {
     font-size: 18px;
     font-weight: 800;
-    color: #ffffff;
+    color: var(--widget-text-main);
     margin: 0 0 4px 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.3);
 }
 
 #song-artist {
     font-size: 13px;
     font-weight: 600;
-    color: var(--accent-color);
+    color: var(--widget-text-muted);
     margin: 0;
     white-space: nowrap;
     overflow: hidden;
@@ -461,6 +472,13 @@ body, html {
     box-shadow: none !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
+}
+
+.theme-transparent .tocadiscos,
+.theme-transparent .platter-area {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
 }
 
 /* 2. Theme Apple Music (Clean White & Rose Gold Glass) */
@@ -959,6 +977,137 @@ body, html {
 @keyframes floatingMajo {
     0% { transform: translateY(0) rotate(-4deg); }
     100% { transform: translateY(-8px) rotate(6deg); }
+}
+
+/* ==========================================
+   9. Theme Glass Minimal (Clean Modern Glassmorphism Overlay)
+   ========================================== */
+.theme-glass-minimal {
+    width: 320px !important;
+    background: var(--widget-bg) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border: 1px solid var(--widget-border-color) !important;
+    border-radius: 20px !important;
+    padding: 18px 15px !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), inset 0 0 1px rgba(255, 255, 255, 0.25) !important;
+    transition: all 0.4s ease-in-out !important;
+}
+
+/* Hide clutter */
+.theme-glass-minimal .neon-sign,
+.theme-glass-minimal .knob,
+.theme-glass-minimal .pitch-slider,
+.theme-glass-minimal .tonearm-container {
+    display: none !important;
+}
+
+/* Convert the record player into a clean square album art frame */
+.theme-glass-minimal .tocadiscos {
+    width: 120px !important;
+    height: 120px !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 auto 15px auto !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+}
+
+.theme-glass-minimal .platter-area {
+    width: 100% !important;
+    height: 100% !important;
+    top: 0 !important;
+    left: 0 !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    background: rgba(255, 255, 255, 0.03) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+.theme-glass-minimal .vinyl-record {
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 12px !important;
+    background: transparent !important;
+    animation: none !important;
+    box-shadow: none !important;
+}
+
+.theme-glass-minimal .vinyl-center {
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 12px !important;
+    border: none !important;
+}
+
+.theme-glass-minimal .vinyl-center::after {
+    display: none !important;
+}
+
+.theme-glass-minimal #song-title {
+    font-size: 16px !important;
+}
+
+.theme-glass-minimal #song-artist {
+    font-size: 11px !important;
+    letter-spacing: 0.5px !important;
+}
+
+.theme-glass-minimal .progress-container {
+    height: 4px !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-radius: 2px !important;
+}
+
+.theme-glass-minimal .progress-bar-fill {
+    background: linear-gradient(90deg, var(--accent-color), var(--widget-border-color)) !important;
+    box-shadow: 0 0 6px var(--accent-color) !important;
+}
+
+/* Horizontal Layout for Glass Minimal (Compact Player Bar) */
+.theme-glass-minimal.layout-horizontal {
+    width: 380px !important;
+    height: auto !important;
+    min-height: 80px !important;
+    padding: 10px 12px !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    border-radius: 16px !important;
+}
+
+.theme-glass-minimal.layout-horizontal .tocadiscos {
+    width: 60px !important;
+    height: 60px !important;
+    margin: 0 12px 0 0 !important;
+    flex-shrink: 0 !important;
+}
+
+.theme-glass-minimal.layout-horizontal .song-info {
+    text-align: left !important;
+    margin-top: 0 !important;
+}
+
+.theme-glass-minimal.layout-horizontal #song-title {
+    font-size: 14px !important;
+    text-align: left !important;
+    margin-bottom: 2px !important;
+}
+
+.theme-glass-minimal.layout-horizontal #song-artist {
+    font-size: 10px !important;
+    text-align: left !important;
+}
+
+.theme-glass-minimal.layout-horizontal .progress-container {
+    width: 100% !important;
+    margin: 6px 0 0 0 !important;
+}
+
+.theme-glass-minimal.layout-horizontal .song-requester {
+    font-size: 8px !important;
+    text-align: left !important;
+    margin-top: 4px !important;
 }
 
 /* ==========================================

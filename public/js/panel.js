@@ -1378,9 +1378,11 @@ function updateUIWithConfig(config) {
     if (spotPosEl) spotPosEl.value = config.spotifyPosition || 'bottom-left';
     
     const spotNeonColorEl = document.getElementById('spotify-neon-color');
+    const songlistColorEl = document.getElementById('songlist-color');
     const spotVinylDesignEl = document.getElementById('spotify-vinyl-design');
     const spotVinylSpeedEl = document.getElementById('spotify-vinyl-speed');
-    if (spotNeonColorEl) spotNeonColorEl.value = config.spotifyNeonColor || 'pink';
+    if (spotNeonColorEl) spotNeonColorEl.value = config.spotifyNeonColor || 'cyan';
+    if (songlistColorEl) songlistColorEl.value = config.songlistColor || 'cyan';
     if (spotVinylDesignEl) spotVinylDesignEl.value = config.spotifyVinylDesign || 'classic';
     if (spotVinylSpeedEl) spotVinylSpeedEl.value = config.spotifyVinylSpeed || 'normal';
 
@@ -1694,7 +1696,8 @@ function sendUpdatedSettings() {
         spotifyEnabled: document.getElementById('spotify-active') ? document.getElementById('spotify-active').checked : false,
         spotifyTheme: document.getElementById('spotify-theme') ? document.getElementById('spotify-theme').value : 'apple-music',
         spotifyPosition: document.getElementById('spotify-position') ? document.getElementById('spotify-position').value : 'bottom-left',
-        spotifyNeonColor: document.getElementById('spotify-neon-color') ? document.getElementById('spotify-neon-color').value : 'pink',
+        spotifyNeonColor: document.getElementById('spotify-neon-color') ? document.getElementById('spotify-neon-color').value : 'cyan',
+        songlistColor: document.getElementById('songlist-color') ? document.getElementById('songlist-color').value : 'cyan',
         spotifyVinylDesign: document.getElementById('spotify-vinyl-design') ? document.getElementById('spotify-vinyl-design').value : 'classic',
         spotifyVinylSpeed: document.getElementById('spotify-vinyl-speed') ? document.getElementById('spotify-vinyl-speed').value : 'normal',
         

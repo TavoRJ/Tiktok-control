@@ -13,13 +13,17 @@
     </script>
     <style>
         :root {
-            --coquette-pink-light: #fff0f3;
-            --coquette-pink-mid: #ffccd5;
-            --coquette-pink-accent: #ff85a1;
-            --coquette-pink-dark: #ff477e;
-            --coquette-text: #800e26;
-            --coquette-brown: #4a2c2a;
-            --coquette-rose-viejo: #b76e79;
+            --widget-bg: rgba(15, 10, 25, 0.45);
+            --widget-border-color: #00f0ff;
+            --widget-accent-color: #00f0ff;
+            --widget-border-width: 1px;
+            --widget-font: 'Outfit', sans-serif;
+            --widget-scale: 1;
+            
+            /* Colores de texto y detalles adaptativos */
+            --widget-text-main: #ffffff;
+            --widget-text-muted: rgba(255, 255, 255, 0.7);
+            --widget-accent-glow: rgba(0, 240, 255, 0.25);
         }
 
         * {
@@ -29,7 +33,7 @@
         }
 
         body {
-            font-family: 'Outfit', sans-serif;
+            font-family: var(--widget-font);
             background: transparent !important;
             margin: 0;
             padding: 0;
@@ -51,30 +55,34 @@
 
         .songlist-container {
             width: 100%;
-            background: linear-gradient(135deg, rgba(255, 240, 243, 0.95), rgba(255, 227, 232, 0.9));
-            border: 3px double var(--coquette-pink-accent);
-            border-radius: 20px;
-            box-shadow: 0 8px 24px rgba(255, 133, 161, 0.15), inset 0 0 10px rgba(255, 255, 255, 0.6);
-            padding: 15px;
-            backdrop-filter: blur(8px);
+            background: var(--widget-bg);
+            border: var(--widget-border-width) solid var(--widget-border-color);
+            border-radius: 18px;
+            /* Sombra ultra limpia sin bordes oscuros en OBS */
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), inset 0 0 1px rgba(255, 255, 255, 0.2);
+            padding: 14px;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             position: relative;
+            transform: scale(var(--widget-scale));
+            transform-origin: top left;
+            transition: background 0.3s, border 0.3s, transform 0.3s, box-shadow 0.3s;
         }
 
-        /* Ribbon Bow Decoration */
         .songlist-header {
             text-align: center;
-            margin-bottom: 12px;
-            border-bottom: 2px dashed var(--coquette-pink-mid);
+            margin-bottom: 10px;
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.15);
             padding-bottom: 8px;
             position: relative;
         }
 
         .songlist-title {
-            color: var(--coquette-text);
-            font-size: 15px;
+            color: var(--widget-text-main);
+            font-size: 13px;
             font-weight: 800;
             text-transform: uppercase;
-            letter-spacing: 0.8px;
+            letter-spacing: 1px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -84,9 +92,9 @@
         .songlist-title em {
             font-family: 'Playfair Display', serif;
             font-style: italic;
-            color: var(--coquette-rose-viejo);
+            color: var(--widget-accent-color);
             text-transform: lowercase;
-            font-size: 16px;
+            font-size: 14px;
         }
 
         .song-list-items {
@@ -98,8 +106,8 @@
         .song-item {
             display: flex;
             align-items: center;
-            background: rgba(255, 255, 255, 0.65);
-            border: 1.5px solid rgba(255, 204, 213, 0.5);
+            background: rgba(255, 255, 255, 0.07);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 10px;
             padding: 6px 10px;
             gap: 8px;
@@ -117,15 +125,15 @@
         }
 
         .song-item:hover {
-            background: rgba(255, 255, 255, 0.95);
-            border-color: var(--coquette-pink-accent);
+            background: rgba(255, 255, 255, 0.14);
+            border-color: var(--widget-accent-color);
             transform: scale(1.02);
         }
 
         .song-index {
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 800;
-            color: var(--coquette-rose-viejo);
+            color: var(--widget-accent-color);
             min-width: 14px;
             text-align: center;
         }
@@ -135,7 +143,7 @@
             height: 32px;
             border-radius: 6px;
             object-fit: cover;
-            border: 1px solid var(--coquette-pink-mid);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .song-details {
@@ -146,7 +154,7 @@
         .song-title {
             font-size: 12px;
             font-weight: 600;
-            color: var(--coquette-text);
+            color: var(--widget-text-main);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -154,7 +162,7 @@
 
         .song-artist {
             font-size: 10px;
-            color: var(--coquette-rose-viejo);
+            color: var(--widget-text-muted);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -162,9 +170,9 @@
 
         .song-requester {
             font-size: 9px;
-            background: var(--coquette-pink-light);
-            color: var(--coquette-text);
-            border: 1px solid var(--coquette-pink-mid);
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--widget-text-main);
+            border: 1px solid rgba(255, 255, 255, 0.12);
             border-radius: 12px;
             padding: 2px 6px;
             font-weight: 600;
@@ -177,7 +185,7 @@
         .empty-state {
             text-align: center;
             font-size: 11px;
-            color: var(--coquette-rose-viejo);
+            color: var(--widget-text-muted);
             padding: 20px 10px;
             line-height: 1.5;
             font-style: italic;
@@ -188,7 +196,7 @@
     <div class="songlist-container">
         <div class="songlist-header">
             <div class="songlist-title">
-                🎀 Próximos <em>pedidos</em> 🎵
+                🎵 Próximos <em>pedidos</em> 🎶
             </div>
         </div>
         <div class="song-list-items" id="song-list-items">
@@ -225,7 +233,7 @@
                 row.className = 'song-item';
                 row.style.animationDelay = `${index * 0.08}s`;
                 
-                const art = item.albumArt || 'data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2232%22%20height%3D%2232%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%2523ffccd5%22%2F%3E%3C%2Fsvg%3E';
+                const art = item.albumArt || 'data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2232%22%20height%3D%2232%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22rgba(255,255,255,0.06)%22%2F%3E%3C%2Fsvg%3E';
                 const requesterName = item.requester || 'Anonimo';
                 
                 row.innerHTML = `
@@ -251,9 +259,10 @@
 
         const isIframe = window.self !== window.top;
 
-        // Widget coordinate shifts from Scene canvas
+        // Apply and adapt chatbot settings (including global widget styles) in real time
         socket.on('chatbot_settings_updated', (config) => {
             if (config) {
+                applyGlobalStyles(config);
                 if (config.widgets && config.widgets.songlist) {
                     applyWidgetState(config.widgets.songlist);
                 }
@@ -298,6 +307,79 @@
                 if (cfg.height) document.body.style.height = cfg.height + '%';
                 document.body.style.display = cfg.active ? '' : 'none';
             }
+        }
+
+        // Real-time custom style application
+        function applyGlobalStyles(config) {
+            const root = document.documentElement;
+            const styles = config.globalWidgetStyles || {};
+            
+            // Color map for spotifyNeonColor or songlistColor
+            const colorMap = {
+                'cyan': '#00f0ff',
+                'purple': '#9900ff',
+                'pink': '#ff0077',
+                'mint': '#00ffaa',
+                'gold': '#ffd700',
+                'rose-gold': '#ffaa99',
+                'white': '#ffffff'
+            };
+            
+            const accentHex = config.songlistColor 
+                ? (colorMap[config.songlistColor] || config.songlistColor)
+                : (config.spotifyNeonColor ? (colorMap[config.spotifyNeonColor] || config.spotifyNeonColor) : '#00f0ff');
+                
+            const borderColor = styles.borderColor || accentHex;
+            root.style.setProperty('--widget-border-color', borderColor);
+            root.style.setProperty('--widget-accent-color', borderColor);
+            root.style.setProperty('--widget-accent-glow', hexToRgba(borderColor, 0.25));
+            
+            // 1. Font Family
+            if (styles.fontFamily) {
+                root.style.setProperty('--widget-font', `'${styles.fontFamily}', 'Outfit', sans-serif`);
+            }
+            
+            // 2. Border Thickness
+            if (styles.borderThickness !== undefined) {
+                root.style.setProperty('--widget-border-width', `${styles.borderThickness}px`);
+            }
+            
+            // 3. Background Color and Opacity
+            if (styles.bgColor) {
+                const bgHex = styles.bgColor;
+                const opacity = styles.bgOpacity !== undefined ? styles.bgOpacity / 100 : 0.45;
+                const rgba = hexToRgba(bgHex, opacity);
+                root.style.setProperty('--widget-bg', rgba);
+            }
+            
+            // 4. Text / Size scale
+            if (styles.textScale !== undefined) {
+                root.style.setProperty('--widget-scale', styles.textScale / 100);
+            }
+        }
+
+        // Helper to convert hex color to RGBA
+        function hexToRgba(hex, alpha) {
+            hex = hex.replace('#', '');
+            if (hex.length === 3) {
+                hex = hex.split('').map(char => char + char).join('');
+            }
+            const r = parseInt(hex.substring(0, 2), 16);
+            const g = parseInt(hex.substring(2, 4), 16);
+            const b = parseInt(hex.substring(4, 6), 16);
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+
+        // Helper to estimate color brightness for contrast
+        function getBrightness(hex) {
+            hex = hex.replace('#', '');
+            if (hex.length === 3) {
+                hex = hex.split('').map(char => char + char).join('');
+            }
+            const r = parseInt(hex.substring(0, 2), 16);
+            const g = parseInt(hex.substring(2, 4), 16);
+            const b = parseInt(hex.substring(4, 6), 16);
+            return (r * 299 + g * 587 + b * 114) / 1000;
         }
 
         function escapeHtml(text) {
