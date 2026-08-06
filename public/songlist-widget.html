@@ -312,6 +312,7 @@
         // Real-time custom style application
         function applyGlobalStyles(config) {
             const root = document.documentElement;
+            const widgetCfg = (config.widgets && config.widgets.songlist) || {};
             const styles = config.globalWidgetStyles || {};
             
             // Color map for spotifyNeonColor or songlistColor
@@ -325,36 +326,53 @@
                 'white': '#ffffff'
             };
             
-            const accentHex = config.songlistColor 
-                ? (colorMap[config.songlistColor] || config.songlistColor)
-                : (config.spotifyNeonColor ? (colorMap[config.spotifyNeonColor] || config.spotifyNeonColor) : '#00f0ff');
-                
-            const borderColor = styles.borderColor || accentHex;
+            const presetColor = config.songlistColor ? (colorMap[config.songlistColor] || config.songlistColor) : '#00f0ff';
+            const borderColor = widgetCfg.borderColor || styles.borderColor || presetColor;
+            const bgHex = widgetCfg.bgColor || styles.bgColor || '#0f0a19';
+            const opacityVal = widgetCfg.bgOpacity !== undefined ? widgetCfg.bgOpacity : (styles.bgOpacity !== undefined ? styles.bgOpacity : 45);
+            const opacity = opacityVal / 100;
+
             root.style.setProperty('--widget-border-color', borderColor);
             root.style.setProperty('--widget-accent-color', borderColor);
             root.style.setProperty('--widget-accent-glow', hexToRgba(borderColor, 0.25));
+            
+            const container = document.querySelector('.songlist-container');
+            if (container) {
+                if (opacity === 0) {
+                    container.style.background = 'transparent';
+                    container.style.border = 'none';
+                    container.style.boxShadow = 'none';
+                    container.style.backdropFilter = 'none';
+                    container.style.webkitBackdropFilter = 'none';
+                } else {
+                    container.style.background = hexToRgba(bgHex, opacity);
+                    container.style.border = `1px solid ${borderColor}`;
+                    container.style.boxShadow = `0 4px 20px rgba(0, 0, 0, ${Math.min(0.3, opacity)})`;
+                    container.style.backdropFilter = 'blur(12px)';
+                    container.style.webkitBackdropFilter = 'blur(12px)';
+                }
+            }
             
             // 1. Font Family
             if (styles.fontFamily) {
                 root.style.setProperty('--widget-font', `'${styles.fontFamily}', 'Outfit', sans-serif`);
             }
             
-            // 2. Border Thickness
-            if (styles.borderThickness !== undefined) {
-                root.style.setProperty('--widget-border-width', `${styles.borderThickness}px`);
+            // 2. Custom Title
+            const customTitle = widgetCfg.title || config.songlistTitle;
+            const titleEl = document.querySelector('.songlist-title');
+            if (titleEl) {
+                if (customTitle && customTitle.trim()) {
+                    titleEl.innerHTML = `🎵 ${escapeHtml(customTitle.trim())} 🎶`;
+                } else {
+                    titleEl.innerHTML = `🎵 Próximos <em>pedidos</em> 🎶`;
+                }
             }
             
-            // 3. Background Color and Opacity
-            if (styles.bgColor) {
-                const bgHex = styles.bgColor;
-                const opacity = styles.bgOpacity !== undefined ? styles.bgOpacity / 100 : 0.45;
-                const rgba = hexToRgba(bgHex, opacity);
-                root.style.setProperty('--widget-bg', rgba);
-            }
-            
-            // 4. Text / Size scale
-            if (styles.textScale !== undefined) {
-                root.style.setProperty('--widget-scale', styles.textScale / 100);
+            // 3. Text / Size scale
+            if (widgetCfg.zoom || styles.textScale !== undefined) {
+                const scaleVal = widgetCfg.zoom !== undefined ? widgetCfg.zoom : styles.textScale;
+                root.style.setProperty('--widget-scale', scaleVal / 100);
             }
         }
 

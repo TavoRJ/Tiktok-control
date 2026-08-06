@@ -5309,6 +5309,7 @@ io.on('connection', (socket) => {
         try {
             fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
             io.emit('globalWidgetStylesChanged', chatbotSettings.globalWidgetStyles);
+            io.emit('chatbot_settings_updated', chatbotSettings);
             console.info('[Settings] globalWidgetStyles updated and broadcasted:', chatbotSettings.globalWidgetStyles);
         } catch (err) {
             console.error('Error saving globalWidgetStyles:', err);

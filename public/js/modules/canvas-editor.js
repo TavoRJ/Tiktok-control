@@ -24,6 +24,15 @@ export class CanvasEditorManager {
         this.inputZoom = document.getElementById('inspector-input-zoom');
         this.valZoom = document.getElementById('widget-val-zoom');
         
+        this.inputTitle = document.getElementById('inspector-input-title');
+        this.inputBgOpacity = document.getElementById('inspector-input-bg-opacity');
+        this.valBgOpacity = document.getElementById('widget-val-bg-opacity');
+        this.inputBorderColor = document.getElementById('inspector-input-border-color');
+        this.inputBgColor = document.getElementById('inspector-input-bg-color');
+        
+        this.btnFloatingSave = document.getElementById('btn-floating-save-canvas');
+        this.btnSaveInspector = document.getElementById('btn-save-inspector-widget');
+        
         this.inputUrl = document.getElementById('inspector-obs-url');
         this.btnCopyUrl = document.getElementById('btn-copy-inspector-url');
         this.btnResetLayout = document.getElementById('btn-reset-canvas-layout');
@@ -140,6 +149,42 @@ export class CanvasEditorManager {
                     currentConfig.zoom = parseInt(this.inputZoom.value) || 100;
                     this.widgetsConfig[this.activeWidgetId] = currentConfig;
                     this.saveAllWidgets();
+                }
+            });
+        }
+
+        if (this.inputBgOpacity) {
+            this.inputBgOpacity.addEventListener('input', () => {
+                if (this.valBgOpacity) {
+                    this.valBgOpacity.textContent = `${this.inputBgOpacity.value}%`;
+                }
+            });
+        }
+
+        const applyInspectorChanges = () => {
+            if (!this.activeWidgetId) return;
+            const info = this.widgets[this.activeWidgetId];
+            const currentConfig = this.widgetsConfig[this.activeWidgetId] || { ...info.default };
+            
+            if (this.inputTitle) currentConfig.title = this.inputTitle.value.trim();
+            if (this.inputBgOpacity) currentConfig.bgOpacity = parseInt(this.inputBgOpacity.value);
+            if (this.inputBorderColor) currentConfig.borderColor = this.inputBorderColor.value;
+            if (this.inputBgColor) currentConfig.bgColor = this.inputBgColor.value;
+            
+            this.widgetsConfig[this.activeWidgetId] = currentConfig;
+            this.saveAllWidgets();
+        };
+
+        if (this.btnSaveInspector) {
+            this.btnSaveInspector.addEventListener('click', applyInspectorChanges);
+        }
+
+        if (this.btnFloatingSave) {
+            this.btnFloatingSave.addEventListener('click', () => {
+                applyInspectorChanges();
+                this.saveAllWidgets();
+                if (window.showToast) {
+                    window.showToast('¡Todos los cambios fueron aplicados y guardados en OBS!', 'success');
                 }
             });
         }
@@ -364,6 +409,15 @@ export class CanvasEditorManager {
         if (this.inputZoom) this.inputZoom.value = zoomVal;
         if (this.valZoom) this.valZoom.textContent = `${zoomVal}%`;
 
+        if (this.inputTitle) this.inputTitle.value = config.title || '';
+        
+        const opacityVal = config.bgOpacity !== undefined ? config.bgOpacity : 45;
+        if (this.inputBgOpacity) this.inputBgOpacity.value = opacityVal;
+        if (this.valBgOpacity) this.valBgOpacity.textContent = `${opacityVal}%`;
+        
+        if (this.inputBorderColor) this.inputBorderColor.value = config.borderColor || '#00f0ff';
+        if (this.inputBgColor) this.inputBgColor.value = config.bgColor || '#0f0a19';
+
         if (this.inspectorDimensions) {
             const pxW = Math.round((config.width / 100) * 1080);
             const pxH = Math.round((config.height / 100) * 1920);
@@ -518,6 +572,14 @@ export class CanvasEditorManager {
         });
 
         this.socket.emit('update_chatbot_settings', { widgets });
+
+        if (this.inputBorderColor || this.inputBgColor || this.inputBgOpacity) {
+            this.socket.emit('updateGlobalWidgetStyles', {
+                borderColor: this.inputBorderColor ? this.inputBorderColor.value : '#00f0ff',
+                bgColor: this.inputBgColor ? this.inputBgColor.value : '#0f0a19',
+                bgOpacity: this.inputBgOpacity ? parseInt(this.inputBgOpacity.value) : 45
+            });
+        }
     }
 
     toggleWidgetState(id, active) {
