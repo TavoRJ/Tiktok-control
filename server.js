@@ -360,16 +360,17 @@ let chatbotSettings = {
     bannerSlide2: "¡Pide tu canción en el chat usando !song 🎵",
     bannerSlide3: "Meta de Regalos Activa (Calculada automáticamente)",
     widgets: {
-        spotify: { active: true, x: 5, y: 70, width: 90, height: 15 },
-        banner: { active: true, x: 0, y: 0, width: 100, height: 8 },
-        donors: { active: true, x: 5, y: 10, width: 90, height: 10 },
-        taps: { active: true, x: 5, y: 22, width: 90, height: 10 },
-        mvp: { active: true, x: 5, y: 34, width: 90, height: 10 },
-        songlist: { active: true, x: 5, y: 46, width: 90, height: 12 },
-        recetas: { active: true, x: 5, y: 59, width: 90, height: 10 },
-        dinamicas: { active: true, x: 5, y: 70, width: 90, height: 10 },
-        ruleta: { active: true, x: 5, y: 30, width: 90, height: 40 },
-        socials: { active: true, x: 5, y: 82, width: 90, height: 8 }
+        spotify: { active: false, x: 5, y: 70, width: 90, height: 15 },
+        banner: { active: false, x: 0, y: 0, width: 100, height: 8 },
+        donors: { active: false, x: 5, y: 10, width: 90, height: 10 },
+        taps: { active: false, x: 5, y: 22, width: 90, height: 10 },
+        mvp: { active: false, x: 5, y: 34, width: 90, height: 10 },
+        songlist: { active: false, x: 5, y: 46, width: 90, height: 12 },
+        recetas: { active: false, x: 5, y: 59, width: 90, height: 10 },
+        dinamicas: { active: false, x: 5, y: 70, width: 90, height: 10 },
+        ruleta: { active: false, x: 5, y: 30, width: 90, height: 40 },
+        socials: { active: false, x: 5, y: 82, width: 90, height: 8 },
+        tts: { active: false, x: 25, y: 5, width: 50, height: 12 }
     },
     globalWidgetStyles: {
         fontFamily: "Outfit",

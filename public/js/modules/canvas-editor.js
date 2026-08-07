@@ -55,17 +55,17 @@ export class CanvasEditorManager {
         };
 
         this.widgets = {
-            spotify: { name: 'Spotify / Music', icon: 'music', url: '/music-widget.html', default: { active: true, x: 5, y: 73, width: 90, height: 15, zoom: 100 } },
-            banner: { name: 'Banner Cocina', icon: 'image', url: '/banner-cocina.html', default: { active: true, x: 0, y: 0, width: 100, height: 8, zoom: 100 } },
-            donors: { name: 'Historial Donaciones', icon: 'heart', url: '/donors-overlay.html', default: { active: true, x: 5, y: 10, width: 42.5, height: 20, zoom: 100 } },
-            taps: { name: 'Historial Taps', icon: 'thumbs-up', url: '/taps-overlay.html', default: { active: true, x: 52.5, y: 10, width: 42.5, height: 20, zoom: 100 } },
-            mvp: { name: 'MVP Overlay', icon: 'award', url: '/mvp-overlay.html', default: { active: true, x: 5, y: 31, width: 42.5, height: 15, zoom: 100 } },
-            songlist: { name: 'Song Request Queue', icon: 'list-music', url: '/songlist-widget.html', default: { active: true, x: 5, y: 47, width: 90, height: 12, zoom: 100 } },
-            recetas: { name: 'Lista Recetas', icon: 'utensils', url: '/recetas.html', default: { active: true, x: 52.5, y: 31, width: 42.5, height: 15, zoom: 100 } },
-            dinamicas: { name: 'Metas Dinámicas', icon: 'target', url: '/dinamicas.html', default: { active: true, x: 5, y: 60, width: 90, height: 12, zoom: 100 } },
-            ruleta: { name: 'Ruleta Desafíos', icon: 'help-circle', url: '', default: { active: true, x: 10, y: 30, width: 80, height: 40, zoom: 100 } },
-            socials: { name: 'Socials Rotator', icon: 'share-2', url: '/social-rotator.html', default: { active: true, x: 5, y: 89, width: 90, height: 8, zoom: 100 } },
-            tts: { name: 'Ondas Voz / IA Asistente', icon: 'mic', url: '/tts-widget.html', default: { active: true, x: 25, y: 5, width: 50, height: 12, zoom: 100 } }
+            spotify: { name: 'Spotify / Music', icon: 'music', url: '/music-widget.html', default: { active: false, x: 5, y: 73, width: 90, height: 15, zoom: 100 } },
+            banner: { name: 'Banner Cocina', icon: 'image', url: '/banner-cocina.html', default: { active: false, x: 0, y: 0, width: 100, height: 8, zoom: 100 } },
+            donors: { name: 'Historial Donaciones', icon: 'heart', url: '/donors-overlay.html', default: { active: false, x: 5, y: 10, width: 42.5, height: 20, zoom: 100 } },
+            taps: { name: 'Historial Taps', icon: 'thumbs-up', url: '/taps-overlay.html', default: { active: false, x: 52.5, y: 10, width: 42.5, height: 20, zoom: 100 } },
+            mvp: { name: 'MVP Overlay', icon: 'award', url: '/mvp-overlay.html', default: { active: false, x: 5, y: 31, width: 42.5, height: 15, zoom: 100 } },
+            songlist: { name: 'Song Request Queue', icon: 'list-music', url: '/songlist-widget.html', default: { active: false, x: 5, y: 47, width: 90, height: 12, zoom: 100 } },
+            recetas: { name: 'Lista Recetas', icon: 'utensils', url: '/recetas.html', default: { active: false, x: 52.5, y: 31, width: 42.5, height: 15, zoom: 100 } },
+            dinamicas: { name: 'Metas Dinámicas', icon: 'target', url: '/dinamicas.html', default: { active: false, x: 5, y: 60, width: 90, height: 12, zoom: 100 } },
+            ruleta: { name: 'Ruleta Desafíos', icon: 'help-circle', url: '', default: { active: false, x: 10, y: 30, width: 80, height: 40, zoom: 100 } },
+            socials: { name: 'Socials Rotator', icon: 'share-2', url: '/social-rotator.html', default: { active: false, x: 5, y: 89, width: 90, height: 8, zoom: 100 } },
+            tts: { name: 'Ondas Voz / IA Asistente', icon: 'mic', url: '/tts-widget.html', default: { active: false, x: 25, y: 5, width: 50, height: 12, zoom: 100 } }
         };
 
         this.init();
