@@ -6,34 +6,14 @@
     <title>Top Tap Tap - Overlay</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script>
-        if (window.self !== window.top) {
-            document.documentElement.classList.add('is-iframe');
-        }
-    </script>
     <style>
         :root {
-            --bg-glass: rgba(10, 10, 12, 0.25);
-            --border-color: rgba(255, 0, 119, 0.3);
+            --bg-glass: rgba(10, 10, 12, 0.45);
+            --border-color: #00f0ff;
             --text-main: #ffffff;
             --text-muted: #a0a0ab;
-            --accent-glow: transparent;
-            --accent-color: #ff0077;
-        }
-
-        body.theme-neutral {
-            --accent-glow: transparent;
-            --accent-color: #ff0077;
-        }
-
-        body.theme-naya {
-            --accent-glow: transparent;
-            --accent-color: #ff0077;
-        }
-
-        body.theme-majo {
-            --accent-glow: transparent;
-            --accent-color: #ff0077;
+            --accent-glow: rgba(0, 240, 255, 0.35);
+            --accent-color: #00f0ff;
         }
 
         * {
@@ -42,35 +22,26 @@
             box-sizing: border-box;
         }
 
-        body {
-            font-family: 'Outfit', sans-serif;
-            background: transparent !important;
-            color: var(--text-main);
-            width: 320px;
-            height: 600px;
+        body, html {
+            width: 100%;
+            height: 100%;
             overflow: hidden;
-            padding: 15px;
-        }
-
-        html.is-iframe body {
-            width: 100% !important;
-            height: 100% !important;
-            padding: 10px !important;
-            margin: 0 !important;
+            background: transparent !important;
+            font-family: 'Outfit', sans-serif;
         }
 
         .ranking-container {
             width: 100%;
             height: 100%;
             background: var(--bg-glass);
-            border: 2px solid var(--accent-color);
+            border: 2px solid var(--border-color);
             border-radius: 24px;
             padding: 20px;
-            backdrop-filter: blur(15px);
-            box-shadow: none;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
             display: flex;
             flex-direction: column;
-            border-color: var(--accent-color);
             transition: all 0.3s ease;
         }
 
@@ -78,17 +49,17 @@
             display: flex;
             align-items: center;
             gap: 12px;
-            margin-bottom: 20px;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 15px;
+            margin-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 12px;
         }
 
         .ranking-header h2 {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 900;
             letter-spacing: 0.5px;
-            text-shadow: 0 0 10px var(--accent-glow);
             text-transform: uppercase;
+            color: #ffffff;
         }
 
         .ranking-list {
@@ -96,236 +67,150 @@
             flex-direction: column;
             gap: 10px;
             flex-grow: 1;
+            overflow-y: auto;
         }
 
         .ranking-item {
             display: flex;
             align-items: center;
             gap: 12px;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             padding: 10px 14px;
             border-radius: 14px;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            animation: slideIn 0.5s ease forwards;
-        }
-
-        @keyframes slideIn {
-            from { transform: translateX(-30px); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-
-        .ranking-item:hover {
-            background: rgba(255, 255, 255, 0.06);
-            transform: scale(1.03);
-            border-color: var(--accent-color);
-            box-shadow: none;
+            transition: all 0.3s ease;
         }
 
         .rank-badge {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            font-size: 14px;
-            background: rgba(255,255,255,0.08);
-            color: var(--text-muted);
-            flex-shrink: 0;
-        }
-
-        .rank-1 .rank-badge {
-            background: linear-gradient(135deg, #ffd700, #ffa500);
-            color: #111;
-            box-shadow: none;
             font-size: 16px;
-        }
-        .rank-2 .rank-badge {
-            background: linear-gradient(135deg, #c0c0c0, #808080);
-            color: #111;
-            box-shadow: none;
-        }
-        .rank-3 .rank-badge {
-            background: linear-gradient(135deg, #cd7f32, #8b4513);
-            color: #fff;
-            box-shadow: none;
+            font-weight: 900;
+            width: 24px;
+            text-align: center;
         }
 
         .user-info {
+            display: flex;
+            flex-direction: column;
             flex-grow: 1;
-            min-width: 0;
+            overflow: hidden;
         }
 
         .nickname {
             font-weight: 800;
-            font-size: 14px;
+            font-size: 13px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            display: block;
         }
 
         .username {
-            font-size: 10px;
+            font-size: 11px;
             color: var(--text-muted);
-            display: block;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
 
         .score-value {
-            font-family: monospace;
-            font-weight: bold;
-            font-size: 15px;
-            color: var(--text-main);
-            text-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            flex-shrink: 0;
-        }
-
-        .unit-icon {
-            color: #ff4d6d;
-            display: inline-flex;
-            align-items: center;
+            font-weight: 900;
+            font-size: 14px;
+            color: var(--accent-color);
         }
     </style>
 </head>
-<body class="theme-neutral">
-    <div class="ranking-container">
+<body>
+    <div class="ranking-container" id="main-container">
         <div class="ranking-header">
-            <span class="unit-icon" style="font-size: 22px;"><i data-lucide="heart"></i></span>
-            <h2>Top Tap Tap</h2>
+            <i data-lucide="heart" style="color: var(--accent-color);"></i>
+            <h2 id="widget-title" class="widget-title-text">TOP TAP TAP</h2>
         </div>
-        <div class="ranking-list" id="ranking-list">
-            <!-- Table rows dynamically populated -->
+        <div class="ranking-list" id="taps-list">
+            <div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 12px;">
+                Esperando likes en este directo...
+            </div>
         </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
-        const listContainer = document.getElementById('ranking-list');
-        const isIframe = window.self !== window.top;
+        const WIDGET_KEY = 'taps';
+        const container = document.getElementById('main-container');
 
-        // Sync theme
+        socket.on('top_tappers_update', (users) => {
+            renderTappers(users);
+        });
+
         socket.on('chatbot_settings_updated', (config) => {
-            if (config && config.themeName) {
-                document.body.className = 'theme-' + config.themeName;
-            }
-            // Apply initial widget position and visibility from config
-            if (config && config.widgets && config.widgets.taps) {
-                applyWidgetState(config.widgets.taps);
-            }
+            applyGlobalStyles(config);
         });
 
-        // Real-time position control from the scene designer
-        socket.on('widget_position_changed', (data) => {
-            if (data && data.widget === 'taps') {
-                if (!isIframe) {
-                    document.body.style.left = data.x + '%';
-                    document.body.style.top  = data.y + '%';
-                    if (data.width !== undefined) document.body.style.width = data.width + '%';
-                    if (data.height !== undefined) document.body.style.height = data.height + '%';
-                }
-            }
-        });
+        function applyGlobalStyles(config) {
+            if (!config) return;
+            const widgetCfg = (config.widgets && config.widgets[WIDGET_KEY]) || {};
+            const styles = config.globalWidgetStyles || {};
 
-        // Real-time visibility control from the scene designer
-        socket.on('widget_status_changed', (data) => {
-            if (data && data.widget === 'taps') {
-                document.body.style.display = data.active ? '' : 'none';
-            }
-        });
+            const borderColor = widgetCfg.borderColor || styles.borderColor || '#00f0ff';
+            const bgHex = widgetCfg.bgColor || styles.bgColor || '#0f0a19';
+            const bgOpacity = widgetCfg.bgOpacity !== undefined ? widgetCfg.bgOpacity : (styles.bgOpacity !== undefined ? styles.bgOpacity : 45);
+            const opacity = bgOpacity / 100;
+            const customTitle = widgetCfg.title;
 
-        function applyWidgetState(cfg) {
-            if (!cfg) return;
-            if (isIframe) {
-                document.body.style.position = 'relative';
-                document.body.style.left = '0';
-                document.body.style.top = '0';
-                document.body.style.width = '100%';
-                document.body.style.height = '100%';
-                document.body.style.margin = '0';
-                document.body.style.display = cfg.active ? '' : 'none';
+            const root = document.documentElement;
+            root.style.setProperty('--border-color', borderColor);
+            root.style.setProperty('--accent-color', borderColor);
+
+            if (opacity === 0) {
+                container.style.setProperty('background', 'transparent', 'important');
+                container.style.setProperty('border', 'none', 'important');
+                container.style.setProperty('box-shadow', 'none', 'important');
+                container.style.setProperty('backdrop-filter', 'none', 'important');
+                container.style.setProperty('-webkit-backdrop-filter', 'none', 'important');
             } else {
-                document.body.style.position = 'absolute';
-                document.body.style.left = cfg.x + '%';
-                document.body.style.top  = cfg.y + '%';
-                if (cfg.width) document.body.style.width = cfg.width + '%';
-                if (cfg.height) document.body.style.height = cfg.height + '%';
-                document.body.style.display = cfg.active ? '' : 'none';
+                container.style.setProperty('background', hexToRgba(bgHex, opacity), 'important');
+                container.style.setProperty('border', `2px solid ${borderColor}`, 'important');
+                container.style.setProperty('box-shadow', `0 10px 30px rgba(0, 0, 0, ${Math.min(0.35, opacity)})`, 'important');
+                container.style.setProperty('backdrop-filter', 'blur(16px)', 'important');
+                container.style.setProperty('-webkit-backdrop-filter', 'blur(16px)', 'important');
+            }
+
+            if (customTitle && customTitle.trim()) {
+                document.getElementById('widget-title').innerText = customTitle.trim();
             }
         }
 
-        // Sync rankings
-        socket.on('rankings_updated', (rankings) => {
-            renderList(rankings.likes);
-        });
+        function hexToRgba(hex, alpha) {
+            if (!hex) return `rgba(15, 10, 25, ${alpha})`;
+            hex = hex.replace('#', '');
+            if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+            const num = parseInt(hex, 16);
+            return `rgba(${(num >> 16) & 255}, ${(num >> 8) & 255}, ${num & 255}, ${alpha})`;
+        }
 
-        function renderList(users) {
-            if (!users || users.length === 0) {
-                listContainer.innerHTML = `
-                    <div style="text-align: center; color: var(--text-muted); padding: 60px 10px; font-size: 13px;">
-                        Esperando likes en este directo...
-                    </div>
-                `;
-                return;
-            }
-
+        function renderTappers(users) {
+            const listContainer = document.getElementById('taps-list');
+            if (!users || users.length === 0) return;
             listContainer.innerHTML = '';
-            // Only show top 5 in the overlay
             users.slice(0, 5).forEach((user, index) => {
                 const item = document.createElement('div');
                 item.className = `ranking-item rank-${index + 1}`;
-                item.style.animationDelay = `${index * 0.08}s`;
-                
-                let medalEmoji = (index + 1).toString();
-                if (index === 0) medalEmoji = '🥇';
-                else if (index === 1) medalEmoji = '🥈';
-                else if (index === 2) medalEmoji = '🥉';
-
-                const initials = (user.nickname || user.username || 'US').substring(0, 2).toUpperCase();
-                const hasAvatar = user.profilePictureUrl && user.profilePictureUrl.trim().length > 0;
-                const avatarImg = hasAvatar 
-                    ? `<img src="${escapeHtml(user.profilePictureUrl)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />`
-                    : '';
-                const fallbackStyle = hasAvatar ? 'style="display: none;"' : 'style="display: flex; width: 100%; height: 100%; justify-content: center; align-items: center;"';
-
+                let medalEmoji = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`;
                 item.innerHTML = `
                     <div class="rank-badge">${medalEmoji}</div>
-                    <div class="rank-avatar" style="position: relative; overflow: hidden; width: 34px; height: 34px; border-radius: 50%; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; color: var(--text-main); flex-shrink: 0;">
-                        ${avatarImg}
-                        <span class="rank-avatar-fallback" ${fallbackStyle}>${initials}</span>
-                    </div>
                     <div class="user-info">
-                        <span class="nickname">${escapeHtml(user.nickname)}</span>
+                        <span class="nickname">${escapeHtml(user.nickname || user.username)}</span>
                         <span class="username">@${escapeHtml(user.username)}</span>
                     </div>
-                    <div class="score-value">
-                        <span>${user.count.toLocaleString()}</span>
-                    </div>
+                    <div class="score-value">${user.count.toLocaleString()}</div>
                 `;
                 listContainer.appendChild(item);
             });
-            
             lucide.createIcons();
         }
 
         function escapeHtml(text) {
             if (!text) return '';
-            return text.toString()
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/"/g, "&quot;")
-                .replace(/'/g, "&#039;");
+            return text.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
         }
 
+        socket.emit('get_chatbot_settings');
         lucide.createIcons();
     </script>
 </body>

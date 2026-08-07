@@ -3,242 +3,191 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Receta del Día - Widget</title>
-    <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
-    
-    <script>
-        if (window.self !== window.top) {
-            document.documentElement.classList.add('is-iframe');
-        }
-    </script>
+    <title>Lista de Recetas - Overlay</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         :root {
-            --coquette-pink-light: #fff0f3;
-            --coquette-pink-mid: #ffccd5;
-            --coquette-pink-accent: #ff0077;
-            --coquette-pink-dark: #ff0077;
-            --coquette-text: #ffffff;
+            --bg-glass: rgba(10, 10, 12, 0.45);
+            --border-color: #00f0ff;
+            --text-main: #ffffff;
+            --text-muted: #a0a0ab;
+            --accent-glow: rgba(0, 240, 255, 0.35);
+            --accent-color: #00f0ff;
         }
 
         * {
-            box-sizing: border-box;
             margin: 0;
             padding: 0;
+            box-sizing: border-box;
         }
 
-        body {
-            font-family: 'Outfit', sans-serif;
-            background: transparent;
-            color: var(--coquette-text);
-            overflow: hidden;
-            user-select: none;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            width: 100vw;
-        }
-
-        /* Coquette design card */
-        .versus-container {
-            display: flex;
-            flex-direction: column;
-            background: rgba(20, 10, 15, 0.45);
-            border: 2px solid var(--coquette-pink-accent);
-            border-radius: 20px;
-            padding: 18px 25px;
-            box-shadow: none;
-            transition: opacity 0.5s ease, transform 0.5s ease;
-            width: 380px;
-            backdrop-filter: blur(8px);
-        }
-
-        .versus-container.hidden {
-            opacity: 0;
-            transform: translateY(-20px);
-            pointer-events: none;
-        }
-
-        .versus-header {
-            font-family: 'Playfair Display', serif;
-            font-size: 19px;
-            font-weight: 800;
-            font-style: italic;
-            color: var(--coquette-pink-dark);
-            text-align: center;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 12px;
-            border-bottom: 2px dashed var(--coquette-pink-mid);
-            padding-bottom: 8px;
-        }
-
-        .versus-list {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
+        body, html {
             width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: transparent !important;
+            font-family: 'Outfit', sans-serif;
         }
 
-        .versus-item {
+        .recetas-container {
+            width: 100%;
+            height: 100%;
+            background: var(--bg-glass);
+            border: 2px solid var(--border-color);
+            border-radius: 24px;
+            padding: 20px;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
             display: flex;
-            justify-content: center;
+            flex-direction: column;
+            transition: all 0.3s ease;
+        }
+
+        .recetas-header {
+            display: flex;
             align-items: center;
-            background: rgba(255, 240, 243, 0.08);
-            padding: 10px 18px;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 0, 119, 0.35);
-            color: var(--coquette-text);
-            font-weight: 600;
-            font-size: 15px;
-            box-shadow: none;
-            text-align: center;
+            gap: 12px;
+            margin-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 12px;
         }
 
-        html.is-iframe body {
-            width: 100% !important;
-            height: 100% !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            display: block !important;
+        .recetas-header h2 {
+            font-size: 18px;
+            font-weight: 900;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            color: #ffffff;
         }
 
-        html.is-iframe .versus-container {
-            width: 100% !important;
-            height: 100% !important;
-            left: 0 !important;
-            top: 0 !important;
-            position: relative !important;
+        .recetas-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        .receta-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 10px 14px;
+            border-radius: 14px;
+        }
+
+        .receta-name {
+            font-weight: 800;
+            font-size: 13px;
+            color: #ffffff;
+        }
+
+        .receta-cost {
+            font-weight: 900;
+            font-size: 13px;
+            color: var(--accent-color);
         }
     </style>
 </head>
 <body>
-
-    <div id="versus-container" class="versus-container hidden">
-        <div class="versus-header" id="versus-header">RECETA DEL DÍA</div>
-        <div class="versus-list" id="versus-list">
-            <!-- Populated dynamically -->
+    <div class="recetas-container" id="main-container">
+        <div class="recetas-header">
+            <i data-lucide="utensils" style="color: var(--accent-color);"></i>
+            <h2 id="widget-title" class="widget-title-text">LISTA DE RECETAS</h2>
+        </div>
+        <div class="recetas-list" id="recetas-list">
+            <div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 12px;">
+                Cargando recetas...
+            </div>
         </div>
     </div>
 
-    <!-- Socket.io connection -->
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
-        const container = document.getElementById('versus-container');
-        const header = document.getElementById('versus-header');
-        const list = document.getElementById('versus-list');
+        const WIDGET_KEY = 'recetas';
+        const container = document.getElementById('main-container');
 
-        function updateUI(config) {
-            if (!config) return;
-            
-            // Set title
-            header.textContent = config.title || "RECETA DEL DÍA";
-            
-            // Set items
-            list.innerHTML = '';
-            const items = config.items || [];
-            items.forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'versus-item';
-                div.textContent = item.name;
-                list.appendChild(div);
-            });
-
-            // Visibility
-            if (config.visible !== false) {
-                container.classList.remove('hidden');
-            } else {
-                container.classList.add('hidden');
-            }
-        }
-
-        // Socket listeners
-        socket.on('initReceta', (config) => {
-            updateUI(config);
+        socket.on('recetas_updated', (recetas) => {
+            renderRecetas(recetas);
         });
 
-        const isIframe = window.self !== window.top;
-
-        // Widget Layout & Position Control
         socket.on('chatbot_settings_updated', (config) => {
-            if (config && config.widgets && config.widgets.recetas) {
-                applyWidgetState(config.widgets.recetas);
-            }
+            applyGlobalStyles(config);
         });
 
-        socket.on('widget_position_changed', (data) => {
-            if (data && data.widget === 'recetas') {
-                if (!isIframe) {
-                    const container = document.querySelector('.versus-container');
-                    if (container) {
-                        container.style.position = 'absolute';
-                        container.style.left = data.x + '%';
-                        container.style.top  = data.y + '%';
-                        if (data.width !== undefined) container.style.width = data.width + '%';
-                        if (data.height !== undefined) container.style.height = data.height + '%';
-                    }
-                }
-            }
-        });
+        function applyGlobalStyles(config) {
+            if (!config) return;
+            const widgetCfg = (config.widgets && config.widgets[WIDGET_KEY]) || {};
+            const styles = config.globalWidgetStyles || {};
 
-        socket.on('widget_status_changed', (data) => {
-            if (data && data.widget === 'recetas') {
-                document.body.style.display = data.active ? '' : 'none';
-            }
-        });
+            const borderColor = widgetCfg.borderColor || styles.borderColor || '#00f0ff';
+            const bgHex = widgetCfg.bgColor || styles.bgColor || '#0f0a19';
+            const bgOpacity = widgetCfg.bgOpacity !== undefined ? widgetCfg.bgOpacity : (styles.bgOpacity !== undefined ? styles.bgOpacity : 45);
+            const opacity = bgOpacity / 100;
+            const customTitle = widgetCfg.title;
 
-        function applyWidgetState(cfg) {
-            if (!cfg) return;
-            if (isIframe) {
-                document.body.style.display = cfg.active ? '' : 'none';
+            const root = document.documentElement;
+            root.style.setProperty('--border-color', borderColor);
+            root.style.setProperty('--accent-color', borderColor);
+
+            if (opacity === 0) {
+                container.style.setProperty('background', 'transparent', 'important');
+                container.style.setProperty('border', 'none', 'important');
+                container.style.setProperty('box-shadow', 'none', 'important');
+                container.style.setProperty('backdrop-filter', 'none', 'important');
+                container.style.setProperty('-webkit-backdrop-filter', 'none', 'important');
             } else {
-                const container = document.querySelector('.versus-container');
-                if (!container) return;
-                container.style.position = 'absolute';
-                container.style.left = cfg.x + '%';
-                container.style.top  = cfg.y + '%';
-                container.style.margin = '0';
-                if (cfg.width) container.style.width = cfg.width + '%';
-                if (cfg.height) container.style.height = cfg.height + '%';
-                document.body.style.display = 'block';
-                document.body.style.position = 'relative';
-                document.body.style.display = cfg.active ? '' : 'none';
+                container.style.setProperty('background', hexToRgba(bgHex, opacity), 'important');
+                container.style.setProperty('border', `2px solid ${borderColor}`, 'important');
+                container.style.setProperty('box-shadow', `0 10px 30px rgba(0, 0, 0, ${Math.min(0.35, opacity)})`, 'important');
+                container.style.setProperty('backdrop-filter', 'blur(16px)', 'important');
+                container.style.setProperty('-webkit-backdrop-filter', 'blur(16px)', 'important');
+            }
+
+            if (customTitle && customTitle.trim()) {
+                document.getElementById('widget-title').innerText = customTitle.trim();
             }
         }
 
-        // Fallback or manual command listener
-        socket.on('overlay_command', (data) => {
-            if (!data) return;
-            if (data.action === 'vs_show') {
-                container.classList.remove('hidden');
-            } else if (data.action === 'vs_hide') {
-                container.classList.add('hidden');
-            } else if (data.action === 'vs_reset') {
-                header.textContent = "RECETA DEL DÍA: PASTEL DE FRESAS";
-                list.innerHTML = '';
-                const defaultNames = ["Fresas Frescas 10 tazas", "Harina de Trigo 300g", "Azúcar Morena 150g", "Esencia de Vainilla 2 cdas"];
-                defaultNames.forEach(name => {
-                    const div = document.createElement('div');
-                    div.className = 'versus-item';
-                    div.textContent = name;
-                    list.appendChild(div);
-                });
-                container.classList.remove('hidden');
-            } else if (data.action === 'vs_update') {
-                header.textContent = data.title || "RECETA DEL DÍA";
-                list.innerHTML = '';
-                (data.items || []).forEach(item => {
-                    const div = document.createElement('div');
-                    div.className = 'versus-item';
-                    div.textContent = item.name;
-                    list.appendChild(div);
-                });
-                container.classList.remove('hidden');
+        function hexToRgba(hex, alpha) {
+            if (!hex) return `rgba(15, 10, 25, ${alpha})`;
+            hex = hex.replace('#', '');
+            if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+            const num = parseInt(hex, 16);
+            return `rgba(${(num >> 16) & 255}, ${(num >> 8) & 255}, ${num & 255}, ${alpha})`;
+        }
+
+        function renderRecetas(recetas) {
+            const listContainer = document.getElementById('recetas-list');
+            if (!recetas || recetas.length === 0) {
+                listContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 12px;">Sin recetas configuradas</div>';
+                return;
             }
-        });
+            listContainer.innerHTML = '';
+            recetas.forEach((receta) => {
+                const item = document.createElement('div');
+                item.className = 'receta-item';
+                item.innerHTML = `
+                    <span class="receta-name">${escapeHtml(receta.nombre || receta.name)}</span>
+                    <span class="receta-cost">${receta.costo || receta.cost || 0} 🪙</span>
+                `;
+                listContainer.appendChild(item);
+            });
+            lucide.createIcons();
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+
+        socket.emit('get_chatbot_settings');
+        lucide.createIcons();
     </script>
 </body>
 </html>

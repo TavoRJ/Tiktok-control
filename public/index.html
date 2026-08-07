@@ -2460,15 +2460,15 @@
                 </div>
 
                 <div class="grid-12" style="gap: 20px;">
-                    <!-- Column Left: Interactive Phone Canvas (Aspect Ratio 9:16) -->
+                    <!-- Column Left: Clean 9:16 Canvas (Aspect Ratio 9:16) -->
                     <div class="span-5" style="display: flex; justify-content: center; align-items: center; padding: 10px;">
-                        <div class="phone-frame" style="width: 324px; height: 576px; border: 6px solid #1f1f2e; border-radius: 36px; background: radial-gradient(circle at center, #161623 0%, #0d0d15 100%); position: relative; box-shadow: 0 25px 50px rgba(0,0,0,0.8), 0 0 30px rgba(255, 0, 119, 0.1); overflow: hidden;">
+                        <div class="canvas-clean-container" style="width: 324px; height: 576px; border-radius: 12px; border: 1px solid var(--border-color); background: radial-gradient(circle at center, #161623 0%, #0d0d15 100%); position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.5); overflow: hidden;">
                             <!-- Grid Overlay for Alignment -->
                             <div class="canvas-grid-helper" style="position: absolute; top:0; left:0; width:100%; height:100%; background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 20px 20px; pointer-events: none; z-index: 1;"></div>
                             
                             <!-- Safe Area Indicator -->
                             <div style="position: absolute; top: 12%; bottom: 12%; left: 5%; right: 5%; border: 1px dashed rgba(255, 255, 255, 0.15); pointer-events: none; z-index: 1; border-radius: 10px;">
-                                <div style="position: absolute; top: -18px; left: 5px; font-size: 8px; color: rgba(255,255,255,0.4); text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px;">Área Segura TikTok Live</div>
+                                <div style="position: absolute; top: -18px; left: 5px; font-size: 8px; color: rgba(255,255,255,0.4); text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px;">Área Segura 9:16</div>
                             </div>
                             
                             <!-- Draggable Widgets Container -->
@@ -2518,42 +2518,13 @@
                                                 <input type="range" id="inspector-input-y" min="0" max="100" step="0.5" style="width: 100%; cursor: pointer;">
                                             </div>
                                         </div>
-                                        <div class="span-6">
-                                            <div style="display: flex; flex-direction: column; gap: 5px;">
-                                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                                    <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Ancho (Width)</label>
-                                                    <span id="widget-val-w" style="font-family: monospace; font-size: 12px; color: #ff0077; font-weight: 800;">0.0%</span>
-                                                </div>
-                                                <input type="range" id="inspector-input-w" min="5" max="100" step="0.5" style="width: 100%; cursor: pointer;">
-                                            </div>
-                                        </div>
-                                        <div class="span-6">
-                                            <div style="display: flex; flex-direction: column; gap: 5px;">
-                                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                                    <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Alto (Height)</label>
-                                                    <span id="widget-val-h" style="font-family: monospace; font-size: 12px; color: #ff0077; font-weight: 800;">0.0%</span>
-                                                </div>
-                                                <input type="range" id="inspector-input-h" min="2" max="100" step="0.5" style="width: 100%; cursor: pointer;">
-                                            </div>
-                                        </div>
-                                        <div class="span-6">
+                                        <div class="span-12">
                                             <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 5px;">
                                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                                     <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Tamaño de Widget (%)</label>
                                                     <span id="widget-val-size" style="font-family: monospace; font-size: 12px; color: #ff0077; font-weight: 800;">100%</span>
                                                 </div>
                                                 <input type="range" id="inspector-input-size" min="50" max="250" step="5" value="100" style="width: 100%; cursor: pointer;">
-                                            </div>
-                                        </div>
-                                        <div class="span-6">
-                                            <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 5px;">
-                                                <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Fuentes / Tipografía</label>
-                                                <select id="inspector-input-font" style="width: 100%; padding: 7px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: white; font-size: 12px;">
-                                                    <option value="Outfit">Outfit (Cyber Chic)</option>
-                                                    <option value="Inter">Inter (Limpio & Moderno)</option>
-                                                    <option value="Space Grotesk">Space Grotesk (Futurista)</option>
-                                                    <option value="Montserrat">Montserrat (Fuerte)</option>
-                                                </select>
                                             </div>
                                         </div>
                                         <div class="span-12">
