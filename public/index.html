@@ -2536,13 +2536,24 @@
                                                 <input type="range" id="inspector-input-h" min="2" max="100" step="0.5" style="width: 100%; cursor: pointer;">
                                             </div>
                                         </div>
-                                        <div class="span-12">
+                                        <div class="span-6">
                                             <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 5px;">
                                                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                                                    <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Zoom / Escala del Widget</label>
-                                                    <span id="widget-val-zoom" style="font-family: monospace; font-size: 12px; color: #ff0077; font-weight: 800;">100%</span>
+                                                    <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Tamaño de Widget (%)</label>
+                                                    <span id="widget-val-size" style="font-family: monospace; font-size: 12px; color: #ff0077; font-weight: 800;">100%</span>
                                                 </div>
-                                                <input type="range" id="inspector-input-zoom" min="50" max="250" step="5" value="100" style="width: 100%; cursor: pointer;">
+                                                <input type="range" id="inspector-input-size" min="50" max="250" step="5" value="100" style="width: 100%; cursor: pointer;">
+                                            </div>
+                                        </div>
+                                        <div class="span-6">
+                                            <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 5px;">
+                                                <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Fuentes / Tipografía</label>
+                                                <select id="inspector-input-font" style="width: 100%; padding: 7px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: white; font-size: 12px;">
+                                                    <option value="Outfit">Outfit (Cyber Chic)</option>
+                                                    <option value="Inter">Inter (Limpio & Moderno)</option>
+                                                    <option value="Space Grotesk">Space Grotesk (Futurista)</option>
+                                                    <option value="Montserrat">Montserrat (Fuerte)</option>
+                                                </select>
                                             </div>
                                         </div>
                                         <div class="span-12">
@@ -2614,69 +2625,6 @@
                             </div>
                         </article>
                         
-                        <!-- Card: Global Widget Styles Customizer -->
-                        <article class="card-config neon">
-                            <div class="card-config-header">
-                                <div style="display: flex; align-items: center; gap: 12px;">
-                                    <i data-lucide="palette" class="icon-accent"></i>
-                                    <h3>Diseño y Estilo Visual</h3>
-                                </div>
-                            </div>
-                            <div style="display: flex; flex-direction: column; gap: 15px;">
-                                <div class="grid-12" style="gap: 15px; margin: 0; padding: 0;">
-                                    <div class="span-6">
-                                        <div style="display: flex; flex-direction: column; gap: 5px;">
-                                            <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Fuentes / Tipografía</label>
-                                            <select id="widget-font-family" style="width: 100%; padding: 8px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: white;">
-                                                <option value="Outfit">Outfit (Cyber-Kawaii Chic)</option>
-                                                <option value="Space Grotesk">Space Grotesk (Cibernético)</option>
-                                                <option value="Playfair Display">Playfair Display (Elegante)</option>
-                                                <option value="Montserrat">Montserrat (Fuerte & Limpio)</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div class="span-6">
-                                        <div style="display: flex; flex-direction: column; gap: 5px;">
-                                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                                <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Grosor Borde</label>
-                                                <span id="widget-border-thickness-val" style="font-family: monospace; font-size: 12px; color: #ff0077; font-weight: 800;">2px</span>
-                                            </div>
-                                            <input type="range" id="widget-border-thickness" min="0" max="8" step="1" value="2" style="width: 100%; cursor: pointer;">
-                                        </div>
-                                    </div>
-                                    <div class="span-6">
-                                        <div style="display: flex; flex-direction: column; gap: 5px;">
-                                            <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Color de Borde</label>
-                                            <input type="color" id="widget-border-color" value="#ff0077" style="width: 100%; height: 35px; border: none; border-radius: 6px; cursor: pointer; background: transparent; padding: 0;">
-                                        </div>
-                                    </div>
-                                    <div class="span-6">
-                                        <div style="display: flex; flex-direction: column; gap: 5px;">
-                                            <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Color de Fondo</label>
-                                            <input type="color" id="widget-bg-color" value="#0f0514" style="width: 100%; height: 35px; border: none; border-radius: 6px; cursor: pointer; background: transparent; padding: 0;">
-                                        </div>
-                                    </div>
-                                    <div class="span-6">
-                                        <div style="display: flex; flex-direction: column; gap: 5px;">
-                                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                                <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Opacidad Fondo</label>
-                                                <span id="widget-bg-opacity-val" style="font-family: monospace; font-size: 12px; color: #ff0077; font-weight: 800;">60%</span>
-                                            </div>
-                                            <input type="range" id="widget-bg-opacity" min="0" max="100" step="5" value="60" style="width: 100%; cursor: pointer;">
-                                        </div>
-                                    </div>
-                                    <div class="span-6">
-                                        <div style="display: flex; flex-direction: column; gap: 5px;">
-                                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                                <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Escala de Texto</label>
-                                                <span id="widget-text-scale-val" style="font-family: monospace; font-size: 12px; color: #ff0077; font-weight: 800;">100%</span>
-                                            </div>
-                                            <input type="range" id="widget-text-scale" min="50" max="150" step="5" value="100" style="width: 100%; cursor: pointer;">
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </article>
                         
                         <!-- Card: Guide/Instructions -->
                         <article class="card-config" style="background: rgba(255, 0, 119, 0.03); border: 1px dashed rgba(255, 0, 119, 0.25); padding: 20px;">

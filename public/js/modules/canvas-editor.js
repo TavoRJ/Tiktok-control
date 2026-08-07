@@ -21,8 +21,9 @@ export class CanvasEditorManager {
         this.inputW = document.getElementById('inspector-input-w');
         this.inputH = document.getElementById('inspector-input-h');
         
-        this.inputZoom = document.getElementById('inspector-input-zoom');
-        this.valZoom = document.getElementById('widget-val-zoom');
+        this.inputSize = document.getElementById('inspector-input-size');
+        this.valSize = document.getElementById('widget-val-size');
+        this.inputFont = document.getElementById('inspector-input-font');
         
         this.inputTitle = document.getElementById('inspector-input-title');
         this.inputBgOpacity = document.getElementById('inspector-input-bg-opacity');
@@ -137,19 +138,10 @@ export class CanvasEditorManager {
             this.inputH.addEventListener('change', saveOnSliderRelease);
         }
 
-        if (this.inputZoom) {
-            this.inputZoom.addEventListener('input', () => {
-                if (this.valZoom) {
-                    this.valZoom.textContent = `${this.inputZoom.value}%`;
-                }
-            });
-            this.inputZoom.addEventListener('change', () => {
-                if (this.activeWidgetId) {
-                    const info = this.widgets[this.activeWidgetId];
-                    const currentConfig = this.widgetsConfig[this.activeWidgetId] || { ...info.default };
-                    currentConfig.zoom = parseInt(this.inputZoom.value) || 100;
-                    this.widgetsConfig[this.activeWidgetId] = currentConfig;
-                    this.saveAllWidgets();
+        if (this.inputSize) {
+            this.inputSize.addEventListener('input', () => {
+                if (this.valSize) {
+                    this.valSize.textContent = `${this.inputSize.value}%`;
                 }
             });
         }
@@ -167,6 +159,8 @@ export class CanvasEditorManager {
             const info = this.widgets[this.activeWidgetId];
             const currentConfig = this.widgetsConfig[this.activeWidgetId] || { ...info.default };
             
+            if (this.inputSize) currentConfig.zoom = parseInt(this.inputSize.value) || 100;
+            if (this.inputFont) currentConfig.fontFamily = this.inputFont.value;
             if (this.inputTitle) currentConfig.title = this.inputTitle.value.trim();
             if (this.inputBgOpacity) currentConfig.bgOpacity = parseInt(this.inputBgOpacity.value);
             if (this.inputBorderColor) currentConfig.borderColor = this.inputBorderColor.value;
@@ -177,6 +171,8 @@ export class CanvasEditorManager {
         };
 
         ['input', 'change'].forEach(evtType => {
+            if (this.inputSize) this.inputSize.addEventListener(evtType, applyInspectorChanges);
+            if (this.inputFont) this.inputFont.addEventListener(evtType, applyInspectorChanges);
             if (this.inputTitle) this.inputTitle.addEventListener(evtType, applyInspectorChanges);
             if (this.inputBgOpacity) this.inputBgOpacity.addEventListener(evtType, applyInspectorChanges);
             if (this.inputBorderColor) this.inputBorderColor.addEventListener(evtType, applyInspectorChanges);
@@ -413,9 +409,11 @@ export class CanvasEditorManager {
         if (this.inputW) this.inputW.value = config.width;
         if (this.inputH) this.inputH.value = config.height;
 
-        const zoomVal = config.zoom !== undefined ? config.zoom : 100;
-        if (this.inputZoom) this.inputZoom.value = zoomVal;
-        if (this.valZoom) this.valZoom.textContent = `${zoomVal}%`;
+        const sizeVal = config.zoom !== undefined ? config.zoom : (config.size !== undefined ? config.size : 100);
+        if (this.inputSize) this.inputSize.value = sizeVal;
+        if (this.valSize) this.valSize.textContent = `${sizeVal}%`;
+
+        if (this.inputFont) this.inputFont.value = config.fontFamily || 'Outfit';
 
         if (this.inputTitle) this.inputTitle.value = config.title || '';
         
