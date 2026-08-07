@@ -804,15 +804,17 @@ try {
         chatbotSettings.soundAlerts = chatbotSettings.soundAlerts || [];
         chatbotSettings.customSounds = chatbotSettings.customSounds || [];
         
+        chatbotSettings.globalWidgetStyles = chatbotSettings.globalWidgetStyles || {};
+        chatbotSettings.globalWidgetStyles.bgOpacity = 0;
+        chatbotSettings.globalWidgetStyles.borderColor = chatbotSettings.globalWidgetStyles.borderColor || "#00f0ff";
+        
         chatbotSettings.widgets = chatbotSettings.widgets || {};
-        // Ensure each widget key exists with defaults if missing
-        chatbotSettings.widgets.spotify  = chatbotSettings.widgets.spotify  || { active: true,  x: 80, y: 10 };
-        chatbotSettings.widgets.donors   = chatbotSettings.widgets.donors   || { active: true,  x: 5,  y: 30 };
-        chatbotSettings.widgets.taps     = chatbotSettings.widgets.taps     || { active: true,  x: 5,  y: 55 };
-        chatbotSettings.widgets.mvp      = chatbotSettings.widgets.mvp      || { active: true,  x: 5,  y: 80 };
-        chatbotSettings.widgets.songlist = chatbotSettings.widgets.songlist || { active: true,  x: 55, y: 80 };
-        chatbotSettings.widgets.banner   = chatbotSettings.widgets.banner   || { active: true,  x: 0,  y: 0, width: 100, height: 10 };
-        chatbotSettings.widgets.socialRotator = chatbotSettings.widgets.socialRotator || { active: true, x: 35, y: 85 };
+        for (const k in chatbotSettings.widgets) {
+            if (chatbotSettings.widgets[k]) {
+                delete chatbotSettings.widgets[k].bgOpacity;
+                delete chatbotSettings.widgets[k].bgColor;
+            }
+        }
         
         chatbotSettings.socials = chatbotSettings.socials || [];
         chatbotSettings.socialsSettings = chatbotSettings.socialsSettings || { displayTime: 10, pauseTime: 2, enabled: true };
