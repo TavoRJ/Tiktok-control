@@ -374,9 +374,9 @@ let chatbotSettings = {
     globalWidgetStyles: {
         fontFamily: "Outfit",
         borderThickness: 2,
-        borderColor: "#ff0077",
-        bgColor: "#0f0514",
-        bgOpacity: 60,
+        borderColor: "#00f0ff",
+        bgColor: "#0f0a19",
+        bgOpacity: 0,
         textScale: 100
     },
     ai: {
@@ -5023,9 +5023,9 @@ io.on('connection', (socket) => {
     socket.emit('initGlobalWidgetStyles', chatbotSettings.globalWidgetStyles || {
         fontFamily: "Outfit",
         borderThickness: 2,
-        borderColor: "#ff0077",
-        bgColor: "#0f0514",
-        bgOpacity: 60,
+        borderColor: "#00f0ff",
+        bgColor: "#0f0a19",
+        bgOpacity: 0,
         textScale: 100
     });
     

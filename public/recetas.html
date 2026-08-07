@@ -3,19 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lista de Recetas - Overlay</title>
+    <title>Recetas - Overlay</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        :root {
-            --bg-glass: rgba(10, 10, 12, 0.45);
-            --border-color: #00f0ff;
-            --text-main: #ffffff;
-            --text-muted: #a0a0ab;
-            --accent-glow: rgba(0, 240, 255, 0.35);
-            --accent-color: #00f0ff;
-        }
-
         * {
             margin: 0;
             padding: 0;
@@ -30,79 +21,63 @@
             font-family: 'Outfit', sans-serif;
         }
 
-        .recetas-container {
+        .widget-card {
             width: 100%;
             height: 100%;
-            background: var(--bg-glass);
-            border: 2px solid var(--border-color);
-            border-radius: 24px;
-            padding: 20px;
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            background: transparent;
+            border: 2px solid #00f0ff;
+            border-radius: 20px;
+            padding: 16px;
             display: flex;
             flex-direction: column;
             transition: all 0.3s ease;
         }
 
-        .recetas-header {
+        .widget-header {
             display: flex;
             align-items: center;
-            gap: 12px;
-            margin-bottom: 15px;
+            gap: 10px;
+            margin-bottom: 12px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            padding-bottom: 12px;
+            padding-bottom: 8px;
         }
 
-        .recetas-header h2 {
-            font-size: 18px;
+        .widget-header h2 {
+            font-size: 16px;
             font-weight: 900;
-            letter-spacing: 0.5px;
             text-transform: uppercase;
             color: #ffffff;
         }
 
-        .recetas-list {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
+        .widget-body {
             flex-grow: 1;
             overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
 
         .receta-item {
             display: flex;
-            align-items: center;
             justify-content: space-between;
+            align-items: center;
             background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 10px 14px;
-            border-radius: 14px;
-        }
-
-        .receta-name {
-            font-weight: 800;
-            font-size: 13px;
+            padding: 8px 12px;
+            border-radius: 10px;
             color: #ffffff;
-        }
-
-        .receta-cost {
-            font-weight: 900;
             font-size: 13px;
-            color: var(--accent-color);
+            font-weight: 700;
         }
     </style>
 </head>
 <body>
-    <div class="recetas-container" id="main-container">
-        <div class="recetas-header">
-            <i data-lucide="utensils" style="color: var(--accent-color);"></i>
-            <h2 id="widget-title" class="widget-title-text">LISTA DE RECETAS</h2>
+    <div class="widget-card" id="main-container">
+        <div class="widget-header">
+            <i data-lucide="utensils" style="color: inherit;"></i>
+            <h2 id="widget-title">LISTA DE RECETAS</h2>
         </div>
-        <div class="recetas-list" id="recetas-list">
-            <div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 12px;">
-                Cargando recetas...
-            </div>
+        <div class="widget-body" id="recetas-list">
+            <div style="text-align: center; padding: 15px; color: rgba(255,255,255,0.6); font-size: 12px;">Esperando recetas...</div>
         </div>
     </div>
 
@@ -112,13 +87,8 @@
         const WIDGET_KEY = 'recetas';
         const container = document.getElementById('main-container');
 
-        socket.on('recetas_updated', (recetas) => {
-            renderRecetas(recetas);
-        });
-
-        socket.on('chatbot_settings_updated', (config) => {
-            applyGlobalStyles(config);
-        });
+        socket.on('recetas_updated', (recetas) => { render(recetas); });
+        socket.on('chatbot_settings_updated', (config) => { applyGlobalStyles(config); });
 
         function applyGlobalStyles(config) {
             if (!config) return;
@@ -127,23 +97,20 @@
 
             const borderColor = widgetCfg.borderColor || styles.borderColor || '#00f0ff';
             const bgHex = widgetCfg.bgColor || styles.bgColor || '#0f0a19';
-            const bgOpacity = widgetCfg.bgOpacity !== undefined ? widgetCfg.bgOpacity : (styles.bgOpacity !== undefined ? styles.bgOpacity : 45);
+            const bgOpacity = widgetCfg.bgOpacity !== undefined ? widgetCfg.bgOpacity : 0;
             const opacity = bgOpacity / 100;
             const customTitle = widgetCfg.title;
 
-            const root = document.documentElement;
-            root.style.setProperty('--border-color', borderColor);
-            root.style.setProperty('--accent-color', borderColor);
+            container.style.setProperty('border-color', borderColor, 'important');
+            container.style.color = borderColor;
 
             if (opacity === 0) {
                 container.style.setProperty('background', 'transparent', 'important');
-                container.style.setProperty('border', 'none', 'important');
                 container.style.setProperty('box-shadow', 'none', 'important');
                 container.style.setProperty('backdrop-filter', 'none', 'important');
                 container.style.setProperty('-webkit-backdrop-filter', 'none', 'important');
             } else {
                 container.style.setProperty('background', hexToRgba(bgHex, opacity), 'important');
-                container.style.setProperty('border', `2px solid ${borderColor}`, 'important');
                 container.style.setProperty('box-shadow', `0 10px 30px rgba(0, 0, 0, ${Math.min(0.35, opacity)})`, 'important');
                 container.style.setProperty('backdrop-filter', 'blur(16px)', 'important');
                 container.style.setProperty('-webkit-backdrop-filter', 'blur(16px)', 'important');
@@ -162,28 +129,20 @@
             return `rgba(${(num >> 16) & 255}, ${(num >> 8) & 255}, ${num & 255}, ${alpha})`;
         }
 
-        function renderRecetas(recetas) {
-            const listContainer = document.getElementById('recetas-list');
+        function render(recetas) {
+            const list = document.getElementById('recetas-list');
             if (!recetas || recetas.length === 0) {
-                listContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 12px;">Sin recetas configuradas</div>';
+                list.innerHTML = '<div style="text-align: center; padding: 15px; color: rgba(255,255,255,0.6); font-size: 12px;">Sin recetas en vivo</div>';
                 return;
             }
-            listContainer.innerHTML = '';
-            recetas.forEach((receta) => {
+            list.innerHTML = '';
+            recetas.forEach(r => {
                 const item = document.createElement('div');
                 item.className = 'receta-item';
-                item.innerHTML = `
-                    <span class="receta-name">${escapeHtml(receta.nombre || receta.name)}</span>
-                    <span class="receta-cost">${receta.costo || receta.cost || 0} 🪙</span>
-                `;
-                listContainer.appendChild(item);
+                item.innerHTML = `<span>${r.nombre || r.name}</span><span>${r.costo || r.cost || 0} 🪙</span>`;
+                list.appendChild(item);
             });
             lucide.createIcons();
-        }
-
-        function escapeHtml(text) {
-            if (!text) return '';
-            return text.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
         }
 
         socket.emit('get_chatbot_settings');
