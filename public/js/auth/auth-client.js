@@ -1,7 +1,7 @@
 /**
  * auth-client.js
  * Client wrapper for communicating with TavLive Remote Authentication API
- * featuring AbortController support, Cold Start retries for Render instances,
+ * featuring AbortController support, Silent Cold Start background retries for Render instances,
  * and robust error handling.
  */
 export const AUTH_SERVER_URL = window.AUTH_SERVER_URL || 'https://tavlive-auth-server.onrender.com';
@@ -28,20 +28,16 @@ export class AuthClient {
     }
 
     /**
-     * Authenticate user credentials with automatic Cold Start retries.
+     * Authenticate user credentials with silent background Cold Start retries.
      */
-    static async login({ tiktokUsername, email, identifier, password, deviceIdentifier = 'TAVLIVE-DESKTOP-CLIENT', deviceName = 'Desktop PC', osPlatform = 'win32' }, onRetryStatus = null) {
+    static async login({ tiktokUsername, email, identifier, password, deviceIdentifier = 'TAVLIVE-DESKTOP-CLIENT', deviceName = 'Desktop PC', osPlatform = 'win32' }) {
         const signal = this._createSignal();
         const targetIdentifier = tiktokUsername || identifier || email;
-        const maxRetries = 3;
+        const maxRetries = 4;
         const retryDelayMs = 3000;
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                if (attempt > 1 && typeof onRetryStatus === 'function') {
-                    onRetryStatus(`Conectando con el servidor en la nube... (Intento ${attempt}/${maxRetries})`);
-                }
-
                 const response = await fetch(`${AUTH_SERVER_URL}/api/auth/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -49,11 +45,8 @@ export class AuthClient {
                     signal
                 });
 
-                // Render Cold Start HTTP 502 / 503 / 504 retry
+                // Render Cold Start HTTP 502 / 503 / 504 silent retry
                 if ([502, 503, 504].includes(response.status) && attempt < maxRetries) {
-                    if (typeof onRetryStatus === 'function') {
-                        onRetryStatus(`El servidor se está iniciando en la nube. Reintentando en ${retryDelayMs / 1000}s...`);
-                    }
                     await new Promise(r => setTimeout(r, retryDelayMs));
                     continue;
                 }
@@ -75,10 +68,8 @@ export class AuthClient {
                     return { success: false, status: -1, isAborted: true, error: 'Request aborted.' };
                 }
 
+                // Silent network error retry for Render instance cold start
                 if (attempt < maxRetries) {
-                    if (typeof onRetryStatus === 'function') {
-                        onRetryStatus(`Conectando con el servidor... (${attempt}/${maxRetries})`);
-                    }
                     await new Promise(r => setTimeout(r, retryDelayMs));
                     continue;
                 }

@@ -2,7 +2,7 @@
  * auth-ui.js
  * Professional Glassmorphic Login UI Overlay and Plan Badging for TavLive.
  * Controls rendering of the Login screen, Plan badges (FREE/PRO/VIP),
- * input handlers, error states, and Logout button with clean input focus & state recovery.
+ * input handlers, error states, and Logout button with smooth continuous loading state.
  */
 import { authState, AUTH_STATES } from './auth-state.js';
 
@@ -378,7 +378,7 @@ export class AuthUI {
         }
     }
 
-    static setLoading(isLoading, textOverride = null) {
+    static setLoading(isLoading) {
         const submitBtn = document.getElementById('tavlive-btn-login');
         const googleBtn = document.getElementById('tavlive-btn-google-login');
         const btnText = document.getElementById('tavlive-btn-text');
@@ -388,7 +388,7 @@ export class AuthUI {
             submitBtn.disabled = isLoading;
             if (googleBtn) googleBtn.disabled = isLoading;
             if (isLoading) {
-                btnText.textContent = textOverride ? textOverride : 'AUTENTICANDO...';
+                btnText.textContent = 'CONECTANDO CON EL SERVIDOR...';
                 spinner.style.display = 'block';
             } else {
                 btnText.textContent = 'INICIAR SESIÓN';
@@ -415,12 +415,8 @@ export class AuthUI {
         this.hideError();
         this.setLoading(true);
 
-        const onStatusUpdate = (msg) => {
-            this.setLoading(true, msg);
-        };
-
         try {
-            const result = await authState.login(email, password, rememberMe, onStatusUpdate);
+            const result = await authState.login(email, password, rememberMe);
             if (!result.success) {
                 this.showError(result.error || 'Credenciales incorrectas.');
             } else {
