@@ -49,8 +49,8 @@ function requireAdmin(req, res, next) {
   const rawKey = req.headers['x-admin-key'] 
     || req.headers['X-Admin-Key'] 
     || req.headers['x_admin_key'] 
-    || (req.body && req.body.adminKey) 
-    || (req.query && req.query.adminKey) 
+    || (req.body && (req.body.adminKey || req.body.key)) 
+    || (req.query && (req.query.adminKey || req.query.key)) 
     || (req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.split(' ')[1] : null);
 
   if (rawKey && String(rawKey).trim() === expectedKey) {
