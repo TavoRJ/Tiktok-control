@@ -4,6 +4,18 @@ node_modules/
 # Local configuration and credentials (CRITICAL: Prevents leaking Spotify credentials!)
 chatbot_settings.json
 .env
+auth-server/.env
+
+# Temporales de pruebas y perfiles dinámicos
+chatbot_settings_*.json
+dinamicas_config_*.json
+goals_catalog_*.json
+recetas_config_*.json
+sounds_config_*.json
+*_bound_tiktok_8c.json
+*_streamer_live_ok.json
+*_streamerpro.json
+*_valid_host.json
 
 # Build outputs
 dist/
@@ -38,3 +50,12 @@ project_context_snapshot.txt
 scratch/
 scratch_read_back.py
 step_*.txt
+
+# Notas internas de arquitectura y resúmenes
+*.md
+!README.md
+
+# Configuración del editor y entorno
+.vscode/
+*.sqlite
+*.db
