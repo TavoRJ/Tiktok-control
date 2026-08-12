@@ -18,6 +18,20 @@ export class AuthUI {
 
         // Initial state rendering
         this.renderState(authState.state, authState.currentUser, authState.currentLicense);
+
+        // Attempt silent auto-login via stored refresh token
+        this.attemptAutoLogin();
+    }
+
+    static async attemptAutoLogin() {
+        try {
+            const restoreRes = await authState.restoreSession();
+            if (restoreRes.success) {
+                console.info('[Auto-Login] Sesión restaurada automáticamente.');
+            }
+        } catch (e) {
+            console.warn('[Auto-Login] No se pudo restaurar la sesión:', e);
+        }
     }
 
     static createLoginOverlay() {
@@ -55,6 +69,11 @@ export class AuthUI {
                         </div>
                     </div>
 
+                    <div style="display: flex; align-items: center; gap: 8px; margin: 10px 0 16px 0;">
+                        <input type="checkbox" id="tavlive-checkbox-remember" checked style="width: 16px; height: 16px; accent-color: #00ffcc; cursor: pointer;">
+                        <label for="tavlive-checkbox-remember" style="font-size: 12px; color: #a0aec0; cursor: pointer; user-select: none;">Recordar mi sesión en este equipo</label>
+                    </div>
+
                     <button type="submit" id="tavlive-btn-login" class="tavlive-auth-submit-btn">
                         <span id="tavlive-btn-text">INICIAR SESIÓN</span>
                         <div id="tavlive-btn-spinner" class="tavlive-spinner" style="display: none;"></div>
@@ -76,7 +95,7 @@ export class AuthUI {
                 </button>
 
                 <div class="tavlive-auth-footer">
-                    <p>TavLive v1.3.19 • Autenticación Remota Protegida</p>
+                    <p>TavLive v1.4.1 • Autenticación Remota Protegida</p>
                 </div>
             </div>
         </div>
@@ -470,6 +489,9 @@ export class AuthUI {
         const email = emailInput ? emailInput.value.trim() : '';
         const password = passwordInput ? passwordInput.value : '';
 
+        const rememberCheckbox = document.getElementById('tavlive-checkbox-remember');
+        const rememberMe = rememberCheckbox ? rememberCheckbox.checked : true;
+
         if (!email || !password) {
             this.showError('Por favor completa todos los campos.');
             return;
@@ -479,7 +501,7 @@ export class AuthUI {
         this.setLoading(true);
 
         try {
-            const result = await authState.login(email, password);
+            const result = await authState.login(email, password, rememberMe);
             if (!result.success) {
                 this.showError(result.error || 'Credenciales incorrectas.');
             } else {
@@ -550,14 +572,23 @@ export class AuthUI {
             }
             this.updateFeatureAvailability();
 
-            // Auto-populate and lock TikTok handle input based on active license
-            if (license && license.tiktok_username) {
+            // Auto-populate and lock TikTok handle inputs based on active license & session
+            const userHandle = user.tiktok_username || (license && license.tiktok_username) || user.tiktokUsername;
+            if (userHandle) {
+                const cleanHandle = String(userHandle).replace('@', '').trim();
+                
                 const tiktokInput = document.getElementById('username-input');
                 if (tiktokInput) {
-                    const cleanHandle = String(license.tiktok_username).replace('@', '').trim();
                     tiktokInput.value = cleanHandle;
                     tiktokInput.readOnly = true;
                     tiktokInput.title = `Conexión fijada por tu licencia activa (@${cleanHandle})`;
+                }
+
+                const setupInput = document.getElementById('setup-tiktok-username');
+                if (setupInput) {
+                    setupInput.value = cleanHandle;
+                    setupInput.readOnly = true;
+                    setupInput.title = `Usuario fijado según la licencia activa de TavLive (@${cleanHandle})`;
                 }
             }
         } else {

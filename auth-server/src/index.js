@@ -8,6 +8,7 @@ const { apiRateLimiter } = require('./middleware/rateLimiter');
 const errorHandler = require('./middleware/errorHandler');
 const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const giftRoutes = require('./routes/giftRoutes');
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.get(['/admin', '/admin/dashboard'], (req, res) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/gifts', giftRoutes);
 
 // 404 Handler
 app.use((req, res) => {

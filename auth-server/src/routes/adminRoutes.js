@@ -13,9 +13,9 @@ const router = express.Router();
 router.use(requireAdmin);
 
 // Admin: Overview for Web Admin Dashboard (Subphase 8B/8C: TikTok Username focused)
-router.get('/overview', (req, res, next) => {
+router.get('/overview', async (req, res, next) => {
   try {
-    const users = dbHelper.query(`
+    const users = await dbHelper.query(`
       SELECT u.id, u.tiktok_username, u.email, u.name, u.role, u.status, u.provider, u.created_at,
              l.id as license_id, l.key as license_key, l.plan, l.status as license_status,
              l.max_devices, l.expires_at, l.tiktok_username as license_tiktok_username
@@ -67,7 +67,7 @@ router.post('/users', validate(createUserSchema), async (req, res, next) => {
       status
     });
 
-    const license = licenseService.createLicense({
+    const license = await licenseService.createLicense({
       userId: user.id,
       plan: plan || 'PRO',
       expiresAt: expiresAt || null,
@@ -85,11 +85,11 @@ const updateStatusSchema = z.object({
   status: z.enum(['active', 'suspended', 'banned'])
 });
 
-router.patch('/users/:id/status', validate(updateStatusSchema), (req, res, next) => {
+router.patch('/users/:id/status', validate(updateStatusSchema), async (req, res, next) => {
   try {
-    const user = userService.updateStatus(req.params.id, req.body.status);
+    const user = await userService.updateStatus(req.params.id, req.body.status);
     if (req.body.status !== 'active') {
-      sessionService.revokeAllUserSessions(req.params.id);
+      await sessionService.revokeAllUserSessions(req.params.id);
     }
     res.json({ success: true, user });
   } catch (err) {
@@ -105,7 +105,7 @@ const updatePasswordSchema = z.object({
 router.put('/users/:id/password', validate(updatePasswordSchema), async (req, res, next) => {
   try {
     const user = await userService.updatePassword(req.params.id, req.body.password);
-    sessionService.revokeAllUserSessions(req.params.id);
+    await sessionService.revokeAllUserSessions(req.params.id);
     res.json({ success: true, message: 'Contraseña actualizada con éxito.', user });
   } catch (err) {
     next(err);
@@ -113,10 +113,10 @@ router.put('/users/:id/password', validate(updatePasswordSchema), async (req, re
 });
 
 // Admin: Delete Creator User (Subphase 8C)
-router.delete('/users/:id', (req, res, next) => {
+router.delete('/users/:id', async (req, res, next) => {
   try {
-    sessionService.revokeAllUserSessions(req.params.id);
-    userService.deleteUser(req.params.id);
+    await sessionService.revokeAllUserSessions(req.params.id);
+    await userService.deleteUser(req.params.id);
     res.json({ success: true, message: 'Creador eliminado exitosamente.' });
   } catch (err) {
     next(err);
@@ -131,9 +131,9 @@ const createLicenseSchema = z.object({
   tiktokUsername: z.string().nullable().optional()
 });
 
-router.post('/licenses', validate(createLicenseSchema), (req, res, next) => {
+router.post('/licenses', validate(createLicenseSchema), async (req, res, next) => {
   try {
-    const license = licenseService.createLicense(req.body);
+    const license = await licenseService.createLicense(req.body);
     res.status(201).json({ success: true, license });
   } catch (err) {
     next(err);
@@ -141,10 +141,10 @@ router.post('/licenses', validate(createLicenseSchema), (req, res, next) => {
 });
 
 // Admin: Extend License Expiration (+30 Days or custom) (Subphase 8C)
-router.post('/licenses/:id/extend', (req, res, next) => {
+router.post('/licenses/:id/extend', async (req, res, next) => {
   try {
     const days = (req.body && req.body.days) ? Number(req.body.days) : 30;
-    const license = licenseService.extendLicense(req.params.id, days);
+    const license = await licenseService.extendLicense(req.params.id, days);
     res.json({ success: true, license });
   } catch (err) {
     next(err);
@@ -159,27 +159,27 @@ const updateLicenseSchema = z.object({
   tiktokUsername: z.string().nullable().optional()
 });
 
-router.patch('/licenses/:id', validate(updateLicenseSchema), (req, res, next) => {
+router.patch('/licenses/:id', validate(updateLicenseSchema), async (req, res, next) => {
   try {
-    let license = licenseService.findById(req.params.id);
+    let license = await licenseService.findById(req.params.id);
     if (!license) {
       return res.status(404).json({ success: false, error: 'License not found.' });
     }
 
     if (req.body.plan) {
-      license = licenseService.updatePlan(req.params.id, req.body.plan);
+      license = await licenseService.updatePlan(req.params.id, req.body.plan);
     }
 
     if (req.body.status) {
-      license = licenseService.updateStatus(req.params.id, req.body.status);
+      license = await licenseService.updateStatus(req.params.id, req.body.status);
     }
 
     if (req.body.expiresAt !== undefined) {
-      license = licenseService.updateExpiresAt(req.params.id, req.body.expiresAt);
+      license = await licenseService.updateExpiresAt(req.params.id, req.body.expiresAt);
     }
 
     if (req.body.tiktokUsername !== undefined) {
-      license = licenseService.updateTiktokUsername(req.params.id, req.body.tiktokUsername);
+      license = await licenseService.updateTiktokUsername(req.params.id, req.body.tiktokUsername);
     }
 
     res.json({ success: true, license });
@@ -189,9 +189,9 @@ router.patch('/licenses/:id', validate(updateLicenseSchema), (req, res, next) =>
 });
 
 // Admin: List Devices for a User
-router.get('/devices/user/:userId', (req, res, next) => {
+router.get('/devices/user/:userId', async (req, res, next) => {
   try {
-    const devices = deviceService.listUserDevices(req.params.userId);
+    const devices = await deviceService.listUserDevices(req.params.userId);
     res.json({ success: true, devices });
   } catch (err) {
     next(err);
@@ -199,9 +199,9 @@ router.get('/devices/user/:userId', (req, res, next) => {
 });
 
 // Admin: Revoke Device
-router.post('/devices/:id/revoke', (req, res, next) => {
+router.post('/devices/:id/revoke', async (req, res, next) => {
   try {
-    const device = deviceService.revokeDevice(req.params.id);
+    const device = await deviceService.revokeDevice(req.params.id);
     res.json({ success: true, device });
   } catch (err) {
     next(err);
@@ -209,9 +209,9 @@ router.post('/devices/:id/revoke', (req, res, next) => {
 });
 
 // Admin: Revoke all sessions for a user
-router.post('/users/:id/revoke-sessions', (req, res, next) => {
+router.post('/users/:id/revoke-sessions', async (req, res, next) => {
   try {
-    sessionService.revokeAllUserSessions(req.params.id);
+    await sessionService.revokeAllUserSessions(req.params.id);
     res.json({ success: true, message: 'All sessions revoked for user.' });
   } catch (err) {
     next(err);

@@ -15,7 +15,8 @@ const configSchema = z.object({
   ADMIN_API_KEY: z.string().min(8, 'ADMIN_API_KEY must be configured'),
   GOOGLE_CLIENT_ID: z.string().optional().default('dev_google_client_id_tavlive_2026.apps.googleusercontent.com'),
   GOOGLE_CLIENT_SECRET: z.string().optional().default('dev_google_client_secret_tavlive_2026'),
-  DB_FILE_PATH: z.string().default('./data/tavlive_auth.db')
+  DB_PATH: z.string().optional().default(process.env.DB_FILE_PATH || './data/tavlive_auth.db'),
+  DB_FILE_PATH: z.string().optional().default('./data/tavlive_auth.db')
 });
 
 const parsed = configSchema.safeParse(process.env);

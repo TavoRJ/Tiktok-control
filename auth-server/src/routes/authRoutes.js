@@ -32,7 +32,7 @@ router.post('/login', loginRateLimiter, validate(loginSchema), async (req, res, 
       return res.status(400).json({ success: false, error: 'Se requiere el usuario de TikTok para iniciar sesión.' });
     }
 
-    const user = userService.findByIdentifier(targetIdentifier);
+    const user = await userService.findByIdentifier(targetIdentifier);
     if (!user) {
       return res.status(401).json({ success: false, error: 'Usuario de TikTok o contraseña incorrectos.' });
     }
@@ -54,7 +54,7 @@ router.post('/login', loginRateLimiter, validate(loginSchema), async (req, res, 
     }
 
     // Verify license status and temporal expiration (expires_at)
-    const latestLicense = licenseService.findLatestByUserId(user.id);
+    const latestLicense = await licenseService.findLatestByUserId(user.id);
     if (latestLicense) {
       if (latestLicense.status === 'revoked') {
         return res.status(403).json({ success: false, error: 'Licencia revocada por administración.' });
@@ -72,7 +72,7 @@ router.post('/login', loginRateLimiter, validate(loginSchema), async (req, res, 
     // Register or get device (Subphase 8B: Device count restriction removed)
     let device = null;
     try {
-      device = deviceService.registerOrGetDevice({
+      device = await deviceService.registerOrGetDevice({
         userId: user.id,
         licenseId: license ? license.id : null,
         deviceIdentifier,
@@ -83,15 +83,11 @@ router.post('/login', loginRateLimiter, validate(loginSchema), async (req, res, 
       if (deviceErr.message && deviceErr.message.includes('revoked')) {
         return res.status(403).json({ success: false, error: deviceErr.message });
       }
-      // If device is revoked or error occurs, return 403
-      if (deviceErr.message && deviceErr.message.includes('revoked')) {
-        return res.status(403).json({ success: false, error: deviceErr.message });
-      }
     }
 
     // Issue Refresh Token & Access Token
     const refreshToken = tokenService.generateRefreshToken();
-    const session = sessionService.createSession({
+    const session = await sessionService.createSession({
       userId: user.id,
       deviceId: device ? device.id : null,
       refreshToken
@@ -159,9 +155,9 @@ router.post('/google', loginRateLimiter, validate(googleLoginSchema), async (req
       return res.status(403).json({ success: false, error: 'Account is permanently banned.' });
     }
 
-    let latestLicense = licenseService.findLatestByUserId(googleUser.id);
+    let latestLicense = await licenseService.findLatestByUserId(googleUser.id);
     if (!latestLicense) {
-      latestLicense = licenseService.createLicense({ userId: googleUser.id, plan: 'FREE' });
+      latestLicense = await licenseService.createLicense({ userId: googleUser.id, plan: 'FREE' });
     }
 
     if (latestLicense.status === 'revoked' || latestLicense.status === 'paused' || licenseService.isLicenseExpired(latestLicense)) {
@@ -170,7 +166,7 @@ router.post('/google', loginRateLimiter, validate(googleLoginSchema), async (req
 
     let device = null;
     try {
-      device = deviceService.registerOrGetDevice({
+      device = await deviceService.registerOrGetDevice({
         userId: googleUser.id,
         licenseId: latestLicense.id,
         deviceIdentifier,
@@ -180,7 +176,7 @@ router.post('/google', loginRateLimiter, validate(googleLoginSchema), async (req
     } catch (dErr) {}
 
     const refreshToken = tokenService.generateRefreshToken();
-    const session = sessionService.createSession({
+    const session = await sessionService.createSession({
       userId: googleUser.id,
       deviceId: device ? device.id : null,
       refreshToken
@@ -221,21 +217,21 @@ const refreshSchema = z.object({
   refreshToken: z.string().min(1, 'refreshToken is required')
 });
 
-router.post('/refresh', validate(refreshSchema), (req, res, next) => {
+router.post('/refresh', validate(refreshSchema), async (req, res, next) => {
   try {
     const { refreshToken } = req.body;
-    const session = sessionService.findValidSessionByRefreshToken(refreshToken);
+    const session = await sessionService.findValidSessionByRefreshToken(refreshToken);
 
     if (!session) {
       return res.status(401).json({ success: false, error: 'Invalid or expired refresh token.' });
     }
 
-    const user = userService.findById(session.user_id);
+    const user = await userService.findById(session.user_id);
     if (!user || user.status !== 'active') {
       return res.status(403).json({ success: false, error: 'Account is not active.' });
     }
 
-    const license = licenseService.findLatestByUserId(user.id);
+    const license = await licenseService.findLatestByUserId(user.id);
     if (licenseService.isLicenseExpired(license)) {
       return res.status(403).json({ success: false, error: 'License expired.' });
     }
@@ -273,13 +269,13 @@ const logoutSchema = z.object({
   refreshToken: z.string().optional()
 });
 
-router.post('/logout', requireAuth, validate(logoutSchema), (req, res, next) => {
+router.post('/logout', requireAuth, validate(logoutSchema), async (req, res, next) => {
   try {
     const { refreshToken } = req.body;
     if (refreshToken) {
-      sessionService.revokeSessionByToken(refreshToken);
+      await sessionService.revokeSession(refreshToken).catch(() => {});
     } else if (req.user && (req.user.sessionId || req.user.id)) {
-      sessionService.revokeAllUserSessions(req.user.id);
+      await sessionService.revokeAllUserSessions(req.user.id);
     }
     res.json({ success: true, message: 'Logged out successfully.' });
   } catch (err) {
@@ -288,15 +284,15 @@ router.post('/logout', requireAuth, validate(logoutSchema), (req, res, next) => 
 });
 
 // Auth Status / Me (Heartbeat)
-router.get('/me', requireAuth, (req, res, next) => {
+router.get('/me', requireAuth, async (req, res, next) => {
   try {
     const userId = req.user.id || req.user.sub;
-    const user = userService.findById(userId);
+    const user = await userService.findById(userId);
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found.' });
     }
 
-    const license = licenseService.findLatestByUserId(user.id);
+    const license = await licenseService.findLatestByUserId(user.id);
     if (licenseService.isLicenseExpired(license)) {
       return res.status(403).json({ success: false, error: 'License expired.' });
     }

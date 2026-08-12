@@ -3,7 +3,7 @@
  * Client wrapper for communicating with TavLive Remote Authentication API
  * featuring AbortController support for cancelling in-flight requests.
  */
-export const AUTH_SERVER_URL = window.AUTH_SERVER_URL || 'http://127.0.0.1:4000';
+export const AUTH_SERVER_URL = window.AUTH_SERVER_URL || 'https://tavlive-auth-server.onrender.com';
 
 let activeAbortController = null;
 

@@ -18,7 +18,7 @@ const licenseService = {
   ALLOWED_PLANS,
   PLAN_DEFAULT_MAX_DEVICES,
 
-  createLicense({ userId, plan = 'PRO', maxDevices = null, expiresAt = null, tiktokUsername = null }) {
+  async createLicense({ userId, plan = 'PRO', maxDevices = null, expiresAt = null, tiktokUsername = null }) {
     const upperPlan = plan.toUpperCase().trim();
     if (!ALLOWED_PLANS.includes(upperPlan)) {
       throw new Error(`Invalid plan '${plan}'. Allowed plans: ${ALLOWED_PLANS.join(', ')}`);
@@ -33,7 +33,7 @@ const licenseService = {
     const createdAt = new Date().toISOString();
     const cleanTiktok = tiktokUsername ? String(tiktokUsername).replace('@', '').trim() : null;
 
-    dbHelper.execute(
+    await dbHelper.execute(
       `INSERT INTO licenses (id, user_id, key, plan, status, max_devices, expires_at, tiktok_username, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [id, userId, key, upperPlan, 'active', effectiveMaxDevices, expiresAt, cleanTiktok, createdAt]
@@ -47,7 +47,7 @@ const licenseService = {
   },
 
   findByUserId(userId) {
-    return dbHelper.queryOne('SELECT * FROM licenses WHERE user_id = ? AND status = "active"', [userId]);
+    return dbHelper.queryOne('SELECT * FROM licenses WHERE user_id = ? AND status = ?', [userId, 'active']);
   },
 
   findLatestByUserId(userId) {
@@ -67,7 +67,7 @@ const licenseService = {
     return false;
   },
 
-  updatePlan(id, plan, maxDevices = null) {
+  async updatePlan(id, plan, maxDevices = null) {
     const upperPlan = plan.toUpperCase().trim();
     if (!ALLOWED_PLANS.includes(upperPlan)) {
       throw new Error(`Invalid plan '${plan}'. Allowed plans: ${ALLOWED_PLANS.join(', ')}`);
@@ -77,7 +77,7 @@ const licenseService = {
       ? maxDevices
       : PLAN_DEFAULT_MAX_DEVICES[upperPlan];
 
-    dbHelper.execute(
+    await dbHelper.execute(
       'UPDATE licenses SET plan = ?, max_devices = ? WHERE id = ?',
       [upperPlan, effectiveMaxDevices, id]
     );
@@ -85,27 +85,27 @@ const licenseService = {
     return this.findById(id);
   },
 
-  updateStatus(id, status) {
+  async updateStatus(id, status) {
     if (!['active', 'expired', 'revoked', 'paused'].includes(status)) {
       throw new Error('Invalid license status.');
     }
-    dbHelper.execute('UPDATE licenses SET status = ? WHERE id = ?', [status, id]);
+    await dbHelper.execute('UPDATE licenses SET status = ? WHERE id = ?', [status, id]);
     return this.findById(id);
   },
 
-  updateExpiresAt(id, expiresAt) {
-    dbHelper.execute('UPDATE licenses SET expires_at = ? WHERE id = ?', [expiresAt, id]);
+  async updateExpiresAt(id, expiresAt) {
+    await dbHelper.execute('UPDATE licenses SET expires_at = ? WHERE id = ?', [expiresAt, id]);
     return this.findById(id);
   },
 
-  updateTiktokUsername(id, tiktokUsername) {
+  async updateTiktokUsername(id, tiktokUsername) {
     const cleanTiktok = tiktokUsername ? String(tiktokUsername).replace('@', '').trim() : null;
-    dbHelper.execute('UPDATE licenses SET tiktok_username = ? WHERE id = ?', [cleanTiktok, id]);
+    await dbHelper.execute('UPDATE licenses SET tiktok_username = ? WHERE id = ?', [cleanTiktok, id]);
     return this.findById(id);
   },
 
-  extendLicense(id, days = 30) {
-    const license = this.findById(id);
+  async extendLicense(id, days = 30) {
+    const license = await this.findById(id);
     if (!license) throw new Error('Licencia no encontrada.');
 
     let baseDate = new Date();
@@ -119,7 +119,7 @@ const licenseService = {
     baseDate.setDate(baseDate.getDate() + Number(days));
     const newExpiresAt = baseDate.toISOString();
 
-    dbHelper.execute('UPDATE licenses SET expires_at = ?, status = "active" WHERE id = ?', [newExpiresAt, id]);
+    await dbHelper.execute('UPDATE licenses SET expires_at = ?, status = ? WHERE id = ?', [newExpiresAt, 'active', id]);
     return this.findById(id);
   }
 };

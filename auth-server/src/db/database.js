@@ -1,91 +1,174 @@
 const fs = require('fs');
 const path = require('path');
-const initSqlJs = require('sql.js');
 const config = require('../config');
 
-const dbPath = path.isAbsolute(config.DB_FILE_PATH)
-  ? config.DB_FILE_PATH
-  : path.join(__dirname, '..', '..', config.DB_FILE_PATH);
+let isPg = false;
+let pgPool = null;
+let sqliteDb = null;
+let SQL = null;
 
-const dbDir = path.dirname(dbPath);
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
+const rawDbPath = process.env.DB_PATH || config.DB_PATH || config.DB_FILE_PATH || './data/tavlive_auth.db';
+const dbPath = path.isAbsolute(rawDbPath)
+  ? rawDbPath
+  : path.join(__dirname, '..', '..', rawDbPath);
+
+function convertPlaceholders(sql) {
+  let index = 1;
+  return sql.replace(/\?/g, () => `$${index++}`);
 }
 
-let db = null;
-
-function saveDb() {
-  if (!db) return;
-  const data = db.export();
+function saveSqliteDb() {
+  if (!sqliteDb) return;
+  const data = sqliteDb.export();
   const buffer = Buffer.from(data);
   fs.writeFileSync(dbPath, buffer);
 }
 
 async function initDatabase() {
-  const SQL = await initSqlJs();
-  if (fs.existsSync(dbPath)) {
-    try {
-      const fileBuffer = fs.readFileSync(dbPath);
-      db = new SQL.Database(fileBuffer);
-    } catch (err) {
-      console.warn('[Database] Existing DB file unreadable, creating new clean database instance.');
-      db = new SQL.Database();
+  const databaseUrl = (process.env.DATABASE_URL || '').trim();
+
+  if (databaseUrl) {
+    // PostgreSQL / Supabase Mode
+    isPg = true;
+    const { Pool } = require('pg');
+    pgPool = new Pool({
+      connectionString: databaseUrl,
+      ssl: { rejectUnauthorized: false }
+    });
+
+    console.info('[Database] Conectando a PostgreSQL / Supabase...');
+
+    const pgInitQueries = [
+      `CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        tiktok_username TEXT UNIQUE,
+        email TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        password_hash TEXT,
+        provider TEXT NOT NULL DEFAULT 'credentials',
+        google_id TEXT UNIQUE,
+        role TEXT NOT NULL DEFAULT 'user',
+        status TEXT NOT NULL DEFAULT 'active',
+        created_at TEXT NOT NULL
+      );`,
+
+      `CREATE TABLE IF NOT EXISTS licenses (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        tiktok_username TEXT,
+        license_key TEXT UNIQUE NOT NULL,
+        plan TEXT NOT NULL DEFAULT 'FREE',
+        status TEXT NOT NULL DEFAULT 'active',
+        device_limit INTEGER NOT NULL DEFAULT 1,
+        activated_at TEXT,
+        expires_at TEXT,
+        created_at TEXT NOT NULL
+      );`,
+
+      `CREATE TABLE IF NOT EXISTS refresh_tokens (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token TEXT UNIQUE NOT NULL,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );`,
+
+      `CREATE TABLE IF NOT EXISTS devices (
+        id TEXT PRIMARY KEY,
+        license_id TEXT NOT NULL REFERENCES licenses(id) ON DELETE CASCADE,
+        device_identifier TEXT NOT NULL,
+        device_name TEXT,
+        os_platform TEXT,
+        last_seen_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        CONSTRAINT unique_license_device UNIQUE(license_id, device_identifier)
+      );`,
+
+      `CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        device_id TEXT,
+        refresh_token_hash TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        revoked_at TEXT
+      );`
+    ];
+
+    for (const q of pgInitQueries) {
+      await pgPool.query(q).catch(e => console.warn('[PostgreSQL Init]', e.message));
     }
+
+    await pgPool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS tiktok_username TEXT;').catch(() => {});
+    await pgPool.query('ALTER TABLE licenses ADD COLUMN IF NOT EXISTS tiktok_username TEXT;').catch(() => {});
+
+    console.info('[Database] PostgreSQL / Supabase inicializado con éxito.');
+    return pgPool;
   } else {
-    db = new SQL.Database();
+    // SQLite Local Mode
+    isPg = false;
+    const dbDir = path.dirname(dbPath);
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
+    }
+
+    const initSqlJs = require('sql.js');
+    SQL = await initSqlJs();
+    if (fs.existsSync(dbPath)) {
+      try {
+        const fileBuffer = fs.readFileSync(dbPath);
+        sqliteDb = new SQL.Database(fileBuffer);
+      } catch (err) {
+        console.warn('[Database] Existing DB file unreadable, creating new clean database instance.');
+        sqliteDb = new SQL.Database();
+      }
+    } else {
+      sqliteDb = new SQL.Database();
+    }
+
+    sqliteDb.run("PRAGMA foreign_keys = ON;");
+    const schemaSql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf-8');
+
+    try {
+      sqliteDb.exec(schemaSql);
+    } catch (err) {}
+
+    try {
+      sqliteDb.exec("ALTER TABLE users ADD COLUMN tiktok_username TEXT;");
+    } catch (e) {}
+
+    try {
+      sqliteDb.exec("ALTER TABLE licenses ADD COLUMN tiktok_username TEXT;");
+    } catch (e) {}
+
+    try {
+      sqliteDb.exec(schemaSql);
+    } catch (err) {}
+
+    saveSqliteDb();
+    console.info('[Database] SQLite local inicializado con éxito en:', dbPath);
+    return sqliteDb;
   }
-
-  // Enable foreign keys
-  db.run("PRAGMA foreign_keys = ON;");
-
-  // Read schema SQL
-  const schemaSql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf-8');
-
-  // Safely execute schema tables creation first
-  try {
-    db.exec(schemaSql);
-  } catch (err) {
-    // If schemaSql fails due to index or column mismatch on existing DB, run dynamic migrations first
-  }
-
-  // Dynamic Migration for Subphase 8B: Ensure tiktok_username column in users and licenses
-  try {
-    db.exec("ALTER TABLE users ADD COLUMN tiktok_username TEXT;");
-  } catch (e) {
-    // Column already exists - ignore error
-  }
-
-  try {
-    db.exec("ALTER TABLE licenses ADD COLUMN tiktok_username TEXT;");
-  } catch (e) {
-    // Column already exists - ignore error
-  }
-
-  // Re-run schema execution to ensure all tables, columns, and indexes exist
-  try {
-    db.exec(schemaSql);
-  } catch (err) {
-    // Ignore harmless duplicates if indexes already exist
-  }
-
-  saveDb();
-
-  return db;
 }
 
-// Database helper functions mirroring standard DB driver interface
 const dbHelper = {
   async init() {
     return await initDatabase();
   },
 
   getDb() {
-    if (!db) throw new Error("Database not initialized. Call dbHelper.init() first.");
-    return db;
+    if (isPg) return pgPool;
+    if (!sqliteDb) throw new Error("Database not initialized. Call dbHelper.init() first.");
+    return sqliteDb;
   },
 
   query(sql, params = []) {
-    const stmt = db.prepare(sql);
+    if (isPg) {
+      const convertedSql = convertPlaceholders(sql);
+      return pgPool.query(convertedSql, params).then(res => res.rows || []);
+    }
+
+    const stmt = sqliteDb.prepare(sql);
     stmt.bind(params);
     const results = [];
     while (stmt.step()) {
@@ -96,13 +179,24 @@ const dbHelper = {
   },
 
   queryOne(sql, params = []) {
+    if (isPg) {
+      const convertedSql = convertPlaceholders(sql);
+      return pgPool.query(convertedSql, params).then(res => (res.rows && res.rows.length > 0 ? res.rows[0] : null));
+    }
+
     const rows = this.query(sql, params);
     return rows.length > 0 ? rows[0] : null;
   },
 
   execute(sql, params = []) {
-    db.run(sql, params);
-    saveDb();
+    if (isPg) {
+      const convertedSql = convertPlaceholders(sql);
+      return pgPool.query(convertedSql, params).then(() => {});
+    }
+
+    sqliteDb.run(sql, params);
+    saveSqliteDb();
+    return Promise.resolve();
   }
 };
 

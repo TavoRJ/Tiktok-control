@@ -19,7 +19,7 @@ const sessionService = {
       [id, userId, deviceId, refreshHash, createdAt, expiresAt]
     );
 
-    return this.findById(id);
+    return this.findById(id) || { id, user_id: userId, device_id: deviceId, refresh_token_hash: refreshHash, expires_at: expiresAt };
   },
 
   findById(id) {
@@ -55,6 +55,12 @@ const sessionService = {
   revokeSession(sessionId) {
     const now = new Date().toISOString();
     dbHelper.execute('UPDATE sessions SET revoked_at = ? WHERE id = ?', [now, sessionId]);
+  },
+
+  revokeSessionByToken(rawRefreshToken) {
+    const refreshHash = tokenService.hashRefreshToken(rawRefreshToken);
+    const now = new Date().toISOString();
+    dbHelper.execute('UPDATE sessions SET revoked_at = ? WHERE refresh_token_hash = ?', [now, refreshHash]);
   },
 
   revokeAllUserSessions(userId) {

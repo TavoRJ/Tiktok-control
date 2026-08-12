@@ -202,7 +202,7 @@ class AuthStateManager {
     /**
      * Perform login with email and password.
      */
-    async login(email, password) {
+    async login(email, password, rememberMe = true) {
         this.heartbeatGeneration++;
         const response = await AuthClient.login({ email, password });
 
@@ -217,7 +217,7 @@ class AuthStateManager {
 
         // Persist refresh token securely via safeStorage
         if (response.refreshToken) {
-            await SessionManager.saveRefreshToken(response.refreshToken);
+            await SessionManager.saveRefreshToken(response.refreshToken, rememberMe);
         }
 
         // Synchronize with local server.js
@@ -233,7 +233,7 @@ class AuthStateManager {
     /**
      * Perform login with Google OIDC Token.
      */
-    async loginWithGoogle(idToken) {
+    async loginWithGoogle(idToken, rememberMe = true) {
         this.heartbeatGeneration++;
         const response = await AuthClient.loginWithGoogle({ idToken });
 
@@ -248,7 +248,7 @@ class AuthStateManager {
 
         // Persist refresh token securely via safeStorage
         if (response.refreshToken) {
-            await SessionManager.saveRefreshToken(response.refreshToken);
+            await SessionManager.saveRefreshToken(response.refreshToken, rememberMe);
         }
 
         // Synchronize with local server.js

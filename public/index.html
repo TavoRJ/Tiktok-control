@@ -2737,7 +2737,10 @@
                         </div>
                         <div class="form-group">
                             <label for="setup-tiktok-username">Usuario de TikTok Predeterminado:</label>
-                            <input type="text" id="setup-tiktok-username" placeholder="@usuario_tiktok">
+                            <input type="text" id="setup-tiktok-username" placeholder="@usuario_tiktok" readonly style="background: rgba(255, 255, 255, 0.03); cursor: not-allowed; border-color: rgba(0, 255, 204, 0.3);">
+                            <div id="setup-tiktok-username-badge" style="font-size: 11px; color: #00ffcc; margin-top: 6px; display: flex; align-items: center; gap: 4px; font-weight: 600;">
+                                <span>🔒 Usuario fijado según la licencia activa de TavLive</span>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label class="switch-container">
@@ -3193,6 +3196,7 @@
     </button>
 
     <script src="/socket.io/socket.io.js"></script>
+    <script type="module" src="js/gifts-catalog.js"></script>
     <script type="module" src="js/panel.js?v=1.3.3"></script>
 </body>
 

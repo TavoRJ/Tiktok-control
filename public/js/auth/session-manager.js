@@ -9,13 +9,28 @@ export class SessionManager {
     /**
      * Save Refresh Token securely using OS safeStorage if available.
      * @param {string} refreshToken 
+     * @param {boolean} rememberMe 
      */
-    static async saveRefreshToken(refreshToken) {
+    static async saveRefreshToken(refreshToken, rememberMe = true) {
         if (!refreshToken) return;
         inMemoryRefreshToken = refreshToken;
 
-        if (window.electronBridge && typeof window.electronBridge.saveSecureToken === 'function') {
-            await window.electronBridge.saveSecureToken('refresh_token', refreshToken);
+        if (rememberMe) {
+            try {
+                localStorage.setItem('tavlive_remember_me', 'true');
+            } catch (e) {}
+
+            if (window.electronBridge && typeof window.electronBridge.saveSecureToken === 'function') {
+                await window.electronBridge.saveSecureToken('refresh_token', refreshToken);
+            } else {
+                try {
+                    localStorage.setItem('tavlive_refresh_token', refreshToken);
+                } catch (e) {}
+            }
+        } else {
+            try {
+                localStorage.setItem('tavlive_remember_me', 'false');
+            } catch (e) {}
         }
     }
 
@@ -31,6 +46,11 @@ export class SessionManager {
                 return encryptedToken;
             }
         }
+        try {
+            const stored = localStorage.getItem('tavlive_refresh_token');
+            if (stored) return stored;
+        } catch (e) {}
+
         return inMemoryRefreshToken;
     }
 
@@ -39,6 +59,11 @@ export class SessionManager {
      */
     static async clearRefreshToken() {
         inMemoryRefreshToken = null;
+        try {
+            localStorage.removeItem('tavlive_refresh_token');
+            localStorage.removeItem('tavlive_remember_me');
+        } catch (e) {}
+
         if (window.electronBridge && typeof window.electronBridge.deleteSecureToken === 'function') {
             await window.electronBridge.deleteSecureToken('refresh_token');
         }

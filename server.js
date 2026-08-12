@@ -461,11 +461,18 @@ const tiktokGiftDatabase = {
     6424: { name: 'Fireworks', coins: 1088 }
 };
 
+let remoteGiftsCatalog = {};
+
 function getGiftCoinValue(data) {
     if (!data) return 1;
     const giftId = String(data.giftId);
     
-    // 1. Try resolving from local gifts_mapping.json (cerebro)
+    // 1. Try resolving from remoteGiftsCatalog (Auth Server sync)
+    if (remoteGiftsCatalog[giftId] && remoteGiftsCatalog[giftId].diamond_count !== undefined) {
+        return parseInt(remoteGiftsCatalog[giftId].diamond_count) || 1;
+    }
+
+    // 2. Try resolving from local gifts_mapping.json (cerebro)
     try {
         const brainData = readJsonFileSafe(GIFTS_MAPPING_FILE, {});
         if (brainData && brainData[giftId] && brainData[giftId].coins !== undefined) {
@@ -475,13 +482,13 @@ function getGiftCoinValue(data) {
         console.error('[Cerebro] Error reading coin value from mapping:', e);
     }
     
-    // 2. Fallback to hardcoded TikTok database
+    // 3. Fallback to hardcoded TikTok database
     const dbGift = tiktokGiftDatabase[parseInt(giftId)];
     if (dbGift) {
         return dbGift.coins;
     }
     
-    // 3. Last fallback
+    // 4. Last fallback
     return data.diamondCount || 1;
 }
 
@@ -2583,7 +2590,7 @@ function requirePlan(minPlan) {
 }
 
 function getRemoteAuthServer() {
-    return process.env.REMOTE_AUTH_SERVER || 'http://127.0.0.1:4000';
+    return process.env.REMOTE_AUTH_SERVER || 'https://tavlive-auth-server.onrender.com';
 }
 
 // API: Set internal auth session from client
