@@ -12,6 +12,9 @@ const giftRoutes = require('./routes/giftRoutes');
 
 const app = express();
 
+// Enable trust proxy for Render / Cloudflare reverse proxies
+app.set('trust proxy', 1);
+
 // Security Headers
 app.use(helmet({
   contentSecurityPolicy: false // Allow inline scripts/styles for Admin Dashboard Web UI

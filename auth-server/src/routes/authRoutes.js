@@ -55,16 +55,18 @@ router.post('/login', loginRateLimiter, validate(loginSchema), async (req, res, 
 
     // Verify license status and temporal expiration (expires_at)
     const latestLicense = await licenseService.findLatestByUserId(user.id);
-    if (latestLicense) {
-      if (latestLicense.status === 'revoked') {
-        return res.status(403).json({ success: false, error: 'Licencia revocada por administración.' });
-      }
-      if (latestLicense.status === 'paused') {
-        return res.status(403).json({ success: false, error: 'Licencia en pausa.' });
-      }
-      if (licenseService.isLicenseExpired(latestLicense)) {
-        return res.status(403).json({ success: false, error: 'Licencia expirada. Por favor renueva tu suscripción.' });
-      }
+    if (!latestLicense) {
+      return res.status(403).json({ success: false, error: 'No se encontró una licencia activa asociada a esta cuenta.' });
+    }
+
+    if (latestLicense.status === 'revoked') {
+      return res.status(403).json({ success: false, error: 'Licencia revocada por administración.' });
+    }
+    if (latestLicense.status === 'paused') {
+      return res.status(403).json({ success: false, error: 'Licencia en pausa.' });
+    }
+    if (licenseService.isLicenseExpired(latestLicense)) {
+      return res.status(403).json({ success: false, error: 'Licencia expirada. Por favor renueva tu suscripción.' });
     }
 
     const license = latestLicense;
