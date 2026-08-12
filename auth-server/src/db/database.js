@@ -56,7 +56,8 @@ async function initDatabase() {
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         tiktok_username TEXT,
-        license_key TEXT UNIQUE NOT NULL,
+        key TEXT UNIQUE NOT NULL,
+        license_key TEXT,
         plan TEXT NOT NULL DEFAULT 'FREE',
         status TEXT NOT NULL DEFAULT 'active',
         device_limit INTEGER NOT NULL DEFAULT 1,
@@ -101,6 +102,10 @@ async function initDatabase() {
 
     await pgPool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS tiktok_username TEXT;').catch(() => {});
     await pgPool.query('ALTER TABLE licenses ADD COLUMN IF NOT EXISTS tiktok_username TEXT;').catch(() => {});
+    await pgPool.query('ALTER TABLE licenses ADD COLUMN IF NOT EXISTS key TEXT;').catch(() => {});
+    await pgPool.query('ALTER TABLE licenses ADD COLUMN IF NOT EXISTS license_key TEXT;').catch(() => {});
+    await pgPool.query('UPDATE licenses SET key = license_key WHERE key IS NULL AND license_key IS NOT NULL;').catch(() => {});
+    await pgPool.query('UPDATE licenses SET license_key = key WHERE license_key IS NULL AND key IS NOT NULL;').catch(() => {});
 
     console.info('[Database] PostgreSQL / Supabase inicializado con éxito.');
     return pgPool;
