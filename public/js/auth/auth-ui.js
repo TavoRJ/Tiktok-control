@@ -2,7 +2,7 @@
  * auth-ui.js
  * Professional Glassmorphic Login UI Overlay and Plan Badging for TavLive.
  * Controls rendering of the Login screen, Plan badges (FREE/PRO/VIP),
- * input handlers, error states, and Logout button.
+ * input handlers, error states, and Logout button with clean input focus & state recovery.
  */
 import { authState, AUTH_STATES } from './auth-state.js';
 
@@ -141,129 +141,86 @@ export class AuthUI {
                 to { transform: scale(1); opacity: 1; }
             }
 
-            .tavlive-auth-header {
-                text-align: center;
-                margin-bottom: 22px;
-            }
-
-            .tavlive-auth-logo {
-                font-size: 36px;
-                font-weight: 900;
-                letter-spacing: -1px;
-                margin-bottom: 4px;
-            }
-
-            .logo-tav {
-                background: linear-gradient(135deg, #00ffcc, #00bfff);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-            }
-
-            .logo-live {
-                background: linear-gradient(135deg, #ff007f, #7928ca);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-            }
-
-            .tavlive-auth-subtitle {
-                color: #8a8d9b;
-                font-size: 13px;
-                margin: 0;
-            }
+            .tavlive-auth-header { text-align: center; margin-bottom: 24px; }
+            .tavlive-auth-logo { font-size: 32px; font-weight: 800; letter-spacing: -0.5px; }
+            .logo-tav { color: #ffffff; }
+            .logo-live { color: #00ffcc; text-shadow: 0 0 12px rgba(0, 255, 204, 0.5); }
+            .tavlive-auth-subtitle { font-size: 13px; color: #a0aec0; margin-top: 6px; }
 
             .tavlive-auth-banner {
                 padding: 12px 16px;
                 border-radius: 12px;
                 font-size: 13px;
                 font-weight: 500;
+                margin-bottom: 20px;
                 display: flex;
                 align-items: center;
                 gap: 10px;
-                margin-bottom: 18px;
             }
-
             .tavlive-auth-banner.error {
                 background: rgba(255, 59, 48, 0.15);
-                border: 1px solid rgba(255, 59, 48, 0.4);
-                color: #ff6b6b;
+                border: 1px solid rgba(255, 59, 48, 0.3);
+                color: #ff453a;
             }
 
-            .tavlive-auth-form {
-                display: flex;
-                flex-direction: column;
-                gap: 16px;
-            }
-
-            .tavlive-form-group {
-                display: flex;
-                flex-direction: column;
-                gap: 6px;
-            }
-
-            .tavlive-form-group label {
-                font-size: 11px;
-                font-weight: 600;
-                color: #a0a5b5;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            }
+            .tavlive-auth-form { display: flex; flex-direction: column; gap: 16px; }
+            .tavlive-form-group { display: flex; flex-direction: column; gap: 6px; }
+            .tavlive-form-group label { font-size: 12px; font-weight: 600; color: #cbd5e0; text-transform: uppercase; letter-spacing: 0.5px; }
 
             .tavlive-input-wrapper {
                 position: relative;
                 display: flex;
                 align-items: center;
             }
-
-            .tavlive-input-wrapper .input-icon {
+            .input-icon {
                 position: absolute;
                 left: 14px;
                 width: 18px;
                 height: 18px;
-                color: #5a6075;
+                color: #718096;
             }
-
             .tavlive-input-wrapper input {
                 width: 100%;
-                padding: 12px 14px 12px 44px;
-                background: rgba(10, 10, 15, 0.7);
+                padding: 12px 14px 12px 42px;
+                background: rgba(255, 255, 255, 0.05);
                 border: 1px solid rgba(255, 255, 255, 0.1);
                 border-radius: 12px;
                 color: #ffffff;
                 font-size: 14px;
                 outline: none;
-                transition: border-color 0.2s, box-shadow 0.2s;
+                transition: all 0.2s ease;
             }
-
             .tavlive-input-wrapper input:focus {
                 border-color: #00ffcc;
-                box-shadow: 0 0 12px rgba(0, 255, 204, 0.25);
+                box-shadow: 0 0 15px rgba(0, 255, 204, 0.25);
+                background: rgba(255, 255, 255, 0.08);
             }
 
             .tavlive-auth-submit-btn {
-                margin-top: 6px;
+                position: relative;
                 width: 100%;
-                padding: 13px;
+                padding: 14px;
+                background: linear-gradient(135deg, #00ffcc 0%, #00b386 100%);
                 border: none;
                 border-radius: 12px;
-                background: linear-gradient(135deg, #00ffcc, #00bfff);
                 color: #050508;
+                font-weight: 700;
                 font-size: 14px;
-                font-weight: 800;
+                letter-spacing: 0.5px;
                 cursor: pointer;
+                transition: all 0.2s ease;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                gap: 10px;
-                transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+                margin-top: 10px;
+                box-shadow: 0 4px 20px rgba(0, 255, 204, 0.3);
             }
-
             .tavlive-auth-submit-btn:hover {
                 transform: translateY(-1px);
-                box-shadow: 0 8px 25px rgba(0, 255, 204, 0.4);
+                box-shadow: 0 6px 25px rgba(0, 255, 204, 0.4);
             }
-
             .tavlive-auth-submit-btn:disabled {
-                opacity: 0.6;
+                opacity: 0.7;
                 cursor: not-allowed;
                 transform: none;
             }
@@ -271,65 +228,52 @@ export class AuthUI {
             .tavlive-auth-divider {
                 display: flex;
                 align-items: center;
-                text-align: center;
-                margin: 18px 0;
-                color: #5a6075;
-            }
-
-            .tavlive-auth-divider::before, .tavlive-auth-divider::after {
-                content: '';
-                flex: 1;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            }
-
-            .tavlive-auth-divider span {
-                padding: 0 10px;
-                font-size: 10px;
-                font-weight: 700;
+                margin: 24px 0;
+                color: #4a5568;
+                font-size: 11px;
+                font-weight: 600;
                 letter-spacing: 1px;
             }
+            .tavlive-auth-divider::before, .tavlive-auth-divider::after {
+                content: "";
+                flex: 1;
+                height: 1px;
+                background: rgba(255, 255, 255, 0.08);
+            }
+            .tavlive-auth-divider span { padding: 0 12px; }
 
             .tavlive-google-btn {
                 width: 100%;
                 padding: 12px;
-                border: 1px solid rgba(255, 255, 255, 0.15);
+                background: rgba(255, 255, 255, 0.06);
+                border: 1px solid rgba(255, 255, 255, 0.12);
                 border-radius: 12px;
-                background: rgba(255, 255, 255, 0.05);
                 color: #ffffff;
-                font-size: 13px;
                 font-weight: 600;
+                font-size: 13px;
                 cursor: pointer;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 gap: 10px;
-                transition: background 0.2s, border-color 0.2s;
+                transition: all 0.2s ease;
             }
-
             .tavlive-google-btn:hover {
                 background: rgba(255, 255, 255, 0.12);
                 border-color: rgba(255, 255, 255, 0.25);
             }
 
+            .tavlive-auth-footer { text-align: center; margin-top: 24px; font-size: 11px; color: #718096; }
+
             .tavlive-spinner {
                 width: 18px;
                 height: 18px;
-                border: 3px solid rgba(5, 5, 8, 0.3);
+                border: 2px solid rgba(5, 5, 8, 0.2);
                 border-top-color: #050508;
                 border-radius: 50%;
                 animation: tavliveSpin 0.8s linear infinite;
             }
-
-            @keyframes tavliveSpin {
-                to { transform: rotate(360deg); }
-            }
-
-            .tavlive-auth-footer {
-                margin-top: 22px;
-                text-align: center;
-                font-size: 11px;
-                color: #5a6075;
-            }
+            @keyframes tavliveSpin { to { transform: rotate(360deg); } }
 
             .tavlive-header-user-badge {
                 display: flex;
@@ -338,65 +282,34 @@ export class AuthUI {
                 padding: 6px 14px;
                 background: rgba(255, 255, 255, 0.05);
                 border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 20px;
+                border-radius: 30px;
+                font-size: 12px;
                 margin-left: auto;
             }
 
-            .tavlive-user-email {
-                font-size: 12px;
-                font-weight: 600;
-                color: #e0e6ed;
-            }
-
-            /* PLAN BADGES (Subphase 6D) */
             .tavlive-plan-badge {
-                padding: 3px 10px;
-                border-radius: 12px;
+                padding: 2px 8px;
+                border-radius: 10px;
                 font-size: 10px;
                 font-weight: 800;
-                letter-spacing: 0.8px;
+                letter-spacing: 0.5px;
                 text-transform: uppercase;
             }
-
-            .tavlive-plan-badge.plan-free {
-                background: rgba(0, 255, 204, 0.1);
-                border: 1px solid rgba(0, 255, 204, 0.4);
-                color: #00ffcc;
-            }
-
-            .tavlive-plan-badge.plan-pro {
-                background: linear-gradient(135deg, rgba(121, 40, 202, 0.35), rgba(255, 0, 127, 0.35));
-                border: 1px solid rgba(255, 0, 127, 0.5);
-                color: #ff66cc;
-                box-shadow: 0 0 10px rgba(255, 0, 127, 0.2);
-            }
-
-            .tavlive-plan-badge.plan-vip {
-                background: linear-gradient(135deg, rgba(255, 215, 0, 0.35), rgba(255, 140, 0, 0.35));
-                border: 1px solid rgba(255, 215, 0, 0.6);
-                color: #ffd700;
-                box-shadow: 0 0 12px rgba(255, 215, 0, 0.3);
-            }
-
-            .tavlive-plan-locked {
-                opacity: 0.5;
-                pointer-events: none;
-                cursor: not-allowed !important;
-                filter: grayscale(0.8);
-            }
+            .plan-free { background: rgba(160, 174, 192, 0.2); color: #a0aec0; border: 1px solid rgba(160, 174, 192, 0.3); }
+            .plan-pro { background: rgba(0, 255, 204, 0.2); color: #00ffcc; border: 1px solid rgba(0, 255, 204, 0.4); box-shadow: 0 0 10px rgba(0, 255, 204, 0.2); }
+            .plan-vip { background: rgba(255, 215, 0, 0.2); color: #ffd700; border: 1px solid rgba(255, 215, 0, 0.4); box-shadow: 0 0 12px rgba(255, 215, 0, 0.3); }
 
             .tavlive-logout-btn {
                 background: rgba(255, 59, 48, 0.2);
-                border: 1px solid rgba(255, 59, 48, 0.4);
-                color: #ff6b6b;
+                border: 1px solid rgba(255, 59, 48, 0.3);
+                color: #ff453a;
                 padding: 4px 10px;
                 border-radius: 12px;
                 font-size: 11px;
-                font-weight: 700;
+                font-weight: 600;
                 cursor: pointer;
-                transition: background 0.2s;
+                transition: all 0.2s ease;
             }
-
             .tavlive-logout-btn:hover {
                 background: rgba(255, 59, 48, 0.4);
             }
@@ -408,10 +321,12 @@ export class AuthUI {
 
         // Bind form submit event
         const form = document.getElementById('tavlive-login-form');
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            await this.handleLoginSubmit();
-        });
+        if (form) {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await this.handleLoginSubmit();
+            });
+        }
 
         // Bind Google login click event
         const googleBtn = document.getElementById('tavlive-btn-google-login');
@@ -463,7 +378,7 @@ export class AuthUI {
         }
     }
 
-    static setLoading(isLoading) {
+    static setLoading(isLoading, textOverride = null) {
         const submitBtn = document.getElementById('tavlive-btn-login');
         const googleBtn = document.getElementById('tavlive-btn-google-login');
         const btnText = document.getElementById('tavlive-btn-text');
@@ -473,7 +388,7 @@ export class AuthUI {
             submitBtn.disabled = isLoading;
             if (googleBtn) googleBtn.disabled = isLoading;
             if (isLoading) {
-                btnText.textContent = 'AUTENTICANDO...';
+                btnText.textContent = textOverride ? textOverride : 'AUTENTICANDO...';
                 spinner.style.display = 'block';
             } else {
                 btnText.textContent = 'INICIAR SESIÓN';
@@ -500,8 +415,12 @@ export class AuthUI {
         this.hideError();
         this.setLoading(true);
 
+        const onStatusUpdate = (msg) => {
+            this.setLoading(true, msg);
+        };
+
         try {
-            const result = await authState.login(email, password, rememberMe);
+            const result = await authState.login(email, password, rememberMe, onStatusUpdate);
             if (!result.success) {
                 this.showError(result.error || 'Credenciales incorrectas.');
             } else {
@@ -517,8 +436,7 @@ export class AuthUI {
     static async handleGoogleLoginClick() {
         this.hideError();
 
-        // Prompt Google ID token input or trigger OAuth PKCE flow
-        const promptToken = prompt('Ingresa tu Token de Google OIDC para probar la autenticación (En producción, esto abre la ventana emergente de Google):');
+        const promptToken = prompt('Ingresa tu Token de Google OIDC para probar la autenticación:');
         if (!promptToken) return;
 
         this.setLoading(true);
@@ -599,6 +517,37 @@ export class AuthUI {
                 planBadge.className = 'tavlive-plan-badge plan-free';
             }
             this.updateFeatureAvailability();
+
+            // Unlock form controls cleanly upon Logout
+            const emailInput = document.getElementById('tavlive-input-email');
+            const passwordInput = document.getElementById('tavlive-input-password');
+            const submitBtn = document.getElementById('tavlive-btn-login');
+            const googleBtn = document.getElementById('tavlive-btn-google-login');
+
+            if (emailInput) {
+                emailInput.disabled = false;
+                emailInput.readOnly = false;
+            }
+            if (passwordInput) {
+                passwordInput.disabled = false;
+                passwordInput.readOnly = false;
+            }
+            if (submitBtn) submitBtn.disabled = false;
+            if (googleBtn) googleBtn.disabled = false;
+
+            this.setLoading(false);
+
+            const tiktokInput = document.getElementById('username-input');
+            if (tiktokInput) {
+                tiktokInput.readOnly = false;
+                tiktokInput.title = '';
+            }
+
+            const setupInput = document.getElementById('setup-tiktok-username');
+            if (setupInput) {
+                setupInput.readOnly = false;
+                setupInput.title = '';
+            }
         }
     }
 }

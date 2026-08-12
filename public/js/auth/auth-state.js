@@ -143,68 +143,32 @@ class AuthStateManager {
             return { success: true, user: this.currentUser, license: this.currentLicense };
         }
 
-        if (profileRes.status === 403) {
-            // Case 2A: Explicit Remote Rejection (Account/License/Device Suspended, Banned, Expired, Revoked, or Paused)
-            console.warn('[Heartbeat] Explicit remote rejection (HTTP 403). Locking application:', profileRes.error);
+        if (profileRes.status === 401 || profileRes.status === 403) {
+            // Case 2: Explicit authentication or license revocation error
+            console.warn('[Heartbeat] Autorización o licencia revocada por el servidor:', profileRes.error);
             await this.logout(false);
-            return { success: false, reason: profileRes.error || 'Authorization revoked.' };
+            return { success: false, reason: profileRes.error };
         }
 
-        if (profileRes.status === 401) {
-            // Case 2B: Token expired -> Attempt silent refresh
-            const refreshToken = await SessionManager.getRefreshToken();
-            if (!refreshToken) {
-                await this.logout(false);
-                return { success: false, reason: 'No refresh token available.' };
-            }
+        // Case 3: Transient network failure (HTTP 500, timeout, OFFLINE)
+        this.consecutiveNetworkErrors++;
+        console.warn(`[Heartbeat] Falla de red transitoria (${this.consecutiveNetworkErrors}/${this.maxGraceNetworkErrors}):`, profileRes.error);
 
-            const refreshRes = await AuthClient.refreshToken(refreshToken);
-
-            // Guard again after async refresh call
-            if (currentGen !== this.heartbeatGeneration || this.state !== AUTH_STATES.AUTHENTICATED) {
-                return { success: false, reason: 'Heartbeat refresh discarded due to state transition.' };
-            }
-
-            if (refreshRes.isAborted) {
-                return { success: false, isAborted: true, reason: 'Refresh request was aborted.' };
-            }
-
-            if (!refreshRes.success || !refreshRes.accessToken) {
-                console.warn('[Heartbeat] Refresh failed (HTTP 401/403). Locking application:', refreshRes.error);
-                await this.logout(false);
-                return { success: false, reason: refreshRes.error || 'Refresh failed.' };
-            }
-
-            // Update in-memory Access Token & sync with local server.js
-            this.accessToken = refreshRes.accessToken;
-            await this._syncWithLocalServer(this.accessToken, this.currentUser);
-            this.consecutiveNetworkErrors = 0;
-            return { success: true, user: this.currentUser, license: this.currentLicense };
+        if (this.consecutiveNetworkErrors >= this.maxGraceNetworkErrors) {
+            console.error('[Heartbeat] Umbral de gracia de red superado. Bloqueando TavLive.');
+            await this.logout(false);
+            return { success: false, reason: 'Pérdida prolongada de conexión con el servidor de autenticación.' };
         }
 
-        if (profileRes.status === 0) {
-            // Case 3: Temporary Network Disconnect
-            this.consecutiveNetworkErrors++;
-            console.warn(`[Heartbeat] Network error (${this.consecutiveNetworkErrors}/${this.maxGraceNetworkErrors}).`);
-
-            if (this.consecutiveNetworkErrors > this.maxGraceNetworkErrors) {
-                console.warn('[Heartbeat] Grace period exceeded for network connection. Locking application.');
-                await this.logout(false);
-                return { success: false, reason: 'Network grace period exceeded.' };
-            }
-
-            return { success: false, reason: 'Temporary network disconnect.', inGracePeriod: true };
-        }
-
-        return { success: false, error: profileRes.error };
+        return { success: false, isTransient: true, consecutiveErrors: this.consecutiveNetworkErrors };
     }
 
     /**
      * Perform login with email and password.
      */
-    async login(email, password, rememberMe = true) {
+    async login(email, password, rememberMe = true, onRetryStatus = null) {
         this.heartbeatGeneration++;
-        const response = await AuthClient.login({ email, password });
+        const response = await AuthClient.login({ email, password }, onRetryStatus);
 
         if (!response.success) {
             return response;
@@ -302,7 +266,7 @@ class AuthStateManager {
     }
 
     /**
-     * Logout and destroy session.
+     * Logout and destroy session cleanly.
      */
     async logout(notifyRemote = true) {
         AuthClient.abortInFlightRequests(); // Abort any in-flight HTTP requests
@@ -311,7 +275,7 @@ class AuthStateManager {
 
         if (notifyRemote) {
             const refreshToken = await SessionManager.getRefreshToken();
-            await AuthClient.logout(refreshToken);
+            await AuthClient.logout(this.accessToken, refreshToken);
         }
 
         await SessionManager.clearRefreshToken();

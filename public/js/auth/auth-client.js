@@ -1,7 +1,8 @@
 /**
  * auth-client.js
  * Client wrapper for communicating with TavLive Remote Authentication API
- * featuring AbortController support for cancelling in-flight requests.
+ * featuring AbortController support, Cold Start retries for Render instances,
+ * and robust error handling.
  */
 export const AUTH_SERVER_URL = window.AUTH_SERVER_URL || 'https://tavlive-auth-server.onrender.com';
 
@@ -26,38 +27,68 @@ export class AuthClient {
         return activeAbortController.signal;
     }
 
-    static async login({ tiktokUsername, email, identifier, password, deviceIdentifier = 'TAVLIVE-DESKTOP-CLIENT', deviceName = 'Desktop PC', osPlatform = 'win32' }) {
+    /**
+     * Authenticate user credentials with automatic Cold Start retries.
+     */
+    static async login({ tiktokUsername, email, identifier, password, deviceIdentifier = 'TAVLIVE-DESKTOP-CLIENT', deviceName = 'Desktop PC', osPlatform = 'win32' }, onRetryStatus = null) {
         const signal = this._createSignal();
-        try {
-            const targetIdentifier = tiktokUsername || identifier || email;
-            const response = await fetch(`${AUTH_SERVER_URL}/api/auth/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tiktokUsername: targetIdentifier, email: targetIdentifier, identifier: targetIdentifier, password, deviceIdentifier, deviceName, osPlatform }),
-                signal
-            });
+        const targetIdentifier = tiktokUsername || identifier || email;
+        const maxRetries = 3;
+        const retryDelayMs = 3000;
 
-            const data = await response.json().catch(() => ({ success: false, error: 'Respuesta inválida del servidor.' }));
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                if (attempt > 1 && typeof onRetryStatus === 'function') {
+                    onRetryStatus(`Conectando con el servidor en la nube... (Intento ${attempt}/${maxRetries})`);
+                }
 
-            if (!response.ok) {
+                const response = await fetch(`${AUTH_SERVER_URL}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tiktokUsername: targetIdentifier, email: targetIdentifier, identifier: targetIdentifier, password, deviceIdentifier, deviceName, osPlatform }),
+                    signal
+                });
+
+                // Render Cold Start HTTP 502 / 503 / 504 retry
+                if ([502, 503, 504].includes(response.status) && attempt < maxRetries) {
+                    if (typeof onRetryStatus === 'function') {
+                        onRetryStatus(`El servidor se está iniciando en la nube. Reintentando en ${retryDelayMs / 1000}s...`);
+                    }
+                    await new Promise(r => setTimeout(r, retryDelayMs));
+                    continue;
+                }
+
+                const data = await response.json().catch(() => ({ success: false, error: 'Respuesta inválida del servidor.' }));
+
+                if (!response.ok) {
+                    return {
+                        success: false,
+                        status: response.status,
+                        error: data.error || 'Error de autenticación.',
+                        details: data.details || null
+                    };
+                }
+
+                return data;
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    return { success: false, status: -1, isAborted: true, error: 'Request aborted.' };
+                }
+
+                if (attempt < maxRetries) {
+                    if (typeof onRetryStatus === 'function') {
+                        onRetryStatus(`Conectando con el servidor... (${attempt}/${maxRetries})`);
+                    }
+                    await new Promise(r => setTimeout(r, retryDelayMs));
+                    continue;
+                }
+
                 return {
                     success: false,
-                    status: response.status,
-                    error: data.error || 'Error de autenticación.',
-                    details: data.details || null
+                    status: 0,
+                    error: 'Servidor de autenticación no disponible. Verifica tu conexión.'
                 };
             }
-
-            return data;
-        } catch (err) {
-            if (err.name === 'AbortError') {
-                return { success: false, status: -1, isAborted: true, error: 'Request aborted.' };
-            }
-            return {
-                success: false,
-                status: 0,
-                error: 'Servidor de autenticación no disponible. Verifica tu conexión.'
-            };
         }
     }
 
