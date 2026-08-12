@@ -6,6 +6,7 @@ let isPg = false;
 let pgPool = null;
 let sqliteDb = null;
 let SQL = null;
+let inTransaction = false;
 
 const rawDbPath = process.env.DB_PATH || config.DB_PATH || config.DB_FILE_PATH || './data/tavlive_auth.db';
 const dbPath = path.isAbsolute(rawDbPath)
@@ -18,10 +19,12 @@ function convertPlaceholders(sql) {
 }
 
 function saveSqliteDb() {
-  if (!sqliteDb) return;
-  const data = sqliteDb.export();
-  const buffer = Buffer.from(data);
-  fs.writeFileSync(dbPath, buffer);
+  if (!sqliteDb || inTransaction) return;
+  try {
+    const data = sqliteDb.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(dbPath, buffer);
+  } catch (err) {}
 }
 
 async function initDatabase() {
@@ -152,6 +155,10 @@ async function initDatabase() {
     } catch (e) {}
 
     try {
+      sqliteDb.exec("ALTER TABLE licenses ADD COLUMN license_key TEXT;");
+    } catch (e) {}
+
+    try {
       sqliteDb.exec(schemaSql);
     } catch (err) {}
 
@@ -207,6 +214,37 @@ const dbHelper = {
     sqliteDb.run(sql, params);
     saveSqliteDb();
     return Promise.resolve();
+  },
+
+  async transaction(fn) {
+    if (isPg) {
+      const client = await pgPool.connect();
+      try {
+        await client.query('BEGIN');
+        const result = await fn(client);
+        await client.query('COMMIT');
+        return result;
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw err;
+      } finally {
+        client.release();
+      }
+    } else {
+      try {
+        inTransaction = true;
+        sqliteDb.exec('BEGIN TRANSACTION;');
+        const result = await fn();
+        sqliteDb.exec('COMMIT;');
+        inTransaction = false;
+        saveSqliteDb();
+        return result;
+      } catch (err) {
+        inTransaction = false;
+        try { sqliteDb.exec('ROLLBACK;'); } catch (e) {}
+        throw err;
+      }
+    }
   }
 };
 

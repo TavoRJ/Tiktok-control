@@ -34,9 +34,9 @@ const licenseService = {
     const cleanTiktok = tiktokUsername ? String(tiktokUsername).replace('@', '').trim() : null;
 
     await dbHelper.execute(
-      `INSERT INTO licenses (id, user_id, key, plan, status, max_devices, expires_at, tiktok_username, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, userId, key, upperPlan, 'active', effectiveMaxDevices, expiresAt, cleanTiktok, createdAt]
+      `INSERT INTO licenses (id, user_id, key, license_key, plan, status, max_devices, expires_at, tiktok_username, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, userId, key, key, upperPlan, 'active', effectiveMaxDevices, expiresAt, cleanTiktok, createdAt]
     );
 
     return this.findById(id);

@@ -58,21 +58,33 @@ router.post('/users', validate(createUserSchema), async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Se requiere @tiktok_username o email.' });
     }
 
-    const user = await userService.createUser({
-      tiktokUsername,
-      email,
-      name,
-      password,
-      role,
-      status
-    });
+    let user = null;
+    let license = null;
 
-    const license = await licenseService.createLicense({
-      userId: user.id,
-      plan: plan || 'PRO',
-      expiresAt: expiresAt || null,
-      tiktokUsername: tiktokUsername
-    });
+    try {
+      await dbHelper.transaction(async () => {
+        user = await userService.createUser({
+          tiktokUsername,
+          email,
+          name,
+          password,
+          role,
+          status
+        });
+
+        license = await licenseService.createLicense({
+          userId: user.id,
+          plan: plan || 'PRO',
+          expiresAt: expiresAt || null,
+          tiktokUsername: tiktokUsername
+        });
+      });
+    } catch (createErr) {
+      if (user && user.id) {
+        await userService.deleteUser(user.id).catch(() => {});
+      }
+      throw createErr;
+    }
 
     res.status(201).json({ success: true, user, license });
   } catch (err) {
