@@ -60,7 +60,8 @@ async function initDatabase() {
         license_key TEXT,
         plan TEXT NOT NULL DEFAULT 'FREE',
         status TEXT NOT NULL DEFAULT 'active',
-        device_limit INTEGER NOT NULL DEFAULT 1,
+        max_devices INT DEFAULT 1,
+        device_limit INT DEFAULT 1,
         activated_at TEXT,
         expires_at TEXT,
         created_at TEXT NOT NULL
@@ -104,8 +105,12 @@ async function initDatabase() {
     await pgPool.query('ALTER TABLE licenses ADD COLUMN IF NOT EXISTS tiktok_username TEXT;').catch(() => {});
     await pgPool.query('ALTER TABLE licenses ADD COLUMN IF NOT EXISTS key TEXT;').catch(() => {});
     await pgPool.query('ALTER TABLE licenses ADD COLUMN IF NOT EXISTS license_key TEXT;').catch(() => {});
+    await pgPool.query('ALTER TABLE licenses ADD COLUMN IF NOT EXISTS max_devices INT DEFAULT 1;').catch(() => {});
+    await pgPool.query('ALTER TABLE licenses ADD COLUMN IF NOT EXISTS device_limit INT DEFAULT 1;').catch(() => {});
     await pgPool.query('UPDATE licenses SET key = license_key WHERE key IS NULL AND license_key IS NOT NULL;').catch(() => {});
     await pgPool.query('UPDATE licenses SET license_key = key WHERE license_key IS NULL AND key IS NOT NULL;').catch(() => {});
+    await pgPool.query('UPDATE licenses SET max_devices = device_limit WHERE max_devices IS NULL AND device_limit IS NOT NULL;').catch(() => {});
+    await pgPool.query('UPDATE licenses SET device_limit = max_devices WHERE device_limit IS NULL AND max_devices IS NOT NULL;').catch(() => {});
 
     console.info('[Database] PostgreSQL / Supabase inicializado con éxito.');
     return pgPool;
