@@ -1,0 +1,936 @@
+/* ==========================================================================
+   TavLive Dynamic Widgets Core Styling System - V1.3.19
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Base CSS Variables / Custom Properties
+   -------------------------------------------------------------------------- */
+:root {
+    --widget-opacity: 0.85;
+    --widget-scale: 1;
+    --widget-duration: 4s;
+    --widget-radius: 12px;
+    --widget-blur: 16px;
+    --widget-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    --widget-accent: #00ffcc;
+    --widget-accent-glow: rgba(0, 255, 204, 0.4);
+    --widget-bg: rgba(15, 10, 25, 0.85);
+    --widget-border: rgba(255, 255, 255, 0.12);
+    --widget-text: #ffffff;
+    --widget-text-sub: rgba(255, 255, 255, 0.7);
+    --widget-font: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* --------------------------------------------------------------------------
+   2. Base Dynamic Overlay Widget Container
+   -------------------------------------------------------------------------- */
+.gr-dynamic-widget {
+    position: absolute;
+    width: max-content !important;
+    height: max-content !important;
+    max-width: 100%;
+    box-sizing: border-box;
+    font-family: var(--widget-font);
+    user-select: none;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    scale: var(--widget-scale, 1);
+    transform-origin: top left !important;
+    will-change: transform, opacity;
+    backface-visibility: hidden;
+    transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.3s ease;
+}
+
+/* Persistent Floating Song Requests Widget */
+.gr-song-requests-floating {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 6px 10px;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: var(--widget-text-color, #ffffff);
+    font-family: var(--widget-font);
+}
+
+.gr-song-request-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.gr-song-cover-mini {
+    width: 46px;
+    height: 46px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+    box-shadow: none !important;
+    border: none !important;
+}
+
+.gr-song-cover-placeholder {
+    width: 46px;
+    height: 46px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+}
+
+.gr-song-request-details {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    overflow: hidden;
+}
+
+.gr-song-request-title {
+    font-size: 30px;
+    font-weight: 800;
+    color: var(--widget-text-color, #ffffff);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+}
+
+.gr-song-request-subtext {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 26px;
+    color: var(--widget-text-color, var(--widget-text-sub));
+    opacity: 0.85;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+}
+
+.gr-song-artist {
+    font-weight: 500;
+}
+
+.gr-song-dot {
+    opacity: 0.6;
+    margin: 0 2px;
+}
+
+.gr-song-requester {
+    font-weight: 700;
+    color: var(--widget-accent, #00ffcc);
+}             visibility 0.3s ease;
+}
+
+/* State Management Classes */
+.gr-dynamic-widget.state-idle {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+.gr-dynamic-widget.state-active {
+    opacity: var(--widget-opacity, 0.85) !important;
+    visibility: visible !important;
+    pointer-events: auto;
+}
+
+.gr-dynamic-widget.state-exit {
+    opacity: 0 !important;
+    visibility: visible !important;
+    pointer-events: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   3. Visual Styles / Presets
+   -------------------------------------------------------------------------- */
+
+/* Transparent Background Override */
+.gr-dynamic-widget.bg-transparent,
+.gr-dynamic-widget.bg-transparent .style-minimal,
+.gr-dynamic-widget.bg-transparent .style-glass,
+.gr-dynamic-widget.bg-transparent .style-clean,
+.gr-dynamic-widget.bg-transparent .style-neon,
+.gr-dynamic-widget.bg-transparent .style-custom {
+    background: transparent !important;
+    background-color: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+/* Explicit Border Removal Override */
+.gr-dynamic-widget.border-none,
+.border-none {
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+/* Minimal Style */
+.style-minimal {
+    background: rgba(10, 10, 15, var(--widget-opacity, 0.85));
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    box-shadow: none !important;
+    color: var(--widget-text-color, var(--widget-text));
+}
+
+/* Glassmorphism Style */
+.style-glass {
+    background: rgba(20, 20, 35, var(--widget-opacity, 0.65));
+    backdrop-filter: blur(var(--widget-blur, 16px)) saturate(180%);
+    -webkit-backdrop-filter: blur(var(--widget-blur, 16px)) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 16px;
+    box-shadow: none !important;
+    color: var(--widget-text-color, var(--widget-text));
+}
+
+/* Clean Style */
+.style-clean {
+    background: rgba(255, 255, 255, var(--widget-opacity, 0.95));
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 12px;
+    box-shadow: none !important;
+    color: var(--widget-text-color, #111118);
+}
+.style-clean .widget-subtext {
+    color: rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Neon Cyberpunk Style */
+.style-neon {
+    background: rgba(12, 5, 20, var(--widget-opacity, 0.9));
+    border: 1px solid var(--widget-border, var(--widget-accent, #00ffcc));
+    border-radius: 12px;
+    box-shadow: none !important;
+    color: var(--widget-text-color, #ffffff);
+}
+
+/* Custom / Theme Responsive Style */
+.style-custom {
+    background: var(--widget-bg);
+    border: 1px solid var(--widget-border);
+    border-radius: var(--widget-radius);
+    box-shadow: none !important;
+    color: var(--widget-text-color, var(--widget-text));
+}
+
+/* --------------------------------------------------------------------------
+   4. Entrance Animations
+   -------------------------------------------------------------------------- */
+
+/* Fade In */
+.anim-enter-fade {
+    animation: grFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes grFadeIn {
+    from { opacity: 0; }
+    to { opacity: var(--widget-opacity, 0.85); }
+}
+
+/* Slide Up */
+.anim-enter-slide-up {
+    animation: grSlideUpIn 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+@keyframes grSlideUpIn {
+    from { opacity: 0; transform: translateY(35px) scale(0.95); }
+    to { opacity: var(--widget-opacity, 0.85); transform: translateY(0) scale(1); }
+}
+
+/* Slide Down */
+.anim-enter-slide-down {
+    animation: grSlideDownIn 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+@keyframes grSlideDownIn {
+    from { opacity: 0; transform: translateY(-35px) scale(0.95); }
+    to { opacity: var(--widget-opacity, 0.85); transform: translateY(0) scale(1); }
+}
+
+/* Slide Left */
+.anim-enter-slide-left {
+    animation: grSlideLeftIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes grSlideLeftIn {
+    from { opacity: 0; transform: translateX(45px); }
+    to { opacity: var(--widget-opacity, 0.85); transform: translateX(0); }
+}
+
+/* Slide Right */
+.anim-enter-slide-right {
+    animation: grSlideRightIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes grSlideRightIn {
+    from { opacity: 0; transform: translateX(-45px); }
+    to { opacity: var(--widget-opacity, 0.85); transform: translateX(0); }
+}
+
+/* Pop */
+.anim-enter-pop {
+    animation: grPopIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+@keyframes grPopIn {
+    from { opacity: 0; transform: scale(0.6); }
+    to { opacity: var(--widget-opacity, 0.85); transform: scale(1); }
+}
+
+/* Scale */
+.anim-enter-scale {
+    animation: grScaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes grScaleIn {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: var(--widget-opacity, 0.85); transform: scale(1); }
+}
+
+/* Bounce */
+.anim-enter-bounce {
+    animation: grBounceIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+}
+@keyframes grBounceIn {
+    0% { opacity: 0; transform: scale(0.3); }
+    50% { opacity: var(--widget-opacity, 0.85); transform: scale(1.08); }
+    70% { transform: scale(0.95); }
+    100% { transform: scale(1); }
+}
+
+/* --------------------------------------------------------------------------
+   5. Exit Animations
+   -------------------------------------------------------------------------- */
+
+/* Fade Out */
+.anim-exit-fade {
+    animation: grFadeOut 0.35s ease forwards;
+}
+@keyframes grFadeOut {
+    from { opacity: var(--widget-opacity, 0.85); }
+    to { opacity: 0; }
+}
+
+/* Slide Up Out */
+.anim-exit-slide-up {
+    animation: grSlideUpOut 0.4s cubic-bezier(0.7, 0, 0.84, 0) forwards;
+}
+@keyframes grSlideUpOut {
+    from { opacity: var(--widget-opacity, 0.85); transform: translateY(0); }
+    to { opacity: 0; transform: translateY(-30px) scale(0.95); }
+}
+
+/* Slide Down Out */
+.anim-exit-slide-down {
+    animation: grSlideDownOut 0.4s cubic-bezier(0.7, 0, 0.84, 0) forwards;
+}
+@keyframes grSlideDownOut {
+    from { opacity: var(--widget-opacity, 0.85); transform: translateY(0); }
+    to { opacity: 0; transform: translateY(30px) scale(0.95); }
+}
+
+/* Slide Left Out */
+.anim-exit-slide-left {
+    animation: grSlideLeftOut 0.4s ease forwards;
+}
+@keyframes grSlideLeftOut {
+    from { opacity: var(--widget-opacity, 0.85); transform: translateX(0); }
+    to { opacity: 0; transform: translateX(-40px); }
+}
+
+/* Slide Right Out */
+.anim-exit-slide-right {
+    animation: grSlideRightOut 0.4s ease forwards;
+}
+@keyframes grSlideRightOut {
+    from { opacity: var(--widget-opacity, 0.85); transform: translateX(0); }
+    to { opacity: 0; transform: translateX(40px); }
+}
+
+/* Pop Out */
+.anim-exit-pop {
+    animation: grPopOut 0.35s ease forwards;
+}
+@keyframes grPopOut {
+    from { opacity: var(--widget-opacity, 0.85); transform: scale(1); }
+    to { opacity: 0; transform: scale(0.6); }
+}
+
+/* Scale Out */
+.anim-exit-scale {
+    animation: grScaleOut 0.35s ease forwards;
+}
+@keyframes grScaleOut {
+    from { opacity: var(--widget-opacity, 0.85); transform: scale(1); }
+    to { opacity: 0; transform: scale(0.8); }
+}
+
+/* Bounce Out */
+.anim-exit-bounce {
+    animation: grBounceOut 0.4s ease forwards;
+}
+@keyframes grBounceOut {
+    0% { transform: scale(1); opacity: var(--widget-opacity, 0.85); }
+    20% { transform: scale(1.1); }
+    100% { transform: scale(0.3); opacity: 0; }
+}
+
+/* --------------------------------------------------------------------------
+   6. General Helper Component Classes for Dynamic Overlay Content
+   -------------------------------------------------------------------------- */
+.gr-widget-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+.gr-widget-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    flex-shrink: 0;
+}
+
+.gr-widget-info {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-grow: 1;
+}
+
+.gr-widget-title {
+    font-size: 14px;
+    font-weight: 700;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    line-height: 1.2;
+}
+
+.gr-widget-subtext {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--widget-text-sub);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    line-height: 1.2;
+    margin-top: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   7. FASE 2 Component Specific Styling (Compact & Clean)
+   -------------------------------------------------------------------------- */
+
+/* Compact Pill Badge (Follow, Share, Compact Donor) */
+.gr-card-compact {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    box-sizing: border-box;
+    max-width: 100%;
+    white-space: nowrap;
+}
+
+.gr-compact-avatar {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.gr-compact-icon {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--widget-accent, #00ffcc);
+}
+
+.gr-compact-text {
+    font-size: 13px;
+    color: var(--widget-text-color, inherit);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Top Donator Showcase Card */
+.gr-card-showcase {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+.gr-showcase-crown {
+    position: absolute;
+    top: -12px;
+    left: 20px;
+    font-size: 20px;
+}
+
+.gr-showcase-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #ffd700;
+    flex-shrink: 0;
+}
+
+.gr-showcase-body {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-grow: 1;
+}
+
+.gr-showcase-tag {
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    color: #ffd700;
+    text-transform: uppercase;
+}
+
+.gr-showcase-name {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--widget-text-color, inherit);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.gr-showcase-name .gr-handle {
+    font-size: 12px;
+    color: rgba(255,255,255,0.6);
+    font-weight: 400;
+    margin-left: 4px;
+}
+
+.gr-showcase-value {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--widget-accent, #00ffcc);
+    margin-top: 2px;
+}
+
+/* Gift Alert Card */
+.gr-card-alert {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+.gr-alert-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 0, 128, 0.5);
+    flex-shrink: 0;
+}
+
+.gr-alert-content {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.gr-alert-user {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--widget-text-color, inherit);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.gr-alert-desc {
+    font-size: 12px;
+    color: var(--widget-text-color, var(--widget-text-sub));
+    opacity: 0.8;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.gr-gift-img {
+    width: 38px;
+    height: 38px;
+    object-fit: contain;
+    flex-shrink: 0;
+    animation: grPopIn 0.3s ease;
+}
+
+.gr-gift-count {
+    font-size: 18px;
+    font-weight: 900;
+    color: #ff0077;
+    text-shadow: 0 0 8px rgba(255, 0, 119, 0.5);
+    flex-shrink: 0;
+    padding-left: 4px;
+}
+
+/* Featured Comment Card */
+.gr-card-comment {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 14px;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+.gr-comment-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.gr-comment-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.gr-comment-author {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--widget-text-color, inherit);
+    flex-grow: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gr-comment-badge {
+    font-size: 10px;
+    font-weight: 800;
+    background: rgba(255, 0, 119, 0.2);
+    color: #ff0077;
+    padding: 2px 6px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 0, 119, 0.3);
+}
+
+.gr-comment-body {
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--widget-text-color, var(--widget-text));
+    font-style: italic;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   8. FASE 3 Component Specific Styling
+   -------------------------------------------------------------------------- */
+
+/* Tap Tap Particle Counter Pill */
+.gr-card-taps {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    background: rgba(255, 0, 85, 0.15);
+    border: 1px solid rgba(255, 0, 85, 0.35);
+    box-shadow: none !important;
+}
+
+.gr-tap-heart-anim {
+    font-size: 16px;
+    animation: grHeartPulse 0.6s infinite alternate cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+@keyframes grHeartPulse {
+    from { transform: scale(0.9); }
+    to { transform: scale(1.25); }
+}
+
+.gr-tap-user {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--widget-text-color, inherit);
+    max-width: 110px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gr-tap-count {
+    font-size: 15px;
+    font-weight: 900;
+    color: #ff0055;
+}
+
+.gr-tap-total {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+/* Ultra-Minimalist Floating Inline Elements for 1080x1920 Canvas */
+.gr-minimal-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    background: transparent;
+    border: none;
+    box-shadow: none !important;
+    color: var(--widget-text-color, #ffffff);
+    font-family: var(--widget-font);
+    white-space: nowrap;
+}
+
+.gr-gift-img-mini {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.gr-compact-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.gr-inline-text {
+    font-size: 30px;
+    color: var(--widget-text-color, inherit);
+    white-space: nowrap;
+}
+
+.gr-badge-icon {
+    font-size: 34px;
+}
+
+.gr-compact-icon {
+    font-size: 34px;
+}
+
+.gr-music-cover-mini {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.gr-music-sep {
+    opacity: 0.6;
+    margin: 0 6px;
+}
+
+.gr-music-icon-anim {
+    font-size: 38px;
+    font-weight: 900;
+    color: var(--widget-accent, #00ffcc);
+    animation: grMusicBeat 1.2s infinite ease-in-out;
+}
+@keyframes grMusicBeat {
+    0%, 100% { transform: scale(1) rotate(0deg); }
+    50% { transform: scale(1.2) rotate(12deg); }
+}
+
+.gr-music-title {
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--widget-text-color, inherit);
+}
+
+.gr-music-artist {
+    font-size: 28px;
+    color: var(--widget-text-color, var(--widget-text-sub));
+    opacity: 0.85;
+}
+
+/* Goal / Progress Card */
+.gr-card-goal {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 14px;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+.gr-goal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.gr-goal-title {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--widget-text-color, inherit);
+    text-transform: uppercase;
+}
+
+.gr-goal-pct {
+    font-size: 12px;
+    font-weight: 900;
+    color: var(--widget-accent, #00ffcc);
+}
+
+.gr-goal-bar {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+
+.gr-goal-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00ffcc, #00ffaa);
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+.gr-goal-text {
+    font-size: 11px;
+    color: var(--widget-text-color, var(--widget-text-sub));
+    opacity: 0.8;
+    text-align: right;
+}
+
+/* Leaderboard Card */
+.gr-card-leaderboard {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 14px;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+.gr-lb-header {
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #ffd700;
+}
+
+.gr-lb-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.gr-lb-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--widget-text-color, inherit);
+}
+
+.gr-lb-rank {
+    font-size: 14px;
+}
+
+.gr-lb-name {
+    font-weight: 700;
+    flex-grow: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gr-lb-val {
+    font-weight: 800;
+    color: var(--widget-accent, #00ffcc);
+}
+
+/* --------------------------------------------------------------------------
+   9. Canvas Editor Box & Selection Styling
+   -------------------------------------------------------------------------- */
+
+.canvas-widget-box {
+    position: absolute;
+    border: 1px dashed rgba(0, 240, 255, 0.4);
+    border-radius: 8px;
+    background: rgba(10, 10, 15, 0.45);
+    box-sizing: border-box;
+    cursor: move;
+    user-select: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    overflow: visible;
+}
+
+.canvas-widget-box:hover {
+    border-color: #00f0ff;
+    box-shadow: 0 0 12px rgba(0, 240, 255, 0.25);
+}
+
+.canvas-widget-box.selected {
+    border: 2px solid #00f0ff !important;
+    box-shadow: 0 0 15px rgba(0, 240, 255, 0.4) !important;
+    z-index: 100;
+}
+
+.canvas-widget-resize-handle {
+    position: absolute;
+    bottom: -5px;
+    right: -5px;
+    width: 12px;
+    height: 12px;
+    background: #00f0ff;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    cursor: se-resize;
+    z-index: 101;
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+}
+
+.canvas-widget-preview-wrapper {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+
+

@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="referrer" content="no-referrer">
-    <title>GRLive - Control Panel</title>
+    <title>TavLive - Control Panel</title>
     <link rel="stylesheet" href="css/panel.css">
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2425,14 +2425,14 @@
                                     </div>
                                 </div>
                                 <div class="span-6">
-                                    <strong style="color: #00ffcc; display: block; margin-bottom: 5px;">2. URL del Lienzo 9:16 de Widgets Consolidados:</strong>
+                                    <strong style="color: #00ffcc; display: block; margin-bottom: 5px;">2. URL ÚNICA DEL OVERLAY DE WIDGETS DINÁMICOS 9:16 (TODOS LOS WIDGETS):</strong>
                                     <div style="display: flex; gap: 10px;">
                                         <input type="text" id="obs-widgets-url" value="http://127.0.0.1:3000/widgets.html" readonly style="flex-grow: 1; background: rgba(255,255,255,0.05); color: var(--text-main); font-family: monospace; border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 6px; font-size: 13px;">
-                                        <button class="btn secondary small" id="btn-copy-obs-widgets" onclick="navigator.clipboard.writeText('http://127.0.0.1:3000/widgets.html'); showToast('¡Enlace de Widgets copiado!', 'success')">Copiar</button>
+                                        <button class="btn secondary small" id="btn-copy-obs-widgets" onclick="navigator.clipboard.writeText('http://127.0.0.1:3000/widgets.html'); showToast('¡Enlace Único de Widgets copiado!', 'success')">Copiar</button>
                                     </div>
                                 </div>
                                 <div class="span-6">
-                                    <strong style="color: #9900ff; display: block; margin-bottom: 5px;">3. Widget Ondas Voz TTS / IA Asistente (.html):</strong>
+                                    <strong style="color: #9900ff; display: block; margin-bottom: 5px;">3. Widget de Ondas TTS (Legacy / Opcional Independiente):</strong>
                                     <div style="display: flex; gap: 10px;">
                                         <input type="text" id="obs-tts-url" value="http://127.0.0.1:3000/tts-widget.html" readonly style="flex-grow: 1; background: rgba(255,255,255,0.05); color: var(--text-main); font-family: monospace; border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 6px; font-size: 13px;">
                                         <button class="btn secondary small" id="btn-copy-obs-tts" onclick="navigator.clipboard.writeText('http://127.0.0.1:3000/tts-widget.html'); showToast('¡Enlace de Ondas IA copiado!', 'success')">Copiar</button>
@@ -2470,6 +2470,16 @@
                             <div style="position: absolute; top: 12%; bottom: 12%; left: 5%; right: 5%; border: 1px dashed rgba(255, 255, 255, 0.15); pointer-events: none; z-index: 1; border-radius: 10px;">
                                 <div style="position: absolute; top: -18px; left: 5px; font-size: 8px; color: rgba(255,255,255,0.4); text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px;">Área Segura 9:16</div>
                             </div>
+
+                            <!-- Streamer Protection Zone Overlay -->
+                            <div id="streamer-protection-zone" style="position: absolute; top: 25%; bottom: 35%; left: 15%; right: 15%; border: 1px dashed rgba(0, 255, 204, 0.15); pointer-events: none; z-index: 1; border-radius: 12px; transition: all 0.3s ease;">
+                                <div style="position: absolute; bottom: 4px; right: 6px; font-size: 7px; color: rgba(0, 255, 204, 0.4); text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px;">Zona Streamer</div>
+                            </div>
+
+                            <!-- Obstruction Warning Badge (Editor Only) -->
+                            <div id="canvas-obstruction-badge" style="position: absolute; top: 10px; right: 10px; z-index: 10; font-size: 9px; font-weight: 800; padding: 4px 8px; border-radius: 12px; background: rgba(0, 255, 204, 0.15); color: #00ffcc; border: 1px solid rgba(0, 255, 204, 0.3); pointer-events: none; transition: all 0.2s ease;">
+                                ✓ Posición Recomendada
+                            </div>
                             
                             <!-- Draggable Widgets Container -->
                             <div id="design-canvas-area" style="position: absolute; width:100%; height:100%; top:0; left:0; overflow:hidden;">
@@ -2480,7 +2490,6 @@
 
                     <!-- Column Right: Inspector & Toggles -->
                     <div class="span-7" style="display: flex; flex-direction: column; gap: 20px;">
-                        <!-- Card: Inspector -->
                         <!-- Card: Inspector -->
                         <article class="card-config neon">
                             <div class="card-config-header">
@@ -2518,10 +2527,68 @@
                                                 <input type="range" id="inspector-input-y" min="0" max="100" step="0.5" style="width: 100%; cursor: pointer;">
                                             </div>
                                         </div>
+
+                                        <!-- Dynamic Event System Options (Fase 1) -->
+                                        <div class="span-6">
+                                            <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 5px;">
+                                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                    <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Duración en Pantalla</label>
+                                                    <span id="widget-val-duration" style="font-family: monospace; font-size: 12px; color: #00ffcc; font-weight: 800;">4s</span>
+                                                </div>
+                                                <input type="range" id="inspector-input-duration" min="1" max="30" step="1" value="4" style="width: 100%; cursor: pointer;">
+                                            </div>
+                                        </div>
+                                        <div class="span-6">
+                                            <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 5px;">
+                                                <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Estilo Visual</label>
+                                                <select id="inspector-input-style" style="width: 100%; padding: 8px 10px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-main); font-size: 12px; cursor: pointer;">
+                                                    <option value="minimal">Minimal</option>
+                                                    <option value="glass">Glassmorphism</option>
+                                                    <option value="clean">Clean White</option>
+                                                    <option value="neon">Neon Cyberpunk</option>
+                                                    <option value="custom">Custom Theme</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div class="span-6">
+                                            <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 5px;">
+                                                <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Animación de Entrada</label>
+                                                <select id="inspector-input-enter-anim" style="width: 100%; padding: 8px 10px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-main); font-size: 12px; cursor: pointer;">
+                                                    <option value="slide-up">Slide Up</option>
+                                                    <option value="fade">Fade In</option>
+                                                    <option value="slide-down">Slide Down</option>
+                                                    <option value="slide-left">Slide Left</option>
+                                                    <option value="slide-right">Slide Right</option>
+                                                    <option value="pop">Pop</option>
+                                                    <option value="scale">Scale</option>
+                                                    <option value="bounce">Bounce</option>
+                                                    <option value="none">None</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div class="span-6">
+                                            <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 5px;">
+                                                <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Animación de Salida</label>
+                                                <select id="inspector-input-exit-anim" style="width: 100%; padding: 8px 10px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-main); font-size: 12px; cursor: pointer;">
+                                                    <option value="fade">Fade Out</option>
+                                                    <option value="slide-up">Slide Up</option>
+                                                    <option value="slide-down">Slide Down</option>
+                                                    <option value="slide-left">Slide Left</option>
+                                                    <option value="slide-right">Slide Right</option>
+                                                    <option value="pop">Pop</option>
+                                                    <option value="scale">Scale</option>
+                                                    <option value="bounce">Bounce</option>
+                                                    <option value="none">None</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
                                         <div class="span-12">
                                             <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 5px;">
                                                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                                                    <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Tamaño de Widget (%)</label>
+                                                    <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Escala de Zoom (%)</label>
                                                     <span id="widget-val-size" style="font-family: monospace; font-size: 12px; color: #ff0077; font-weight: 800;">100%</span>
                                                 </div>
                                                 <input type="range" id="inspector-input-size" min="50" max="250" step="5" value="100" style="width: 100%; cursor: pointer;">
@@ -2536,16 +2603,19 @@
                                         <div class="span-12">
                                             <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 5px;">
                                                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                                                    <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Opacidad del Fondo (0% = Transparente Apple)</label>
-                                                    <span id="widget-val-bg-opacity" style="font-family: monospace; font-size: 12px; color: #00ffcc; font-weight: 800;">45%</span>
+                                                    <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Opacidad del Widget (Transparencia)</label>
+                                                    <span id="widget-val-bg-opacity" style="font-family: monospace; font-size: 12px; color: #00ffcc; font-weight: 800;">85%</span>
                                                 </div>
-                                                <input type="range" id="inspector-input-bg-opacity" min="0" max="100" step="5" value="45" style="width: 100%; cursor: pointer;">
+                                                <input type="range" id="inspector-input-bg-opacity" min="10" max="100" step="5" value="85" style="width: 100%; cursor: pointer;">
                                             </div>
                                         </div>
                                         <div class="span-6">
                                             <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 5px;">
-                                                <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Color Borde / Glow</label>
-                                                <input type="color" id="inspector-input-border-color" value="#00f0ff" style="width: 100%; height: 36px; border: 1px solid var(--border-color); border-radius: 6px; background: none; cursor: pointer;">
+                                                <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Tipo de Fondo</label>
+                                                <select id="inspector-input-bg-type" style="width: 100%; padding: 8px 10px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-main); font-size: 12px; cursor: pointer;">
+                                                    <option value="solid">Con fondo</option>
+                                                    <option value="transparent">Sin fondo / Transparente</option>
+                                                </select>
                                             </div>
                                         </div>
                                         <div class="span-6">
@@ -2554,10 +2624,50 @@
                                                 <input type="color" id="inspector-input-bg-color" value="#0f0a19" style="width: 100%; height: 36px; border: 1px solid var(--border-color); border-radius: 6px; background: none; cursor: pointer;">
                                             </div>
                                         </div>
+                                        <div class="span-6">
+                                            <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 5px;">
+                                                <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">🎨 Color de Texto</label>
+                                                <input type="color" id="inspector-input-text-color" value="#ffffff" style="width: 100%; height: 36px; border: 1px solid var(--border-color); border-radius: 6px; background: none; cursor: pointer;">
+                                            </div>
+                                        </div>
+                                        <div class="span-6">
+                                            <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 5px;">
+                                                <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Estilo de Borde</label>
+                                                <select id="inspector-input-border-style" style="width: 100%; padding: 8px 10px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-main); font-size: 12px; cursor: pointer;">
+                                                    <option value="none" selected>Sin borde (predeterminado)</option>
+                                                    <option value="solid">Sólido</option>
+                                                    <option value="neon">Glow / Neón</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="span-6">
+                                            <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 5px;">
+                                                <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">Color Borde / Glow</label>
+                                                <input type="color" id="inspector-input-border-color" value="#00f0ff" style="width: 100%; height: 36px; border: 1px solid var(--border-color); border-radius: 6px; background: none; cursor: pointer;">
+                                            </div>
+                                        </div>
+                                        <div class="span-6" id="field-max-songs-wrapper">
+                                            <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 5px;">
+                                                <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; margin: 0;">🎵 Canciones Visibles</label>
+                                                <select id="inspector-input-max-songs" style="width: 100%; padding: 8px 10px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-main); font-size: 12px; cursor: pointer;">
+                                                    <option value="1">1 canción</option>
+                                                    <option value="2">2 canciones</option>
+                                                    <option value="3" selected>3 canciones (predeterminado)</option>
+                                                    <option value="4">4 canciones</option>
+                                                    <option value="5">5 canciones</option>
+                                                </select>
+                                            </div>
+                                        </div>
                                     </div>
                                     
-                                    <div style="border-top: 1px solid var(--border-color); padding-top: 15px; display: flex; flex-direction: column; gap: 6px;">
-                                        <strong style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Enlace de OBS Redimensionado en Vivo:</strong>
+                                    <div style="border-top: 1px solid var(--border-color); padding-top: 15px; display: flex; flex-direction: column; gap: 10px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                                            <div style="display: flex; gap: 8px;">
+                                                <button class="btn success small" id="btn-save-inspector-widget" style="background: #00ffcc; color: #0a0a0f; font-weight: 800; font-size: 11px;">💾 Guardar Cambios</button>
+                                                <button class="btn secondary small" id="btn-reset-inspector-widget" style="font-size: 11px;">↩️ Restablecer</button>
+                                            </div>
+                                            <button class="btn accent small" id="btn-test-inspector-widget" style="background: linear-gradient(135deg, #ff0077, #e6006c); color: #ffffff; font-weight: 800; font-size: 11px;">⚡ Probar Alerta Temporal</button>
+                                        </div>
                                         <div style="display: flex; gap: 8px;">
                                             <input type="text" id="inspector-obs-url" readonly style="flex-grow: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: white; padding: 8px 10px; border-radius: 6px; font-family: monospace; font-size: 11px;">
                                             <button class="btn secondary small" id="btn-copy-inspector-url">Copiar</button>
@@ -2587,6 +2697,7 @@
                                     <h3>Activar/Desactivar Overlays</h3>
                                 </div>
                                 <div style="display: flex; gap: 8px; align-items: center;">
+                                    <button class="btn success small" id="btn-enable-all-overlays" style="background: rgba(0, 255, 204, 0.2); color: #00ffcc; border: 1px solid rgba(0, 255, 204, 0.4);">Activar Todos</button>
                                     <button class="btn danger small" id="btn-disable-all-overlays">Desactivar Todos</button>
                                     <button class="btn secondary small" id="btn-reset-canvas-layout">Restablecer Posiciones</button>
                                 </div>
@@ -2703,11 +2814,11 @@
                         </div>
                     </article>
 
-                    <!-- GRLive Updates / Actualizaciones -->
+                    <!-- TavLive Updates / Actualizaciones -->
                     <article class="card neon span-6">
                         <div class="card-config-header">
                             <i data-lucide="refresh-cw" class="icon-accent" style="color: #00f0ff;"></i>
-                            <h3>Actualizaciones de GRLive</h3>
+                            <h3>Actualizaciones de TavLive</h3>
                         </div>
                         <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
                             Comprueba manualmente si existe una versión más reciente de la aplicación en el servidor.
@@ -2726,7 +2837,7 @@
                             <h3 style="color: #ff3b30;">Limpieza de Sistema</h3>
                         </div>
                         <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
-                            Borra toda la caché, perfiles de streamers, configuraciones de Spotify y base de datos para restaurar GRLive al estado de fábrica de recién instalado.
+                            Borra toda la caché, perfiles de streamers, configuraciones de Spotify y base de datos para restaurar TavLive al estado de fábrica de recién instalado.
                         </p>
                         <div style="margin-top: 15px;">
                             <button class="btn primary small" id="btn-clear-cache" style="width: 100%; justify-content: center; font-size: 13px; background: linear-gradient(135deg, #ff3b30 0%, #c61a09 100%); border: none; box-shadow: 0 4px 15px rgba(255, 59, 48, 0.3); color: white;">

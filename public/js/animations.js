@@ -88,17 +88,14 @@ socket.on('overlay_command', (data) => {
                 break;
         }
     } else if (data.action === 'play_custom_animation') {
-        const animId = data.animation.id;
-        const validKeys = ['trigger_glove', 'trigger_levelup', 'trigger_quiereme', 'trigger_x2'];
-        if (validKeys.includes(animId)) {
-            playCustomAnimation(
-                data.animation.layer,
-                data.animation.filepath,
-                data.animation.text,
-                data.animation.duration,
-                data.nickname
-            );
-        }
+        // Permitir reproducir cualquier animación personalizada que venga del backend
+        playCustomAnimation(
+            data.animation.layer,
+            data.animation.filepath,
+            data.animation.text,
+            data.animation.duration,
+            data.nickname
+        );
     }
 });
 
@@ -158,7 +155,7 @@ function playCustomAnimation(layerType, fileUrl, textTemplate, durationMs, nickn
     }
     
     const fileExt = fileUrl.split('.').pop().toLowerCase();
-    const isVideo = ['mp4', 'webm', 'mov'].includes(fileExt);
+    const isVideo = ['mp4', 'webm', 'mov', 'web', 'ogg', 'avi'].includes(fileExt);
     const isAudio = ['mp3', 'wav', 'ogg', 'm4a'].includes(fileExt);
     
     if (isVideo) {

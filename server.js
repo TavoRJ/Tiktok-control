@@ -11,6 +11,8 @@ const packageJson = require('./package.json');
 const ytdl = require('@distube/ytdl-core');
 const play = require('play-dl');
 
+var io = null;
+
 // Known fallback public Cobalt instances
 let workingCobaltApis = [
     "https://api.cobalt.blackcat.sweeux.org",
@@ -940,11 +942,6 @@ try {
         chatbotSettings.socials = chatbotSettings.socials || [];
         chatbotSettings.socialsSettings = chatbotSettings.socialsSettings || { displayTime: 10, pauseTime: 2, enabled: true };
     }
-    
-    // Load last connected profile configuration if exists
-    if (chatbotSettings.tiktokUsername) {
-        loadProfile(chatbotSettings.tiktokUsername);
-    }
 } catch (err) {
     console.error('Error loading chatbot settings:', err);
 }
@@ -1045,6 +1042,15 @@ try {
     }
 } catch (err) {
     console.error('Error loading dinamicas_config.json:', err);
+}
+
+// Load last connected profile configuration if exists
+try {
+    if (chatbotSettings.tiktokUsername) {
+        loadProfile(chatbotSettings.tiktokUsername);
+    }
+} catch (err) {
+    console.error('Error loading profile at startup:', err);
 }
 
 
@@ -2432,6 +2438,8 @@ async function getSpotifyCurrentlyPlaying() {
 let lastTriggeredUri = null;
 let lastPollUri = null;
 let currentActiveQueueTrack = null;
+let lastEmittedTrackUri = null;
+let lastEmittedIsPlaying = null;
 
 setInterval(async () => {
     if (chatbotSettings.spotifyConnected && chatbotSettings.spotifyEnabled) {
@@ -2465,7 +2473,15 @@ setInterval(async () => {
                     currentActiveQueueTrack = null;
                 }
                 
-                io.emit('spotify_track', track);
+                // Emitir spotify_track ÚNICAMENTE cuando la canción cambia o cambia el estado de reproducción (play/pause)
+                const hasTrackChanged = track.spotifyUrl !== lastEmittedTrackUri;
+                const hasStatusChanged = track.isPlaying !== lastEmittedIsPlaying;
+
+                if (hasTrackChanged || hasStatusChanged) {
+                    lastEmittedTrackUri = track.spotifyUrl;
+                    lastEmittedIsPlaying = track.isPlaying;
+                    io.emit('spotify_track', track);
+                }
             }
         } catch (e) {
             console.error('Error in Spotify background polling interval:', e);
@@ -2477,7 +2493,7 @@ setInterval(async () => {
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+io = new Server(server);
 
 let remoteConfig = {};
 
@@ -2504,6 +2520,150 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const PORT = 3000;
 const TIKTOK_USERNAME = 'nayamorningstar';
+
+// =========================================================================
+// TAVLIVE LOCAL AUTHENTICATION LOCK STATE (FASE 2)
+// =========================================================================
+let localAuthState = {
+    isAuthed: false,
+    user: null,
+    license: null,
+    accessToken: null,
+    lastVerifiedAt: null
+};
+
+const REMOTE_AUTH_SERVER = process.env.REMOTE_AUTH_SERVER || 'http://127.0.0.1:4000';
+
+const PLAN_WEIGHTS = {
+    'FREE': 1,
+    'PRO': 2,
+    'VIP': 3
+};
+
+/**
+ * Feature Gating Middleware for Local server.js Routes
+ * Enforces tier authorization based on remotely validated license state.
+ */
+function requirePlan(minPlan) {
+    return (req, res, next) => {
+        if (!localAuthState.isAuthed || !localAuthState.user) {
+            return res.status(401).json({
+                success: false,
+                error: 'UNAUTHORIZED',
+                message: 'Authentication required'
+            });
+        }
+
+        const userPlan = (localAuthState.license && localAuthState.license.plan) ? localAuthState.license.plan : 'FREE';
+        const licenseStatus = localAuthState.license ? localAuthState.license.status : 'active';
+        const expiresAt = localAuthState.license ? localAuthState.license.expires_at : null;
+        const isExpiredByDate = expiresAt && (new Date(expiresAt).getTime() < Date.now());
+
+        if (licenseStatus === 'revoked' || licenseStatus === 'paused' || licenseStatus === 'expired' || isExpiredByDate) {
+            return res.status(403).json({
+                success: false,
+                error: 'LICENSE_INVALID',
+                message: `License is ${isExpiredByDate ? 'expired' : licenseStatus}`
+            });
+        }
+
+        const userWeight = PLAN_WEIGHTS[userPlan] || 1;
+        const minWeight = PLAN_WEIGHTS[minPlan] || 1;
+
+        if (userWeight < minWeight) {
+            return res.status(403).json({
+                success: false,
+                error: 'PLAN_UPGRADE_REQUIRED',
+                message: `Plan ${minPlan} required`
+            });
+        }
+
+        next();
+    };
+}
+
+function getRemoteAuthServer() {
+    return process.env.REMOTE_AUTH_SERVER || 'http://127.0.0.1:4000';
+}
+
+// API: Set internal auth session from client
+app.post('/api/internal/set-auth-session', async (req, res) => {
+    try {
+        const { accessToken, user } = req.body;
+        if (!accessToken) {
+            localAuthState = { isAuthed: false, user: null, license: null, accessToken: null };
+            return res.status(400).json({ success: false, error: 'Access token required.' });
+        }
+
+        // Validate token remotely with Remote Auth Server
+        const verifyRes = await fetch(`${getRemoteAuthServer()}/api/auth/me`, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        }).catch(err => ({ ok: false, status: 0 }));
+
+        if (!verifyRes.ok) {
+            const isJson = verifyRes.headers && typeof verifyRes.headers.get === 'function' && (verifyRes.headers.get('content-type') || '').includes('application/json');
+            const errData = (isJson && typeof verifyRes.json === 'function') ? await verifyRes.json().catch(() => ({})) : {};
+            if (verifyRes.status === 403) {
+                localAuthState = {
+                    isAuthed: true,
+                    user: user || { id: 'blocked', email: 'blocked@user.com' },
+                    license: { plan: 'FREE', status: 'expired' },
+                    accessToken,
+                    lastVerifiedAt: Date.now()
+                };
+                return res.status(403).json({ success: false, error: errData.error || 'License invalid or expired.' });
+            }
+
+            localAuthState = { isAuthed: false, user: null, license: null, accessToken: null };
+            io.emit('auth_state_changed', { isAuthed: false });
+            return res.status(401).json({ success: false, error: 'Remote token validation failed.' });
+        }
+
+        const verifyData = await verifyRes.json();
+        if (!verifyData.success || !verifyData.user) {
+            localAuthState = { isAuthed: false, user: null, license: null, accessToken: null };
+            io.emit('auth_state_changed', { isAuthed: false });
+            return res.status(401).json({ success: false, error: 'Invalid user state.' });
+        }
+
+        localAuthState = {
+            isAuthed: true,
+            user: verifyData.user,
+            license: verifyData.license || { plan: 'FREE', status: 'active' },
+            accessToken,
+            lastVerifiedAt: Date.now()
+        };
+
+        console.info(`[TavLive Auth] Local server unlocked for user: ${verifyData.user.email} [Plan: ${localAuthState.license.plan}]`);
+        io.emit('auth_state_changed', { isAuthed: true, user: localAuthState.user, license: localAuthState.license });
+
+        res.json({ success: true, isAuthed: true, user: localAuthState.user, license: localAuthState.license });
+    } catch (err) {
+        console.error('[TavLive Auth] Error setting local auth session:', err);
+        localAuthState = { isAuthed: false, user: null, license: null, accessToken: null };
+        res.status(500).json({ success: false, error: 'Internal auth error.' });
+    }
+});
+
+// API: Clear internal auth session (Logout)
+app.post('/api/internal/clear-auth-session', (req, res) => {
+    localAuthState = { isAuthed: false, user: null, license: null, accessToken: null };
+    if (typeof tiktokLiveConnection !== 'undefined' && tiktokLiveConnection) {
+        try {
+            tiktokLiveConnection.removeAllListeners();
+            tiktokLiveConnection.disconnect();
+        } catch (e) {}
+        tiktokLiveConnection = null;
+    }
+    console.info('[TavLive Auth] Local server locked (Logged out).');
+    io.emit('auth_state_changed', { isAuthed: false });
+    res.json({ success: true });
+});
+
+// API: Check internal auth status
+app.get('/api/internal/auth-status', (req, res) => {
+    res.json({ isAuthed: localAuthState.isAuthed, user: localAuthState.user, license: localAuthState.license });
+});
 
 // Ensure upload directory exists in writable directory
 const UPLOADS_DIR = path.join(writableDir, 'uploads');
@@ -2533,8 +2693,14 @@ app.use((req, res, next) => {
     next();
 });
 
-// Serve static files from the 'public' directory
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve static files from the 'public' directory with anti-cache headers
+app.use(express.static(path.join(__dirname, 'public'), {
+    setHeaders: (res) => {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+    }
+}));
 
 // Serve temporary files from the writable directory
 app.use(express.static(writableDir));
@@ -2759,7 +2925,7 @@ app.get('/api/version', (req, res) => {
 });
 
 // API: Stream audio locally to bypass CORS and rights blocks
-app.get('/api/stream-audio', (req, res) => {
+app.get('/api/stream-audio', requirePlan('VIP'), (req, res) => {
     const streamUrl = req.query.url;
     if (!streamUrl) {
         return res.status(400).send('Missing url parameter');
@@ -2978,7 +3144,7 @@ app.get('/api/goals-catalog', (req, res) => {
 });
 
 // API: Upload Custom Animation (Base64)
-app.post('/api/custom-animations', (req, res) => {
+app.post('/api/custom-animations', requirePlan('PRO'), (req, res) => {
     try {
         const { name, text, layer, duration, filename, fileData } = req.body;
         if (!name || !filename || !fileData) {
@@ -3030,7 +3196,7 @@ app.post('/api/custom-animations', (req, res) => {
 });
 
 // API: Delete Custom Animation
-app.delete('/api/custom-animations/:id', (req, res) => {
+app.delete('/api/custom-animations/:id', requirePlan('PRO'), (req, res) => {
     try {
         const { id } = req.params;
         if (!chatbotSettings.customAnimations) {
@@ -3069,7 +3235,7 @@ app.delete('/api/custom-animations/:id', (req, res) => {
 });
 
 // API: Upload Custom Sound (Base64)
-app.post('/api/upload-sound', (req, res) => {
+app.post('/api/upload-sound', requirePlan('PRO'), (req, res) => {
     try {
         const { filename, fileData } = req.body;
         if (!filename || !fileData) {
@@ -3103,7 +3269,7 @@ app.post('/api/upload-sound', (req, res) => {
 });
 
 // API: Delete Custom Sound
-app.delete('/api/upload-sound/:id', (req, res) => {
+app.delete('/api/upload-sound/:id', requirePlan('PRO'), (req, res) => {
     try {
         const { id } = req.params;
         if (!chatbotSettings.customSounds) {
@@ -3137,7 +3303,7 @@ app.delete('/api/upload-sound/:id', (req, res) => {
 });
 
 // API: Upload Master Animation Custom Override
-app.post('/api/master-animations/:key', (req, res) => {
+app.post('/api/master-animations/:key', requirePlan('PRO'), (req, res) => {
     try {
         const { key } = req.params;
         const { filename, fileData } = req.body;
@@ -3196,7 +3362,7 @@ app.post('/api/master-animations/:key', (req, res) => {
 });
 
 // API: Delete Master Animation Custom Override
-app.delete('/api/master-animations/:key', (req, res) => {
+app.delete('/api/master-animations/:key', requirePlan('PRO'), (req, res) => {
     try {
         const { key } = req.params;
         const validKeys = ['trigger_glove', 'trigger_levelup', 'trigger_quiereme', 'trigger_x2'];
@@ -3234,7 +3400,7 @@ app.get('/api/mvps', (req, res) => {
 });
 
 // API: Register MVP
-app.post('/api/mvps', (req, res) => {
+app.post('/api/mvps', requirePlan('VIP'), (req, res) => {
     try {
         const { username, animationId } = req.body;
         if (!username || !animationId) {
@@ -3274,7 +3440,7 @@ app.post('/api/mvps', (req, res) => {
 });
 
 // API: Toggle MVP enabled state
-app.put('/api/mvps/:username/toggle', (req, res) => {
+app.put('/api/mvps/:username/toggle', requirePlan('VIP'), (req, res) => {
     try {
         const user = req.params.username.toLowerCase();
         const { enabled } = req.body;
@@ -3301,15 +3467,13 @@ app.put('/api/mvps/:username/toggle', (req, res) => {
 });
 
 // API: Delete MVP mapping
-app.delete('/api/mvps/:username', (req, res) => {
+app.delete('/api/mvps/:username', requirePlan('VIP'), (req, res) => {
     try {
         const user = req.params.username.toLowerCase();
         if (chatbotSettings.mvpEntrances) {
             chatbotSettings.mvpEntrances = chatbotSettings.mvpEntrances.filter(
                 m => m.username.toLowerCase() !== user
             );
-            fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
-            io.emit('chatbot_settings_updated', chatbotSettings);
         }
         res.json({ success: true });
     } catch (err) {
@@ -3359,6 +3523,38 @@ app.get('/music-widget', (req, res) => {
 });
 
 
+
+// API: Connect TikTok LIVE with License Username Binding (Subphase 8A)
+app.post('/api/tiktok/connect', (req, res) => {
+    if (!localAuthState.isAuthed) {
+        return res.status(401).json({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
+    }
+    const { username } = req.body;
+    const allowedHandle = (localAuthState.license && localAuthState.license.tiktok_username)
+        ? String(localAuthState.license.tiktok_username).replace('@', '').trim().toLowerCase()
+        : null;
+
+    const requestedHandle = username ? String(username).replace('@', '').trim().toLowerCase() : '';
+
+    if (allowedHandle && requestedHandle !== allowedHandle) {
+        return res.status(403).json({
+            success: false,
+            error: 'TIKTOK_HANDLE_MISMATCH',
+            message: `Licencia vinculada exclusivamente a @${allowedHandle}`
+        });
+    }
+
+    const connected = connectToTikTok(username);
+    if (connected === false) {
+        return res.status(403).json({
+            success: false,
+            error: 'TIKTOK_HANDLE_MISMATCH',
+            message: `Licencia vinculada exclusivamente a @${allowedHandle}`
+        });
+    }
+
+    return res.json({ success: true, username: requestedHandle });
+});
 
 // Route for Banner Cocina Widget
 app.get('/banner-cocina', (req, res) => {
@@ -4043,12 +4239,14 @@ function loadProfile(username) {
             console.error('[Profile Manager] Error al actualizar puntero global:', err);
         }
         
-        io.emit('chatbot_settings_updated', chatbotSettings);
-        io.emit('initSoundsConfig', soundsConfig);
-        io.emit('initDinamicas', dinamicasConfig);
-        io.emit('initReceta', recetasConfig);
-        io.emit('initGoalsCatalog', goalsCatalog);
-        io.emit('goals_updated', chatbotSettings.goals);
+        if (typeof io !== 'undefined' && io) {
+            io.emit('chatbot_settings_updated', chatbotSettings);
+            io.emit('initSoundsConfig', soundsConfig);
+            io.emit('initDinamicas', dinamicasConfig);
+            io.emit('initReceta', recetasConfig);
+            io.emit('initGoalsCatalog', goalsCatalog);
+            io.emit('goals_updated', chatbotSettings.goals);
+        }
         
     } catch (e) {
         console.error(`[Profile Manager] Error cargando el perfil de @${sanitized}:`, e);
@@ -4242,6 +4440,25 @@ function detectActiveBoosters(obj) {
 }
 
 function connectToTikTok(username) {
+    if (!localAuthState.isAuthed) {
+        console.warn('[Security] Connection attempt blocked: TavLive is locked / unauthenticated.');
+        io.emit('tiktok_disconnected', { error: 'Acceso Denegado: Debes iniciar sesión en TavLive para conectar a TikTok LIVE.' });
+        return false;
+    }
+
+    // TikTok Handle Binding Verification (Subphase 8A)
+    const allowedHandle = (localAuthState.license && localAuthState.license.tiktok_username)
+        ? String(localAuthState.license.tiktok_username).replace('@', '').trim().toLowerCase()
+        : null;
+
+    const requestedHandle = username ? String(username).replace('@', '').trim().toLowerCase() : '';
+
+    if (allowedHandle && requestedHandle !== allowedHandle) {
+        console.warn(`[Security 8A] Connection attempt blocked: Target handle '${requestedHandle}' does not match licensed handle '${allowedHandle}'.`);
+        io.emit('tiktok_disconnected', { error: `Acceso Denegado: Tu licencia está vinculada exclusivamente a @${allowedHandle}.` });
+        return false;
+    }
+
     try {
         saveViewerSessionHistory();
     } catch (e) {}
@@ -5722,6 +5939,10 @@ io.on('connection', (socket) => {
     socket.on('test_social_rotator', (data) => {
         console.log('[Rotador] Emitiendo evento de prueba de red social:', data);
         io.emit('test_social_rotator', data);
+    });
+
+    socket.on('trigger_dynamic_widget_event', (data) => {
+        io.emit('trigger_dynamic_widget_event', data);
     });
 });
 

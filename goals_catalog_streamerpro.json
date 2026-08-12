@@ -1,0 +1,67 @@
+{
+  "45": {
+    "name": "Corazón",
+    "coins": 10,
+    "image": "heart.png"
+  },
+  "46": {
+    "name": "Confeti",
+    "coins": 10,
+    "image": "confetti.png"
+  },
+  "5655": {
+    "name": "Rose",
+    "coins": 1,
+    "image": "rose.png"
+  },
+  "5879": {
+    "name": "Doughnut",
+    "coins": 30,
+    "image": "doughnut.png"
+  },
+  "6064": {
+    "name": "GG",
+    "coins": 1,
+    "image": "gg.png"
+  },
+  "7934": {
+    "name": "Heart Me",
+    "coins": 1,
+    "image": "heart_me.png"
+  },
+  "8913": {
+    "name": "Rosa",
+    "coins": 10,
+    "image": "rosa.png"
+  },
+  "9947": {
+    "name": "BFF Necklace",
+    "coins": 10,
+    "image": "bff_necklace.png"
+  },
+  "13651": {
+    "name": "Popular Vote",
+    "coins": 1,
+    "image": "popular_vote.png"
+  },
+  "14488": {
+    "name": "Capybara",
+    "coins": 30,
+    "image": "capybara.png"
+  },
+  "15232": {
+    "name": "You're awesome",
+    "coins": 1,
+    "image": "you're_awesome.png"
+  },
+  "28445": {
+    "name": "Ari Radiante",
+    "coins": 1,
+    "image": "ari_radiante.png"
+  },
+  "105781": {
+    "name": "Spinning Soccer",
+    "coins": 5,
+    "image": "spinning_soccer.png"
+  }
+}

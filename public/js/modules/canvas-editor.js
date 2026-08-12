@@ -1,3 +1,19 @@
+import { WidgetRenderers } from './dynamic-widget-renderers.js';
+
+export const DEMO_PAYLOADS = {
+    donors: { type: 'donors', mode: 'compact', nickname: 'Juan', amount: '5.2K' },
+    gift: { type: 'gift', nickname: 'Juan', giftName: 'Rose', count: 5 },
+    follow: { type: 'follow', nickname: 'Juan' },
+    share: { type: 'share', nickname: 'Juan' },
+    comment: { type: 'comment', nickname: 'Juan', comment: 'Saludos desde México' },
+    taps: { type: 'taps', nickname: 'María', count: 127, total: 4500 },
+    spotify: { type: 'spotify', title: 'Blinding Lights', artist: 'The Weeknd' },
+    recetas: { type: 'viewers', count: 1420 },
+    dinamicas: { type: 'goal', title: 'Meta de Rosas', current: 75, target: 100 },
+    mvp: { type: 'leaderboard', title: 'TOP DEL LIVE', items: [{ rank: 1, name: 'Juan', value: '5.2K' }, { rank: 2, name: 'María', value: '3.1K' }, { rank: 3, name: 'Pedro', value: '1.8K' }] },
+    'song-requests': { type: 'song-requests', queue: [{ title: 'Blinding Lights', artist: 'The Weeknd', requester: 'Carlos' }, { title: 'Starboy', artist: 'The Weeknd', requester: 'María' }, { title: 'One More Time', artist: 'Daft Punk', requester: 'Pedro' }] }
+};
+
 export class CanvasEditorManager {
     constructor(socketClient) {
         this.socket = socketClient;
@@ -24,48 +40,62 @@ export class CanvasEditorManager {
         this.inputSize = document.getElementById('inspector-input-size');
         this.valSize = document.getElementById('widget-val-size');
         this.inputFont = document.getElementById('inspector-input-font');
+
+        // Dynamic Widget Engine Inputs (Fase 1)
+        this.inputDuration = document.getElementById('inspector-input-duration');
+        this.valDuration = document.getElementById('widget-val-duration');
+        this.inputStyle = document.getElementById('inspector-input-style');
+        this.inputEnterAnim = document.getElementById('inspector-input-enter-anim');
+        this.inputExitAnim = document.getElementById('inspector-input-exit-anim');
+
+        this.obstructionBadge = document.getElementById('canvas-obstruction-badge');
+        this.streamerZoneOverlay = document.getElementById('streamer-protection-zone');
         
         this.inputTitle = document.getElementById('inspector-input-title');
         this.inputBgOpacity = document.getElementById('inspector-input-bg-opacity');
         this.valBgOpacity = document.getElementById('widget-val-bg-opacity');
         this.inputBorderColor = document.getElementById('inspector-input-border-color');
+        this.inputBorderStyle = document.getElementById('inspector-input-border-style');
         this.inputBgColor = document.getElementById('inspector-input-bg-color');
+        this.inputBgType = document.getElementById('inspector-input-bg-type');
+        this.inputTextColor = document.getElementById('inspector-input-text-color');
+        this.inputMaxSongs = document.getElementById('inspector-input-max-songs');
+        this.fieldMaxSongsWrapper = document.getElementById('field-max-songs-wrapper');
         
         this.btnFloatingSave = document.getElementById('btn-floating-save-canvas');
         this.btnSaveInspector = document.getElementById('btn-save-inspector-widget');
+        this.btnResetInspector = document.getElementById('btn-reset-inspector-widget');
         
         this.inputUrl = document.getElementById('inspector-obs-url');
         this.btnCopyUrl = document.getElementById('btn-copy-inspector-url');
         this.btnResetLayout = document.getElementById('btn-reset-canvas-layout');
         this.btnDisableAll = document.getElementById('btn-disable-all-overlays');
+        this.btnEnableAll = document.getElementById('btn-enable-all-overlays');
 
         this.canvasWidth = 324;
         this.canvasHeight = 576;
 
-        // Dynamic Card Relocation variables
-        this.currentRelocatedCard = null;
-        this.lastWidgetId = null;
-        this.cardMapping = {
-            spotify: 'spotify-widget-custom-card',
-            banner: 'banner-widget-custom-card',
-            recetas: 'recetas-widget-custom-card',
-            dinamicas: 'dinamicas-widget-custom-card',
-            ruleta: 'ruleta-widget-custom-card',
-            socials: 'socials-widget-custom-card'
+        const defaultWidgetConfig = {
+            duration: 4,
+            opacity: 85,
+            scale: 100,
+            style: 'minimal',
+            enterAnim: 'slide-up',
+            exitAnim: 'fade'
         };
 
         this.widgets = {
-            spotify: { name: 'Spotify / Music', icon: 'music', url: '/music-widget.html', default: { active: false, x: 5, y: 73, width: 90, height: 15, zoom: 100 } },
-            banner: { name: 'Banner Cocina', icon: 'image', url: '/banner-cocina.html', default: { active: false, x: 0, y: 0, width: 100, height: 8, zoom: 100 } },
-            donors: { name: 'Historial Donaciones', icon: 'heart', url: '/donors-overlay.html', default: { active: false, x: 5, y: 10, width: 42.5, height: 20, zoom: 100 } },
-            taps: { name: 'Historial Taps', icon: 'thumbs-up', url: '/taps-overlay.html', default: { active: false, x: 52.5, y: 10, width: 42.5, height: 20, zoom: 100 } },
-            mvp: { name: 'MVP Overlay', icon: 'award', url: '/mvp-overlay.html', default: { active: false, x: 5, y: 31, width: 42.5, height: 15, zoom: 100 } },
-            songlist: { name: 'Song Request Queue', icon: 'list-music', url: '/songlist-widget.html', default: { active: false, x: 5, y: 47, width: 90, height: 12, zoom: 100 } },
-            recetas: { name: 'Lista Recetas', icon: 'utensils', url: '/recetas.html', default: { active: false, x: 52.5, y: 31, width: 42.5, height: 15, zoom: 100 } },
-            dinamicas: { name: 'Metas Dinámicas', icon: 'target', url: '/dinamicas.html', default: { active: false, x: 5, y: 60, width: 90, height: 12, zoom: 100 } },
-            ruleta: { name: 'Ruleta Desafíos', icon: 'help-circle', url: '', default: { active: false, x: 10, y: 30, width: 80, height: 40, zoom: 100 } },
-            socials: { name: 'Socials Rotator', icon: 'share-2', url: '/social-rotator.html', default: { active: false, x: 5, y: 89, width: 90, height: 8, zoom: 100 } },
-            tts: { name: 'Ondas Voz / IA Asistente', icon: 'mic', url: '/tts-widget.html', default: { active: false, x: 25, y: 5, width: 50, height: 12, zoom: 100 } }
+            donors: { name: 'Top Donator', icon: 'award', url: '/widgets.html', default: { ...defaultWidgetConfig, active: true, x: 5, y: 5, width: 35, height: 5 } },
+            gift: { name: 'Gift Alert', icon: 'gift', url: '/widgets.html', default: { ...defaultWidgetConfig, active: true, x: 45, y: 5, width: 35, height: 5 } },
+            follow: { name: 'Follow Alert', icon: 'user-plus', url: '/widgets.html', default: { ...defaultWidgetConfig, active: true, x: 5, y: 15, width: 35, height: 5 } },
+            share: { name: 'Share Alert', icon: 'share-2', url: '/widgets.html', default: { ...defaultWidgetConfig, active: true, x: 45, y: 15, width: 35, height: 5 } },
+            comment: { name: 'Featured Comment', icon: 'message-square', url: '/widgets.html', default: { ...defaultWidgetConfig, active: true, x: 5, y: 25, width: 50, height: 5 } },
+            taps: { name: 'Tap Tap Contador', icon: 'heart', url: '/widgets.html', default: { ...defaultWidgetConfig, active: true, x: 5, y: 35, width: 25, height: 5 } },
+            spotify: { name: 'Music Player', icon: 'music', url: '/widgets.html', default: { ...defaultWidgetConfig, active: true, x: 45, y: 35, width: 35, height: 5 } },
+            recetas: { name: 'Viewer Counter', icon: 'eye', url: '/widgets.html', default: { ...defaultWidgetConfig, active: true, x: 5, y: 45, width: 20, height: 5 } },
+            dinamicas: { name: 'Goal / Progress', icon: 'target', url: '/widgets.html', default: { ...defaultWidgetConfig, active: true, x: 5, y: 55, width: 45, height: 5 } },
+            mvp: { name: 'Leaderboard Top 3', icon: 'trophy', url: '/widgets.html', default: { ...defaultWidgetConfig, active: true, x: 5, y: 65, width: 55, height: 5 } },
+            'song-requests': { name: 'Lista de peticiones', icon: 'list-music', url: '/widgets.html', default: { ...defaultWidgetConfig, active: true, x: 45, y: 65, width: 45, height: 12, maxSongs: 3, borderStyle: 'none', bgType: 'transparent' } }
         };
 
         this.init();
@@ -84,64 +114,66 @@ export class CanvasEditorManager {
         // Listen for input changes in inspector to update preview
         const updateFromInputs = () => {
             if (!this.activeWidgetId) return;
-            const x = parseFloat(this.inputX.value) || 0;
-            const y = parseFloat(this.inputY.value) || 0;
-            const w = parseFloat(this.inputW.value) || 0;
-            const h = parseFloat(this.inputH.value) || 0;
-            const z = this.inputZoom ? parseInt(this.inputZoom.value) || 100 : 100;
+            const x = this.inputX ? parseFloat(this.inputX.value) || 0 : 0;
+            const y = this.inputY ? parseFloat(this.inputY.value) || 0 : 0;
+            const w = this.inputW ? parseFloat(this.inputW.value) || 0 : 0;
+            const h = this.inputH ? parseFloat(this.inputH.value) || 0 : 0;
+            const z = this.inputSize ? parseInt(this.inputSize.value) || 100 : 100;
 
             const box = document.getElementById(`widget-box-${this.activeWidgetId}`);
             if (box) {
-                box.style.left = `${(x / 100) * this.canvasWidth}px`;
-                box.style.top = `${(y / 100) * this.canvasHeight}px`;
-                box.style.width = `${(w / 100) * this.canvasWidth}px`;
-                box.style.height = `${(h / 100) * this.canvasHeight}px`;
+                if (this.inputX) box.style.left = `${(x / 100) * this.canvasWidth}px`;
+                if (this.inputY) box.style.top = `${(y / 100) * this.canvasHeight}px`;
                 
                 if (this.valX) this.valX.textContent = `${x.toFixed(1)}%`;
                 if (this.valY) this.valY.textContent = `${y.toFixed(1)}%`;
-                if (this.valW) this.valW.textContent = `${w.toFixed(1)}%`;
-                if (this.valH) this.valH.textContent = `${h.toFixed(1)}%`;
-                if (this.valZoom) this.valZoom.textContent = `${z}%`;
-
-                if (this.inspectorDimensions) {
-                    const pxW = Math.round((w / 100) * 1080);
-                    const pxH = Math.round((h / 100) * 1920);
-                    this.inspectorDimensions.textContent = `${pxW} x ${pxH} px`;
-                }
+                if (this.valW && this.inputW) this.valW.textContent = `${w.toFixed(1)}%`;
+                if (this.valH && this.inputH) this.valH.textContent = `${h.toFixed(1)}%`;
+                if (this.valSize) this.valSize.textContent = `${z}%`;
             }
         };
 
-        if (this.inputX) {
-            this.inputX.addEventListener('input', updateFromInputs);
-            this.inputY.addEventListener('input', updateFromInputs);
-            this.inputW.addEventListener('input', updateFromInputs);
-            this.inputH.addEventListener('input', updateFromInputs);
+        if (this.inputX) this.inputX.addEventListener('input', updateFromInputs);
+        if (this.inputY) this.inputY.addEventListener('input', updateFromInputs);
+        if (this.inputW) this.inputW.addEventListener('input', updateFromInputs);
+        if (this.inputH) this.inputH.addEventListener('input', updateFromInputs);
 
-            const saveOnSliderRelease = () => {
-                if (this.activeWidgetId) {
-                    const info = this.widgets[this.activeWidgetId];
-                    const currentConfig = this.widgetsConfig[this.activeWidgetId] || { ...info.default };
-                    currentConfig.x = parseFloat(this.inputX.value);
-                    currentConfig.y = parseFloat(this.inputY.value);
-                    currentConfig.width = parseFloat(this.inputW.value);
-                    currentConfig.height = parseFloat(this.inputH.value);
-                    if (this.inputZoom) {
-                        currentConfig.zoom = parseInt(this.inputZoom.value) || 100;
-                    }
-                    this.widgetsConfig[this.activeWidgetId] = currentConfig;
-                    this.saveAllWidgets();
-                }
-            };
-            this.inputX.addEventListener('change', saveOnSliderRelease);
-            this.inputY.addEventListener('change', saveOnSliderRelease);
-            this.inputW.addEventListener('change', saveOnSliderRelease);
-            this.inputH.addEventListener('change', saveOnSliderRelease);
-        }
+        const saveOnSliderRelease = () => {
+            if (this.activeWidgetId) {
+                const info = this.widgets[this.activeWidgetId];
+                const currentConfig = this.widgetsConfig[this.activeWidgetId] || { ...info.default };
+                if (this.inputX) currentConfig.x = parseFloat(this.inputX.value);
+                if (this.inputY) currentConfig.y = parseFloat(this.inputY.value);
+                if (this.inputW) currentConfig.width = parseFloat(this.inputW.value);
+                if (this.inputH) currentConfig.height = parseFloat(this.inputH.value);
+                if (this.inputSize) currentConfig.scale = parseInt(this.inputSize.value) || 100;
+                this.widgetsConfig[this.activeWidgetId] = currentConfig;
+                this.saveAllWidgets();
+            }
+        };
+
+        if (this.inputX) this.inputX.addEventListener('change', saveOnSliderRelease);
+        if (this.inputY) this.inputY.addEventListener('change', saveOnSliderRelease);
 
         if (this.inputSize) {
             this.inputSize.addEventListener('input', () => {
                 if (this.valSize) {
                     this.valSize.textContent = `${this.inputSize.value}%`;
+                }
+                if (this.activeWidgetId) {
+                    const id = this.activeWidgetId;
+                    this.widgetsConfig[id] = this.widgetsConfig[id] || { ...this.widgets[id].default };
+                    this.widgetsConfig[id].scale = parseInt(this.inputSize.value) || 100;
+                    this.renderCanvasWidgets();
+                    this.saveAllWidgets();
+                }
+            });
+        }
+
+        if (this.inputDuration) {
+            this.inputDuration.addEventListener('input', () => {
+                if (this.valDuration) {
+                    this.valDuration.textContent = `${this.inputDuration.value}s`;
                 }
             });
         }
@@ -151,57 +183,96 @@ export class CanvasEditorManager {
                 if (this.valBgOpacity) {
                     this.valBgOpacity.textContent = `${this.inputBgOpacity.value}%`;
                 }
+                if (this.activeWidgetId) {
+                    const id = this.activeWidgetId;
+                    this.widgetsConfig[id] = this.widgetsConfig[id] || { ...this.widgets[id].default };
+                    this.widgetsConfig[id].opacity = parseInt(this.inputBgOpacity.value) || 85;
+                    this.renderCanvasWidgets();
+                    this.saveAllWidgets();
+                }
             });
         }
 
         const applyInspectorChanges = () => {
             if (!this.activeWidgetId) return;
             const info = this.widgets[this.activeWidgetId];
-            const currentConfig = this.widgetsConfig[this.activeWidgetId] || { ...info.default };
+            const currentConfig = { ...info.default, ...(this.widgetsConfig[this.activeWidgetId] || {}) };
             
-            if (this.inputSize) currentConfig.zoom = parseInt(this.inputSize.value) || 100;
-            if (this.inputFont) currentConfig.fontFamily = this.inputFont.value;
+            if (this.inputSize) currentConfig.scale = parseInt(this.inputSize.value) || 100;
             if (this.inputTitle) currentConfig.title = this.inputTitle.value.trim();
-            if (this.inputBgOpacity) currentConfig.bgOpacity = parseInt(this.inputBgOpacity.value);
+            if (this.inputBgOpacity) {
+                currentConfig.opacity = parseInt(this.inputBgOpacity.value);
+            }
+            if (this.inputDuration) currentConfig.duration = parseFloat(this.inputDuration.value) || 4;
+            if (this.inputStyle) currentConfig.style = this.inputStyle.value;
+            if (this.inputEnterAnim) currentConfig.enterAnim = this.inputEnterAnim.value;
+            if (this.inputExitAnim) currentConfig.exitAnim = this.inputExitAnim.value;
             if (this.inputBorderColor) currentConfig.borderColor = this.inputBorderColor.value;
+            if (this.inputBorderStyle) currentConfig.borderStyle = this.inputBorderStyle.value;
             if (this.inputBgColor) currentConfig.bgColor = this.inputBgColor.value;
-            
+            if (this.inputBgType) currentConfig.bgType = this.inputBgType.value;
+            if (this.inputTextColor) currentConfig.textColor = this.inputTextColor.value;
+
             this.widgetsConfig[this.activeWidgetId] = currentConfig;
             this.saveAllWidgets();
+            this.renderCanvasWidgets();
         };
-
-        ['input', 'change'].forEach(evtType => {
-            if (this.inputSize) this.inputSize.addEventListener(evtType, applyInspectorChanges);
-            if (this.inputFont) this.inputFont.addEventListener(evtType, applyInspectorChanges);
-            if (this.inputTitle) this.inputTitle.addEventListener(evtType, applyInspectorChanges);
-            if (this.inputBgOpacity) this.inputBgOpacity.addEventListener(evtType, applyInspectorChanges);
-            if (this.inputBorderColor) this.inputBorderColor.addEventListener(evtType, applyInspectorChanges);
-            if (this.inputBgColor) this.inputBgColor.addEventListener(evtType, applyInspectorChanges);
-        });
 
         if (this.btnSaveInspector) {
             this.btnSaveInspector.addEventListener('click', applyInspectorChanges);
         }
 
+        if (this.btnResetInspector) {
+            this.btnResetInspector.addEventListener('click', () => {
+                if (!this.activeWidgetId) return;
+                const id = this.activeWidgetId;
+                const info = this.widgets[id];
+                this.widgetsConfig[id] = { ...info.default };
+                this.saveAllWidgets();
+                this.renderCanvasWidgets();
+                this.selectWidget(id);
+                if (window.showToast) window.showToast(`Configuración de ${info.name} restablecida.`, 'success');
+            });
+        }
+
         if (this.btnFloatingSave) {
             this.btnFloatingSave.addEventListener('click', () => {
-                applyInspectorChanges();
                 this.saveAllWidgets();
-                if (window.showToast) {
-                    window.showToast('¡Todos los cambios fueron aplicados y guardados en OBS!', 'success');
+                if (window.showToast) window.showToast('Configuración de lienzo guardada exitosamente.', 'success');
+            });
+        }
+
+        if (this.btnCopyUrl) {
+            this.btnCopyUrl.addEventListener('click', () => {
+                if (this.inputUrl) {
+                    this.inputUrl.select();
+                    navigator.clipboard.writeText(this.inputUrl.value);
+                    alert('¡Enlace de OBS copiado al portapapeles!');
                 }
             });
         }
 
-        // Copy OBS URL Button
-        if (this.btnCopyUrl && this.inputUrl) {
-            this.btnCopyUrl.addEventListener('click', () => {
-                this.inputUrl.select();
-                document.execCommand('copy');
+        // Test Dynamic Alert Button (Fase 1)
+        this.btnTestWidget = document.getElementById('btn-test-inspector-widget');
+        if (this.btnTestWidget) {
+            this.btnTestWidget.addEventListener('click', () => {
+                if (!this.activeWidgetId) return;
+                const widgetKey = this.activeWidgetId;
+                const payload = DEMO_PAYLOADS[widgetKey] || {
+                    type: widgetKey,
+                    nickname: 'UsuarioDemo',
+                    subtext: 'Demostración de Alerta Dinámica'
+                };
+
+                if (window.triggerDynamicWidgetEvent) {
+                    window.triggerDynamicWidgetEvent(widgetKey, payload);
+                }
+                if (this.socket) {
+                    this.socket.emit('trigger_dynamic_widget_event', { widgetKey, payload });
+                }
+
                 if (window.showToast) {
-                    window.showToast('¡Enlace de OBS copiado al portapapeles!', 'success');
-                } else {
-                    alert('¡Enlace de OBS copiado al portapapeles!');
+                    window.showToast(`⚡ Alerta de prueba enviada para ${this.widgets[widgetKey]?.name || widgetKey}`, 'success');
                 }
             });
         }
@@ -217,6 +288,24 @@ export class CanvasEditorManager {
                     this.renderCanvasWidgets();
                     this.renderWidgetToggles();
                     this.selectWidget(null);
+                }
+            });
+        }
+
+        // Enable All Overlays Button
+        if (this.btnEnableAll) {
+            this.btnEnableAll.addEventListener('click', () => {
+                if (confirm('¿Estás seguro de que deseas activar todos los overlays?')) {
+                    Object.keys(this.widgets).forEach(id => {
+                        if (this.widgetsConfig[id]) {
+                            this.widgetsConfig[id].active = true;
+                        } else {
+                            this.widgetsConfig[id] = { ...this.widgets[id].default, active: true };
+                        }
+                    });
+                    this.saveAllWidgets();
+                    this.renderWidgetToggles();
+                    this.renderCanvasWidgets();
                 }
             });
         }
@@ -240,6 +329,10 @@ export class CanvasEditorManager {
             });
         }
 
+        // Initial UI Render
+        this.renderWidgetToggles();
+        this.renderCanvasWidgets();
+
         // Handle window events for dragging
         document.addEventListener('mousemove', (e) => this.handleMouseMove(e));
         document.addEventListener('mouseup', (e) => this.handleMouseUp(e));
@@ -249,18 +342,11 @@ export class CanvasEditorManager {
             this.socket.on('chatbot_settings_updated', (config) => {
                 if (config && config.widgets) {
                     this.widgetsConfig = config.widgets;
+                    this.renderWidgetToggles();
                     this.renderCanvasWidgets();
-                    this.updateListToggles();
-                    
-                    // Populate toggles if grid is empty
-                    const grid = document.getElementById('canvas-widget-toggles-grid');
-                    if (grid && grid.children.length === 0) {
-                        this.renderWidgetToggles();
-                    }
                 }
             });
 
-            // Request settings immediately to ensure we load coordinates on startup
             this.socket.emit('get_chatbot_settings');
         }
     }
@@ -275,7 +361,7 @@ export class CanvasEditorManager {
             const config = this.widgetsConfig[id] || info.default;
 
             const col = document.createElement('div');
-            col.className = 'span-4'; // 3 columns
+            col.className = 'span-4';
             col.style.display = 'flex';
             col.style.alignItems = 'center';
             col.style.background = 'rgba(255, 255, 255, 0.02)';
@@ -302,14 +388,13 @@ export class CanvasEditorManager {
         });
     }
 
-    updateListToggles() {
-        Object.entries(this.widgets).forEach(([id, info]) => {
-            const config = this.widgetsConfig[id] || info.default;
-            const checkbox = document.querySelector(`#canvas-widget-toggles-grid input[type="checkbox"][data-widget="${id}"]`);
-            if (checkbox) {
-                checkbox.checked = config.active;
-            }
-        });
+    toggleWidgetState(id, active) {
+        if (!this.widgetsConfig[id]) {
+            this.widgetsConfig[id] = { ...this.widgets[id].default };
+        }
+        this.widgetsConfig[id].active = active;
+        this.saveAllWidgets();
+        this.renderCanvasWidgets();
     }
 
     renderCanvasWidgets() {
@@ -320,7 +405,7 @@ export class CanvasEditorManager {
 
         Object.entries(this.widgets).forEach(([id, info]) => {
             const config = this.widgetsConfig[id] || info.default;
-            if (!config.active) return; // Only render active widgets on canvas editor
+            if (config.active === false) return;
 
             const box = document.createElement('div');
             box.id = `widget-box-${id}`;
@@ -336,9 +421,20 @@ export class CanvasEditorManager {
             box.style.width = `${widthVal}px`;
             box.style.height = `${heightVal}px`;
 
+            // Render live DEMO HTML inside preview wrapper
+            let demoHtml = '';
+            const scaleFactor = (config.scale !== undefined ? parseFloat(config.scale) : 100) / 100;
+
+            if (WidgetRenderers && WidgetRenderers[id]) {
+                const demoPayload = DEMO_PAYLOADS[id] || { type: id, nickname: 'Juan' };
+                demoHtml = WidgetRenderers[id](demoPayload, config);
+            }
+
             box.innerHTML = `
-                <i data-lucide="${info.icon}"></i>
-                <span class="canvas-widget-label">${info.name}</span>
+                <div class="canvas-widget-preview-wrapper" style="width: 100%; height: 100%; overflow: visible; pointer-events: none; opacity: 0.95; transform: scale(${scaleFactor}); scale: ${scaleFactor}; transform-origin: top left;">
+                    ${demoHtml ? demoHtml : `<i data-lucide="${info.icon}"></i><span class="canvas-widget-label">${info.name}</span>`}
+                </div>
+                <span class="canvas-widget-label-badge" style="position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.7); color: #00ffcc; font-size: 9px; font-weight: 800; padding: 2px 5px; border-radius: 4px; z-index: 10; pointer-events: none;">${info.name}</span>
                 <div class="canvas-widget-resize-handle" id="resize-handle-${id}"></div>
             `;
 
@@ -356,30 +452,16 @@ export class CanvasEditorManager {
         if (window.lucide) {
             window.lucide.createIcons();
         }
+
+        this.checkStreamerObstruction();
     }
 
     selectWidget(id) {
-        // Return previously relocated card to its placeholder (if any)
-        if (this.currentRelocatedCard && this.lastWidgetId) {
-            const placeholder = document.getElementById(`placeholder-${this.lastWidgetId}-widget-custom-card`);
-            if (placeholder) {
-                placeholder.appendChild(this.currentRelocatedCard);
-            }
-            this.currentRelocatedCard = null;
-            this.lastWidgetId = null;
-        }
-
         this.activeWidgetId = id;
         
         document.querySelectorAll('.canvas-widget-box').forEach(el => {
             el.classList.remove('selected');
         });
-
-        // Hide custom settings card by default
-        const customSettingsCard = document.getElementById('canvas-widget-custom-settings-card');
-        if (customSettingsCard) {
-            customSettingsCard.style.display = 'none';
-        }
 
         if (!id) {
             if (this.inspectorEmpty) this.inspectorEmpty.style.display = 'block';
@@ -404,25 +486,37 @@ export class CanvasEditorManager {
         if (this.valW) this.valW.textContent = `${config.width.toFixed(1)}%`;
         if (this.valH) this.valH.textContent = `${config.height.toFixed(1)}%`;
 
-        if (this.inputX) this.inputX.value = config.x;
-        if (this.inputY) this.inputY.value = config.y;
-        if (this.inputW) this.inputW.value = config.width;
-        if (this.inputH) this.inputH.value = config.height;
+        if (this.inputX) this.inputX.value = config.x.toFixed(1);
+        if (this.inputY) this.inputY.value = config.y.toFixed(1);
+        if (this.inputSize) {
+            this.inputSize.value = config.scale || config.zoom || 100;
+            if (this.valSize) this.valSize.textContent = `${this.inputSize.value}%`;
+        }
 
-        const sizeVal = config.zoom !== undefined ? config.zoom : (config.size !== undefined ? config.size : 100);
-        if (this.inputSize) this.inputSize.value = sizeVal;
-        if (this.valSize) this.valSize.textContent = `${sizeVal}%`;
+        if (this.inputDuration) {
+            this.inputDuration.value = config.duration || 4;
+            if (this.valDuration) this.valDuration.textContent = `${this.inputDuration.value}s`;
+        }
 
-        if (this.inputFont) this.inputFont.value = config.fontFamily || 'Outfit';
+        if (this.inputBgOpacity) {
+            this.inputBgOpacity.value = config.opacity !== undefined ? config.opacity : 85;
+            if (this.valBgOpacity) this.valBgOpacity.textContent = `${this.inputBgOpacity.value}%`;
+        }
 
-        if (this.inputTitle) this.inputTitle.value = config.title || '';
-        
-        const opacityVal = config.bgOpacity !== undefined ? config.bgOpacity : 45;
-        if (this.inputBgOpacity) this.inputBgOpacity.value = opacityVal;
-        if (this.valBgOpacity) this.valBgOpacity.textContent = `${opacityVal}%`;
-        
+        if (this.inputStyle) this.inputStyle.value = config.style || 'minimal';
+        if (this.inputEnterAnim) this.inputEnterAnim.value = config.enterAnim || 'slide-up';
+        if (this.inputExitAnim) this.inputExitAnim.value = config.exitAnim || 'fade';
+        if (this.inputTitle) this.inputTitle.value = config.title || info.name;
         if (this.inputBorderColor) this.inputBorderColor.value = config.borderColor || '#00f0ff';
+        if (this.inputBorderStyle) this.inputBorderStyle.value = config.borderStyle || 'none';
         if (this.inputBgColor) this.inputBgColor.value = config.bgColor || '#0f0a19';
+        if (this.inputBgType) this.inputBgType.value = config.bgType || 'solid';
+        if (this.inputTextColor) this.inputTextColor.value = config.textColor || '#ffffff';
+        if (this.inputMaxSongs) this.inputMaxSongs.value = config.maxSongs || 3;
+
+        if (this.fieldMaxSongsWrapper) {
+            this.fieldMaxSongsWrapper.style.display = id === 'song-requests' ? 'block' : 'none';
+        }
 
         if (this.inspectorDimensions) {
             const pxW = Math.round((config.width / 100) * 1080);
@@ -431,174 +525,160 @@ export class CanvasEditorManager {
         }
 
         if (this.inputUrl) {
-            this.inputUrl.value = 'http://127.0.0.1:3000/widgets.html';
+            const host = window.location.host;
+            this.inputUrl.value = `http://${host}${info.url || '/widgets.html'}`;
         }
 
-        // Relocate customization card to the inspector
-        const cardId = this.cardMapping[id];
-        if (cardId) {
-            const card = document.getElementById(cardId);
-            const inspectorContainer = document.getElementById('inspector-widget-customizer');
-            if (card && inspectorContainer) {
-                inspectorContainer.appendChild(card);
-                this.currentRelocatedCard = card;
-                this.lastWidgetId = id;
-                if (customSettingsCard) {
-                    customSettingsCard.style.display = 'block';
-                }
-            }
-        }
+        this.checkStreamerObstruction();
     }
 
     startDrag(e, id) {
         e.preventDefault();
         this.selectWidget(id);
-        
-        const box = document.getElementById(`widget-box-${id}`);
-        const rect = this.canvasArea.getBoundingClientRect();
-        
-        this.dragState = {
-            id: id,
-            type: 'drag',
-            startX: e.clientX,
-            startY: e.clientY,
-            startLeft: parseFloat(box.style.left) || 0,
-            startTop: parseFloat(box.style.top) || 0,
-            rect: rect
-        };
+
+        this.isDragging = true;
+        this.draggedWidgetId = id;
+        this.startX = e.clientX;
+        this.startY = e.clientY;
+
+        const config = { ...this.widgets[id].default, ...(this.widgetsConfig[id] || {}) };
+        this.initialWidgetX = config.x;
+        this.initialWidgetY = config.y;
     }
 
     startResize(e, id) {
         e.preventDefault();
         e.stopPropagation();
         this.selectWidget(id);
-        
-        const box = document.getElementById(`widget-box-${id}`);
-        
-        this.dragState = {
-            id: id,
-            type: 'resize',
-            startX: e.clientX,
-            startY: e.clientY,
-            startWidth: parseFloat(box.style.width) || 50,
-            startHeight: parseFloat(box.style.height) || 50
-        };
+
+        this.isResizing = true;
+        this.draggedWidgetId = id;
+        this.startX = e.clientX;
+        this.startY = e.clientY;
+
+        const config = { ...this.widgets[id].default, ...(this.widgetsConfig[id] || {}) };
+        this.initialWidgetW = config.width;
+        this.initialWidgetH = config.height;
     }
 
     handleMouseMove(e) {
-        if (!this.dragState) return;
+        if (!this.draggedWidgetId) return;
 
-        const { id, type, startX, startY, startLeft, startTop, startWidth, startHeight } = this.dragState;
-        const box = document.getElementById(`widget-box-${id}`);
-        if (!box) return;
+        const dx = e.clientX - this.startX;
+        const dy = e.clientY - this.startY;
 
-        const deltaX = e.clientX - startX;
-        const deltaY = e.clientY - startY;
+        const dxPercent = (dx / this.canvasWidth) * 100;
+        const dyPercent = (dy / this.canvasHeight) * 100;
 
-        if (type === 'drag') {
-            let newLeft = startLeft + deltaX;
-            let newTop = startTop + deltaY;
+        const currentWidgetInfo = this.widgets[this.draggedWidgetId];
+        const config = { ...currentWidgetInfo.default, ...(this.widgetsConfig[this.draggedWidgetId] || {}) };
 
-            const maxLeft = this.canvasWidth - box.offsetWidth;
-            const maxTop = this.canvasHeight - box.offsetHeight;
-            newLeft = Math.max(0, Math.min(newLeft, maxLeft));
-            newTop = Math.max(0, Math.min(newTop, maxTop));
+        if (this.isDragging) {
+            let newX = Math.max(0, Math.min(100 - config.width, this.initialWidgetX + dxPercent));
+            let newY = Math.max(0, Math.min(100 - config.height, this.initialWidgetY + dyPercent));
 
-            box.style.left = `${newLeft}px`;
-            box.style.top = `${newTop}px`;
+            config.x = newX;
+            config.y = newY;
+        } else if (this.isResizing) {
+            let newW = Math.max(10, Math.min(100 - config.x, this.initialWidgetW + dxPercent));
+            let newH = Math.max(5, Math.min(100 - config.y, this.initialWidgetH + dyPercent));
 
-            const pctX = (newLeft / this.canvasWidth) * 100;
-            const pctY = (newTop / this.canvasHeight) * 100;
-            if (this.inputX) this.inputX.value = pctX.toFixed(1);
-            if (this.inputY) this.inputY.value = pctY.toFixed(1);
-            if (this.valX) this.valX.textContent = `${pctX.toFixed(1)}%`;
-            if (this.valY) this.valY.textContent = `${pctY.toFixed(1)}%`;
+            config.width = newW;
+            config.height = newH;
 
-        } else if (type === 'resize') {
-            let newWidth = startWidth + deltaX;
-            let newHeight = startHeight + deltaY;
+            // Automatically compute scale from box expansion ratio so resizing box scales text!
+            const defaultW = currentWidgetInfo.default.width || 35;
+            const computedScale = Math.round((newW / defaultW) * 100);
+            config.scale = Math.max(50, Math.min(500, computedScale));
 
-            newWidth = Math.max(30, Math.min(newWidth, this.canvasWidth));
-            newHeight = Math.max(20, Math.min(newHeight, this.canvasHeight));
+            if (this.inputSize) this.inputSize.value = config.scale;
+            if (this.valSize) this.valSize.textContent = `${config.scale}%`;
+        }
 
-            const leftVal = parseFloat(box.style.left) || 0;
-            const topVal = parseFloat(box.style.top) || 0;
-            if (leftVal + newWidth > this.canvasWidth) {
-                newWidth = this.canvasWidth - leftVal;
-            }
-            if (topVal + newHeight > this.canvasHeight) {
-                newHeight = this.canvasHeight - topVal;
-            }
+        this.widgetsConfig[this.draggedWidgetId] = config;
 
-            box.style.width = `${newWidth}px`;
-            box.style.height = `${newHeight}px`;
+        const box = document.getElementById(`widget-box-${this.draggedWidgetId}`);
+        if (box) {
+            box.style.left = `${(config.x / 100) * this.canvasWidth}px`;
+            box.style.top = `${(config.y / 100) * this.canvasHeight}px`;
+            box.style.width = `${(config.width / 100) * this.canvasWidth}px`;
+            box.style.height = `${(config.height / 100) * this.canvasHeight}px`;
+        }
 
-            const pctW = (newWidth / this.canvasWidth) * 100;
-            const pctH = (newHeight / this.canvasHeight) * 100;
-            if (this.inputW) this.inputW.value = pctW.toFixed(1);
-            if (this.inputH) this.inputH.value = pctH.toFixed(1);
-            if (this.valW) this.valW.textContent = `${pctW.toFixed(1)}%`;
-            if (this.valH) this.valH.textContent = `${pctH.toFixed(1)}%`;
+        if (this.activeWidgetId === this.draggedWidgetId) {
+            if (this.valX) this.valX.textContent = `${config.x.toFixed(1)}%`;
+            if (this.valY) this.valY.textContent = `${config.y.toFixed(1)}%`;
+            if (this.valW) this.valW.textContent = `${config.width.toFixed(1)}%`;
+            if (this.valH) this.valH.textContent = `${config.height.toFixed(1)}%`;
+
+            if (this.inputX) this.inputX.value = config.x.toFixed(1);
+            if (this.inputY) this.inputY.value = config.y.toFixed(1);
 
             if (this.inspectorDimensions) {
-                const pxW = Math.round((pctW / 100) * 1080);
-                const pxH = Math.round((pctH / 100) * 1920);
+                const pxW = Math.round((config.width / 100) * 1080);
+                const pxH = Math.round((config.height / 100) * 1920);
                 this.inspectorDimensions.textContent = `${pxW} x ${pxH} px`;
             }
         }
+
+        this.checkStreamerObstruction();
     }
 
-    handleMouseUp(e) {
-        if (!this.dragState) return;
+    handleMouseUp() {
+        if (this.isDragging || this.isResizing) {
+            this.isDragging = false;
+            this.isResizing = false;
+            this.draggedWidgetId = null;
+            this.saveAllWidgets();
+        }
+    }
 
-        const { id } = this.dragState;
-        this.dragState = null;
+    checkStreamerObstruction() {
+        if (!this.streamerZoneOverlay || !this.activeWidgetId) {
+            if (this.obstructionBadge) {
+                this.obstructionBadge.className = 'status-badge safe';
+                this.obstructionBadge.textContent = '✓ Posición Recomendada';
+            }
+            return;
+        }
 
-        const info = this.widgets[id];
-        const currentConfig = this.widgetsConfig[id] || { ...info.default };
+        const config = this.widgetsConfig[this.activeWidgetId] || this.widgets[this.activeWidgetId].default;
         
-        if (this.inputX) currentConfig.x = parseFloat(this.inputX.value);
-        if (this.inputY) currentConfig.y = parseFloat(this.inputY.value);
-        if (this.inputW) currentConfig.width = parseFloat(this.inputW.value);
-        if (this.inputH) currentConfig.height = parseFloat(this.inputH.value);
-        if (this.inputZoom) currentConfig.zoom = parseInt(this.inputZoom.value) || 100;
+        // Streamer protection zone coordinates (20% to 80% X, 30% to 75% Y)
+        const streamerBox = { left: 20, right: 80, top: 30, bottom: 75 };
+        const widgetBox = {
+            left: config.x,
+            right: config.x + config.width,
+            top: config.y,
+            bottom: config.y + config.height
+        };
 
-        this.widgetsConfig[id] = currentConfig;
-        
-        this.saveAllWidgets();
+        const overlapX = Math.max(0, Math.min(streamerBox.right, widgetBox.right) - Math.max(streamerBox.left, widgetBox.left));
+        const overlapY = Math.max(0, Math.min(streamerBox.bottom, widgetBox.bottom) - Math.max(streamerBox.top, widgetBox.top));
+        const overlapArea = overlapX * overlapY;
+        const widgetArea = config.width * config.height;
+
+        const overlapPct = widgetArea > 0 ? (overlapArea / widgetArea) * 100 : 0;
+
+        if (this.obstructionBadge) {
+            if (overlapPct === 0) {
+                this.obstructionBadge.className = 'status-badge safe';
+                this.obstructionBadge.textContent = '✓ Posición Recomendada';
+            } else if (overlapPct < 30) {
+                this.obstructionBadge.className = 'status-badge warning';
+                this.obstructionBadge.textContent = '⚠️ Posible Obstrucción';
+            } else {
+                this.obstructionBadge.className = 'status-badge danger';
+                this.obstructionBadge.textContent = '🚫 Obstrucción Alta';
+            }
+        }
     }
 
     saveAllWidgets() {
-        if (!this.socket) return;
-        
-        const widgets = {};
-        Object.keys(this.widgets).forEach(id => {
-            const info = this.widgets[id];
-            widgets[id] = this.widgetsConfig[id] || { ...info.default };
-        });
-
-        this.socket.emit('update_chatbot_settings', { widgets });
-
-        if (this.inputBorderColor || this.inputBgColor || this.inputBgOpacity) {
-            this.socket.emit('updateGlobalWidgetStyles', {
-                borderColor: this.inputBorderColor ? this.inputBorderColor.value : '#00f0ff',
-                bgColor: this.inputBgColor ? this.inputBgColor.value : '#0f0a19',
-                bgOpacity: this.inputBgOpacity ? parseInt(this.inputBgOpacity.value) : 45
+        if (this.socket) {
+            this.socket.emit('update_chatbot_settings', {
+                widgets: this.widgetsConfig
             });
         }
-    }
-
-    toggleWidgetState(id, active) {
-        const info = this.widgets[id];
-        const config = this.widgetsConfig[id] || { ...info.default };
-        config.active = active;
-        this.widgetsConfig[id] = config;
-        
-        this.renderCanvasWidgets();
-        if (this.activeWidgetId === id) {
-            this.selectWidget(active ? id : null);
-        }
-
-        this.saveAllWidgets();
     }
 }

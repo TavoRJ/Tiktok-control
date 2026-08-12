@@ -11,7 +11,8 @@
   },
   "build": {
     "appId": "com.tavorj.tiktoklive",
-    "productName": "GRLive",
+    "productName": "TavLive",
+    "asar": true,
     "publish": [
       {
         "provider": "github",
@@ -36,7 +37,9 @@
       "!.gitignore",
       "!*.txt",
       "!fix_*.js",
-      "!scratch_*.py"
+      "!scratch_*.py",
+      "!auth-server/data/*.db",
+      "!auth-server/scripts/run_*.js"
     ],
     "win": {
       "target": "nsis",

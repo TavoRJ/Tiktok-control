@@ -30,6 +30,11 @@ socket.on('chatbot_settings_updated', (config) => {
     if (!config) return;
     currentSettings = config;
     
+    // Apply real-time global styles if defined
+    if (config.globalWidgetStyles) {
+        applyGlobalStyles(config);
+    }
+    
     const wrapper = document.querySelector('.widget-wrapper');
     if (wrapper) {
         // Clear and rebuild class list
@@ -237,4 +242,69 @@ setOfflineState();
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.get('layout') === 'horizontal' || urlParams.get('horizontal') === 'true') {
     document.querySelector('.widget-wrapper')?.classList.add('layout-horizontal');
+}
+
+// Real-time custom style application for the music widget
+function applyGlobalStyles(config) {
+    const styles = config.globalWidgetStyles;
+    if (!styles) return;
+    
+    const root = document.documentElement;
+    
+    // 1. Font Family
+    if (styles.fontFamily) {
+        root.style.setProperty('--widget-font', `'${styles.fontFamily}', 'Outfit', sans-serif`);
+    }
+    
+    // 2. Border Color
+    if (styles.borderColor) {
+        root.style.setProperty('--widget-border-color', styles.borderColor);
+    }
+    
+    // 3. Background Color and Opacity
+    if (styles.bgColor) {
+        const bgHex = styles.bgColor;
+        const opacity = styles.bgOpacity !== undefined ? styles.bgOpacity / 100 : 0.65;
+        const rgba = hexToRgba(bgHex, opacity);
+        root.style.setProperty('--widget-bg', rgba);
+        
+        // Adjust text colors based on background contrast for high legibility
+        const brightness = getBrightness(bgHex);
+        if (brightness > 130) {
+            root.style.setProperty('--widget-text-main', '#111111');
+            root.style.setProperty('--widget-text-muted', 'rgba(0, 0, 0, 0.6)');
+        } else {
+            root.style.setProperty('--widget-text-main', '#ffffff');
+            root.style.setProperty('--widget-text-muted', 'rgba(255, 255, 255, 0.7)');
+        }
+    }
+    
+    // 4. Text / Zoom scale
+    if (styles.textScale !== undefined) {
+        root.style.setProperty('--widget-scale', styles.textScale / 100);
+    }
+}
+
+// Helper to convert hex color to RGBA
+function hexToRgba(hex, alpha) {
+    hex = hex.replace('#', '');
+    if (hex.length === 3) {
+        hex = hex.split('').map(char => char + char).join('');
+    }
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// Helper to calculate color brightness (for contrast checking)
+function getBrightness(hex) {
+    hex = hex.replace('#', '');
+    if (hex.length === 3) {
+        hex = hex.split('').map(char => char + char).join('');
+    }
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    return (r * 299 + g * 587 + b * 114) / 1000;
 }

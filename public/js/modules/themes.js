@@ -44,7 +44,7 @@ export const ThemesManager = {
         const serverPort = window.location.port || '3000';
         
         if (theme === 'neutral') {
-            document.title = "GRLive - Control Panel";
+            document.title = "TavLive - Control Panel";
             if (logoEl) {
                 logoEl.src = `http://127.0.0.1:${serverPort}/app-assets/neutral-logo.jpg`;
                 logoEl.alt = 'GR Logo';

@@ -12,5 +12,9 @@ contextBridge.exposeInMainWorld('electronBridge', {
      */
     setBackgroundMaterial: (material) => {
         ipcRenderer.send('set-background-material', material);
-    }
+    },
+    saveSecureToken: (key, value) => ipcRenderer.invoke('secure-store-save', key, value),
+    getSecureToken: (key) => ipcRenderer.invoke('secure-store-get', key),
+    deleteSecureToken: (key) => ipcRenderer.invoke('secure-store-delete', key)
 });
+

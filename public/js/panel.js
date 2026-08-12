@@ -2,6 +2,19 @@ import { SocketClient } from './modules/socket-client.js';
 import { UIManager } from './modules/ui-manager.js';
 import { ThemesManager } from './modules/themes.js';
 import { CanvasEditorManager } from './modules/canvas-editor.js';
+import { AuthUI } from './auth/auth-ui.js';
+import { authState } from './auth/auth-state.js';
+
+// Initialize TavLive Auth System (FASE 2)
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        AuthUI.init();
+        authState.restoreSession();
+    });
+} else {
+    AuthUI.init();
+    authState.restoreSession();
+}
 
 // Close Spotify auth popup if loaded inside one
 if (window.opener && window.location.search.includes('spotify=')) {
@@ -147,6 +160,11 @@ function switchToTab(item, targetId) {
     if (footer) {
         footer.style.display = (targetId === 'overlays-view') ? 'flex' : 'none';
     }
+
+    if (targetId === 'canvas-editor-view' && window.canvasEditor) {
+        window.canvasEditor.renderWidgetToggles();
+        window.canvasEditor.renderCanvasWidgets();
+    }
 }
 
 document.querySelectorAll('.menu-item').forEach(item => {
@@ -167,6 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize unified OBS designer canvas editor
     canvasEditor = new CanvasEditorManager(SocketClient);
+    window.canvasEditor = canvasEditor;
 
     const activeItem = document.querySelector('.menu-item.active');
     const footer = document.querySelector('.controls-footer');
@@ -1307,7 +1326,7 @@ function updateUIWithConfig(config) {
     const logoEl = document.querySelector('.brand-logo');
     const serverPort = window.location.port || '3000';
     if (themeName === 'neutral') {
-        document.title = "GRLive - Control Panel";
+        document.title = "TavLive - Control Panel";
         if (logoEl) {
             logoEl.src = `http://127.0.0.1:${serverPort}/app-assets/neutral-logo.jpg`;
             logoEl.alt = 'GR Logo';
@@ -4046,7 +4065,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnClearCache = document.getElementById('btn-clear-cache');
     if (btnClearCache) {
         btnClearCache.addEventListener('click', () => {
-            const confirmed = confirm("¡ADVERTENCIA CRÍTICA!\n\n¿Estás completamente seguro de que deseas borrar toda la caché del sistema y restaurar GRLive a sus valores de fábrica?\n\nEsta acción eliminará de forma permanente todos los perfiles de streamers, configuraciones de Spotify/YouTube, voces personalizadas y archivos multimedia subidos.\n\nEsta acción NO se puede deshacer.");
+            const confirmed = confirm("¡ADVERTENCIA CRÍTICA!\n\n¿Estás completamente seguro de que deseas borrar toda la caché del sistema y restaurar TavLive a sus valores de fábrica?\n\nEsta acción eliminará de forma permanente todos los perfiles de streamers, configuraciones de Spotify/YouTube, voces personalizadas y archivos multimedia subidos.\n\nEsta acción NO se puede deshacer.");
             if (confirmed) {
                 socket.emit('clear_cache');
             }
@@ -4088,16 +4107,16 @@ async function loadSystemSounds() {
     } catch (e) {
         console.error("Failed to load system sounds dynamically, falling back to defaults", e);
         SYSTEM_SOUNDS = [
-            { name: 'GRLive Bruh', url: '/sounds/bruh.mp3' },
-            { name: 'GRLive Fart', url: '/sounds/fart.mp3' },
-            { name: 'GRLive Vine Boom', url: '/sounds/vine-boom.mp3' },
-            { name: 'GRLive Anime Wow', url: '/sounds/anime-wow.mp3' },
-            { name: 'GRLive Roblox Oof', url: '/sounds/oof.mp3' },
-            { name: 'GRLive Bonk', url: '/sounds/bonk.mp3' },
-            { name: 'GRLive Taco Bell', url: '/sounds/taco-bell.mp3' },
-            { name: 'GRLive Yeet', url: '/sounds/yeet.mp3' },
-            { name: 'GRLive Nice Click', url: '/sounds/nice.mp3' },
-            { name: 'GRLive Discord Notif', url: '/sounds/discord-notification.mp3' }
+            { name: 'TavLive Bruh', url: '/sounds/bruh.mp3' },
+            { name: 'TavLive Fart', url: '/sounds/fart.mp3' },
+            { name: 'TavLive Vine Boom', url: '/sounds/vine-boom.mp3' },
+            { name: 'TavLive Anime Wow', url: '/sounds/anime-wow.mp3' },
+            { name: 'TavLive Roblox Oof', url: '/sounds/oof.mp3' },
+            { name: 'TavLive Bonk', url: '/sounds/bonk.mp3' },
+            { name: 'TavLive Taco Bell', url: '/sounds/taco-bell.mp3' },
+            { name: 'TavLive Yeet', url: '/sounds/yeet.mp3' },
+            { name: 'TavLive Nice Click', url: '/sounds/nice.mp3' },
+            { name: 'TavLive Discord Notif', url: '/sounds/discord-notification.mp3' }
         ];
     }
 }
@@ -5690,7 +5709,7 @@ function populateEventSoundDropdowns() {
         SYSTEM_SOUNDS.forEach(sound => {
             const option = document.createElement('option');
             option.value = sound.url; // e.g. /sounds/bruh.mp3
-            option.textContent = sound.name; // e.g. GRLive Bruh
+            option.textContent = sound.name; // e.g. TavLive Bruh
             select.appendChild(option);
         });
         select.value = currentValue;
@@ -6079,7 +6098,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
                 link.setAttribute('href', url);
-                link.setAttribute('download', `espectadores_GRLive_${new Date().toISOString().split('T')[0]}.csv`);
+                link.setAttribute('download', `espectadores_TavLive_${new Date().toISOString().split('T')[0]}.csv`);
                 link.style.visibility = 'hidden';
                 document.body.appendChild(link);
                 link.click();

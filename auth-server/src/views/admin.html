@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TavLive Admin — Modo Dueño</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090b10;
+      --card-bg: rgba(18, 22, 33, 0.75);
+      --card-border: rgba(255, 255, 255, 0.1);
+      --accent-cyan: #00f2fe;
+      --accent-purple: #9d4edd;
+      --accent-gold: #ffb703;
+      --text-main: #f8f9fa;
+      --text-sub: #a0aec0;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --success: #10b981;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Outfit', sans-serif; }
+    body { background: var(--bg); color: var(--text-main); min-height: 100vh; padding: 24px; }
+
+    /* Admin Login Glassmorphic Overlay */
+    .admin-login-overlay {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(5, 5, 8, 0.94); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
+      z-index: 999999; display: flex; align-items: center; justify-content: center;
+    }
+    .admin-login-card {
+      background: rgba(18, 22, 33, 0.92); border: 1px solid var(--card-border);
+      border-radius: 20px; padding: 40px; width: 90%; max-width: 440px; text-align: center;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+    }
+    .admin-login-card h2 {
+      font-size: 22px; font-weight: 700; margin-bottom: 6px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+
+    /* Dashboard Layout */
+    .header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 20px 28px; background: var(--card-bg); backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border); border-radius: 16px; margin-bottom: 24px;
+    }
+    .header h1 { font-size: 22px; font-weight: 700; background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .header-controls { display: flex; gap: 12px; align-items: center; }
+
+    input, select, button {
+      padding: 10px 14px; border-radius: 10px; border: 1px solid var(--card-border);
+      background: rgba(255, 255, 255, 0.05); color: var(--text-main); font-size: 14px; outline: none;
+    }
+    input:focus, select:focus { border-color: var(--accent-cyan); box-shadow: 0 0 10px rgba(0, 242, 254, 0.2); }
+    button { cursor: pointer; font-weight: 600; transition: all 0.2s ease; background: linear-gradient(135deg, #00c6ff, #0072ff); border: none; }
+    button:hover { transform: translateY(-1px); opacity: 0.95; }
+    button.btn-danger { background: linear-gradient(135deg, #f87171, #dc2626); }
+    button.btn-warning { background: linear-gradient(135deg, #fbbf24, #d97706); color: #000; }
+    button.btn-success { background: linear-gradient(135deg, #34d399, #059669); }
+
+    .grid-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 20px; text-align: center; }
+    .stat-num { font-size: 28px; font-weight: 700; color: var(--accent-cyan); margin-top: 6px; }
+
+    .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; padding: 24px; margin-bottom: 24px; }
+    .card-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group label { font-size: 12px; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.5px; }
+
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th, td { padding: 14px 16px; border-bottom: 1px solid var(--card-border); font-size: 14px; }
+    th { color: var(--text-sub); font-weight: 500; text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px; }
+    tr:hover td { background: rgba(255, 255, 255, 0.02); }
+    tr.expiring-soon td { background: rgba(245, 158, 11, 0.08); }
+    tr.expired-row td { background: rgba(239, 68, 68, 0.08); }
+
+    .badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; display: inline-block; }
+    .badge-free { background: rgba(0, 242, 254, 0.15); color: var(--accent-cyan); border: 1px solid var(--accent-cyan); }
+    .badge-pro { background: rgba(157, 78, 221, 0.15); color: #c77dff; border: 1px solid #c77dff; }
+    .badge-vip { background: rgba(255, 183, 3, 0.15); color: var(--accent-gold); border: 1px solid var(--accent-gold); }
+    .badge-active { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+    .badge-suspended { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+    .badge-expiring { background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid var(--warning); }
+    .badge-expired { background: rgba(239, 68, 68, 0.2); color: var(--danger); border: 1px solid var(--danger); }
+
+    .modal-overlay { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.75); display: none; align-items: center; justify-content: center; backdrop-filter: blur(8px); z-index: 999; }
+    .modal { background: #121621; border: 1px solid var(--card-border); border-radius: 16px; width: 90%; max-width: 480px; padding: 24px; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+
+  <!-- ADMIN LOGIN OVERLAY (AUTH GUARD) -->
+  <div class="admin-login-overlay" id="admin-login-overlay">
+    <div class="admin-login-card">
+      <div style="font-size: 42px; margin-bottom: 10px;">👑</div>
+      <h2>Consola de Administración</h2>
+      <p style="color: var(--text-sub); font-size: 13px; margin-bottom: 24px;">Ingresa la Clave Maestra X-Admin-Key para acceder</p>
+      
+      <div id="admin-login-error" style="display: none; background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); color: var(--danger); padding: 10px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 16px; font-weight: 600;">
+        Clave Administrador Inválida
+      </div>
+
+      <form onsubmit="handleAdminLogin(event)" style="display: flex; flex-direction: column; gap: 16px;">
+        <input type="password" id="login-admin-key" placeholder="••••••••••••••••" style="width: 100%; text-align: center; font-size: 16px; letter-spacing: 2px; padding: 12px;" required autofocus>
+        <button type="submit" style="width: 100%; padding: 12px; font-size: 15px; font-weight: 700; border-radius: 12px;">INGRESAR AL PANEL</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MAIN ADMIN DASHBOARD (PROTECTED) -->
+  <div id="admin-dashboard" style="display: none;">
+    <div class="header">
+      <h1>👑 TavLive Admin — Modo Dueño (Subfase 8C)</h1>
+      <div class="header-controls">
+        <button onclick="loadOverview()">🔄 Actualizar</button>
+        <button class="btn-danger" onclick="logoutAdmin()">🔒 Cerrar Sesión Admin</button>
+      </div>
+    </div>
+
+    <div class="grid-stats">
+      <div class="stat-card">
+        <div>Total Usuarios TikTok</div>
+        <div class="stat-num" id="stat-users">0</div>
+      </div>
+      <div class="stat-card">
+        <div>Licencias Activas</div>
+        <div class="stat-num" id="stat-licenses">0</div>
+      </div>
+      <div class="stat-card">
+        <div>Próximas a Vencer (72h)</div>
+        <div class="stat-num" id="stat-expiring" style="color: var(--warning);">0</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">➕ Registrar Creador por @TikTok Username & Activar Licencia</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>@TikTok Username *</label>
+          <input type="text" id="new-tiktok" placeholder="@tu_usuario_tiktok">
+        </div>
+        <div class="form-group">
+          <label>Nombre / Alias</label>
+          <input type="text" id="new-name" placeholder="Nombre de creador">
+        </div>
+        <div class="form-group">
+          <label>Contraseña / PIN *</label>
+          <input type="password" id="new-password" placeholder="Mínimo 6 caracteres">
+        </div>
+        <div class="form-group">
+          <label>Plan Inicial</label>
+          <select id="new-plan">
+            <option value="PRO">PRO</option>
+            <option value="FREE">FREE</option>
+            <option value="VIP">VIP</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Vencimiento (Opcional)</label>
+          <input type="date" id="new-expires">
+        </div>
+      </div>
+      <button onclick="createUser()">Registrar Creador & Activar Licencia</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <span>👥 Creadores de TikTok & Licencias Vinculadas</span>
+        <input type="text" id="search-creator-input" oninput="filterCreators()" placeholder="🔍 Buscar por @tiktok_username o nombre..." style="width: 320px; font-weight: 400;">
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>TikTok Username</th>
+            <th>Nombre</th>
+            <th>Plan</th>
+            <th>Estado</th>
+            <th>Vencimiento</th>
+            <th>Acciones de Gestión</th>
+          </tr>
+        </thead>
+        <tbody id="users-table-body">
+          <tr><td colspan="6" style="text-align: center; color: var(--text-sub);">Cargando usuarios...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Modal Editar Licencia -->
+  <div class="modal-overlay" id="edit-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Editar Licencia / TikTok Handle</h3>
+        <button onclick="closeModal('edit-modal')" style="background: none; border: none; font-size: 18px; color: var(--text-sub);">✕</button>
+      </div>
+      <input type="hidden" id="edit-license-id">
+      <div class="form-group" style="margin-bottom: 12px;">
+        <label>Plan</label>
+        <select id="edit-plan">
+          <option value="FREE">FREE</option>
+          <option value="PRO">PRO</option>
+          <option value="VIP">VIP</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom: 12px;">
+        <label>@TikTok Username Autorizado</label>
+        <input type="text" id="edit-tiktok" placeholder="@usuario_tiktok">
+      </div>
+      <div class="form-group" style="margin-bottom: 16px;">
+        <label>Estado de Licencia</label>
+        <select id="edit-status">
+          <option value="active">Activa</option>
+          <option value="paused">Pausada</option>
+          <option value="expired">Expirada</option>
+          <option value="revoked">Revocada</option>
+        </select>
+      </div>
+      <button onclick="saveLicenseEdit()" style="width: 100%;">Guardar Cambios</button>
+    </div>
+  </div>
+
+  <!-- Modal Reset Contraseña (Subfase 8C) -->
+  <div class="modal-overlay" id="password-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>🔑 Cambiar Contraseña de Creador</h3>
+        <button onclick="closeModal('password-modal')" style="background: none; border: none; font-size: 18px; color: var(--text-sub);">✕</button>
+      </div>
+      <input type="hidden" id="pwd-user-id">
+      <div class="form-group" style="margin-bottom: 16px;">
+        <label id="pwd-user-label">Nueva Contraseña (Argon2id)</label>
+        <input type="password" id="pwd-new-input" placeholder="Mínimo 6 caracteres">
+      </div>
+      <button onclick="submitPasswordChange()" style="width: 100%;">Actualizar Contraseña & Revocar Sesiones</button>
+    </div>
+  </div>
+
+  <script>
+    let adminKey = sessionStorage.getItem('x_admin_key') || localStorage.getItem('x_admin_key') || '';
+    let globalUsersList = [];
+
+    async function handleAdminLogin(event) {
+      if (event) event.preventDefault();
+      const inputKey = document.getElementById('login-admin-key').value.trim();
+      if (!inputKey) return;
+      await verifyAndShowDashboard(inputKey);
+    }
+
+    async function verifyAndShowDashboard(key) {
+      const errorBanner = document.getElementById('admin-login-error');
+      if (errorBanner) errorBanner.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/admin/overview', {
+          headers: {
+            'Content-Type': 'application/json',
+            'x-admin-key': key
+          }
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          adminKey = key;
+          sessionStorage.setItem('x_admin_key', key);
+          localStorage.setItem('x_admin_key', key);
+
+          document.getElementById('admin-login-overlay').style.display = 'none';
+          document.getElementById('admin-dashboard').style.display = 'block';
+
+          globalUsersList = data.users;
+          renderOverviewData(globalUsersList);
+        } else {
+          showLoginError('Clave Administrador Inválida');
+        }
+      } catch (err) {
+        showLoginError('Error de conexión con el servidor.');
+      }
+    }
+
+    function showLoginError(msg) {
+      adminKey = '';
+      sessionStorage.removeItem('x_admin_key');
+      localStorage.removeItem('x_admin_key');
+      document.getElementById('admin-dashboard').style.display = 'none';
+      document.getElementById('admin-login-overlay').style.display = 'flex';
+      const errorBanner = document.getElementById('admin-login-error');
+      if (errorBanner) {
+        errorBanner.innerText = msg;
+        errorBanner.style.display = 'block';
+      }
+    }
+
+    function logoutAdmin() {
+      adminKey = '';
+      sessionStorage.removeItem('x_admin_key');
+      localStorage.removeItem('x_admin_key');
+      document.getElementById('users-table-body').innerHTML = '';
+      document.getElementById('login-admin-key').value = '';
+      const errorBanner = document.getElementById('admin-login-error');
+      if (errorBanner) errorBanner.style.display = 'none';
+      document.getElementById('admin-dashboard').style.display = 'none';
+      document.getElementById('admin-login-overlay').style.display = 'flex';
+    }
+
+    async function apiFetch(path, options = {}) {
+      options.headers = {
+        'Content-Type': 'application/json',
+        'x-admin-key': adminKey,
+        ...(options.headers || {})
+      };
+      const res = await fetch(path, options);
+      if (res.status === 401 || res.status === 403) {
+        showLoginError('Sesión expirada o no autorizada.');
+        throw new Error('Unauthorized');
+      }
+      return res.json();
+    }
+
+    async function loadOverview() {
+      if (!adminKey) {
+        showLoginError('Por favor ingresa la clave de administrador.');
+        return;
+      }
+      try {
+        const data = await apiFetch('/api/admin/overview');
+        if (data.success) {
+          globalUsersList = data.users;
+          filterCreators();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function filterCreators() {
+      const query = (document.getElementById('search-creator-input').value || '').toLowerCase().trim();
+      if (!query) {
+        renderOverviewData(globalUsersList);
+        return;
+      }
+      const filtered = globalUsersList.filter(u => {
+        const handle = (u.tiktok_username || u.license_tiktok_username || '').toLowerCase();
+        const name = (u.name || '').toLowerCase();
+        return handle.includes(query) || name.includes(query);
+      });
+      renderOverviewData(filtered);
+    }
+
+    function renderOverviewData(users) {
+      document.getElementById('stat-users').innerText = globalUsersList.length;
+      const activeLics = globalUsersList.filter(u => u.license_status === 'active').length;
+      document.getElementById('stat-licenses').innerText = activeLics;
+
+      const nowMs = Date.now();
+      const seventyTwoHoursMs = 72 * 60 * 60 * 1000;
+      let expiringCount = 0;
+
+      const tbody = document.getElementById('users-table-body');
+      tbody.innerHTML = '';
+
+      users.forEach(u => {
+        const plan = u.plan || 'FREE';
+        const planClass = `badge-${plan.toLowerCase()}`;
+        const handle = u.tiktok_username || u.license_tiktok_username || u.name;
+        const tiktokDisplay = handle ? `@${handle.replace('@', '')}` : '— Sin Handle —';
+        
+        let statusClass = u.status === 'active' ? 'badge-active' : 'badge-suspended';
+        let rowClass = '';
+        let expiresDisplay = u.expires_at ? new Date(u.expires_at).toLocaleDateString() : 'Permanente';
+
+        if (u.expires_at) {
+          const expTime = new Date(u.expires_at).getTime();
+          if (expTime <= nowMs) {
+            statusClass = 'badge-expired';
+            rowClass = 'expired-row';
+            expiresDisplay = `❌ Expiró (${new Date(u.expires_at).toLocaleDateString()})`;
+          } else if (expTime - nowMs <= seventyTwoHoursMs) {
+            statusClass = 'badge-expiring';
+            rowClass = 'expiring-soon';
+            expiringCount++;
+            expiresDisplay = `⚠️ Vence pronto (${new Date(u.expires_at).toLocaleDateString()})`;
+          }
+        }
+
+        const tr = document.createElement('tr');
+        if (rowClass) tr.className = rowClass;
+        tr.innerHTML = `
+          <td><strong style="color: var(--accent-cyan); font-size: 15px;">${tiktokDisplay}</strong></td>
+          <td>${u.name}</td>
+          <td><span class="badge ${planClass}">${plan}</span></td>
+          <td><span class="badge ${statusClass}">${u.status.toUpperCase()}</span></td>
+          <td>${expiresDisplay}</td>
+          <td style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <button style="padding: 5px 9px; font-size: 11px;" onclick="openEditModal('${u.license_id || ''}', '${plan}', '${handle}', '${u.license_status || 'active'}')">✏️ Editar</button>
+            <button class="btn-warning" style="padding: 5px 9px; font-size: 11px;" onclick="openPasswordModal('${u.id}', '${tiktokDisplay}')">🔑 Clave</button>
+            <button class="btn-success" style="padding: 5px 9px; font-size: 11px;" onclick="extendLicense('${u.license_id || ''}')">⏳ +30 Días</button>
+            <button class="btn-danger" style="padding: 5px 9px; font-size: 11px;" onclick="deleteCreator('${u.id}', '${tiktokDisplay}')">🗑️ Eliminar</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('stat-expiring').innerText = expiringCount;
+    }
+
+    async function createUser() {
+      const tiktokUsername = document.getElementById('new-tiktok').value.trim();
+      const name = document.getElementById('new-name').value.trim();
+      const password = document.getElementById('new-password').value.trim();
+      const plan = document.getElementById('new-plan').value;
+      const expiresAtDate = document.getElementById('new-expires').value;
+      const expiresAt = expiresAtDate ? new Date(expiresAtDate).toISOString() : null;
+
+      if (!tiktokUsername || !password) {
+        alert('Por favor ingresa el @TikTok Username y la Contraseña/PIN.');
+        return;
+      }
+
+      const res = await apiFetch('/api/admin/users', {
+        method: 'POST',
+        body: JSON.stringify({ tiktokUsername, name, password, plan, expiresAt })
+      });
+
+      if (res.success) {
+        alert('Creador registrado y Licencia activada exitosamente.');
+        document.getElementById('new-tiktok').value = '';
+        document.getElementById('new-name').value = '';
+        document.getElementById('new-password').value = '';
+        loadOverview();
+      } else {
+        alert('Error al registrar creador: ' + (res.error || 'Error desconocido'));
+      }
+    }
+
+    function openPasswordModal(userId, tiktokDisplay) {
+      document.getElementById('pwd-user-id').value = userId;
+      document.getElementById('pwd-user-label').innerText = `Nueva Contraseña para ${tiktokDisplay}`;
+      document.getElementById('pwd-new-input').value = '';
+      document.getElementById('password-modal').style.display = 'flex';
+    }
+
+    async function submitPasswordChange() {
+      const userId = document.getElementById('pwd-user-id').value;
+      const password = document.getElementById('pwd-new-input').value.trim();
+
+      if (!password || password.length < 6) {
+        alert('La nueva contraseña debe tener al menos 6 caracteres.');
+        return;
+      }
+
+      const res = await apiFetch(`/api/admin/users/${userId}/password`, {
+        method: 'PUT',
+        body: JSON.stringify({ password })
+      });
+
+      if (res.success) {
+        alert('Contraseña actualizada con éxito mediante Argon2id.');
+        closeModal('password-modal');
+        loadOverview();
+      } else {
+        alert('Error al actualizar contraseña: ' + (res.error || 'Error desconocido'));
+      }
+    }
+
+    async function extendLicense(licenseId) {
+      if (!licenseId) {
+        alert('El usuario no posee una licencia activa para extender.');
+        return;
+      }
+
+      const res = await apiFetch(`/api/admin/licenses/${licenseId}/extend`, {
+        method: 'POST',
+        body: JSON.stringify({ days: 30 })
+      });
+
+      if (res.success) {
+        alert('Licencia extendida por +30 Días con éxito.');
+        loadOverview();
+      } else {
+        alert('Error al extender licencia: ' + (res.error || 'Error desconocido'));
+      }
+    }
+
+    async function deleteCreator(userId, tiktokDisplay) {
+      if (!confirm(`¿Estás seguro de ELIMINAR definitivamente al creador ${tiktokDisplay}? Esta acción revocará todas sus sesiones y eliminará sus datos.`)) {
+        return;
+      }
+
+      const res = await apiFetch(`/api/admin/users/${userId}`, {
+        method: 'DELETE'
+      });
+
+      if (res.success) {
+        alert(`Creador ${tiktokDisplay} eliminado exitosamente.`);
+        loadOverview();
+      } else {
+        alert('Error al eliminar creador: ' + (res.error || 'Error desconocido'));
+      }
+    }
+
+    function openEditModal(licenseId, plan, tiktok, status) {
+      if (!licenseId) {
+        alert('Este usuario no tiene una licencia asociada aún.');
+        return;
+      }
+      document.getElementById('edit-license-id').value = licenseId;
+      document.getElementById('edit-plan').value = plan;
+      document.getElementById('edit-tiktok').value = tiktok;
+      document.getElementById('edit-status').value = status;
+      document.getElementById('edit-modal').style.display = 'flex';
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).style.display = 'none';
+    }
+
+    async function saveLicenseEdit() {
+      const licenseId = document.getElementById('edit-license-id').value;
+      const plan = document.getElementById('edit-plan').value;
+      const tiktokUsername = document.getElementById('edit-tiktok').value.trim();
+      const status = document.getElementById('edit-status').value;
+
+      const res = await apiFetch(`/api/admin/licenses/${licenseId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ plan, tiktokUsername, status })
+      });
+
+      if (res.success) {
+        closeModal('edit-modal');
+        loadOverview();
+      } else {
+        alert('Error al actualizar licencia: ' + (res.error || 'Error desconocido'));
+      }
+    }
+
+    // Check stored key on load
+    if (adminKey) {
+      verifyAndShowDashboard(adminKey);
+    } else {
+      document.getElementById('admin-dashboard').style.display = 'none';
+      document.getElementById('admin-login-overlay').style.display = 'flex';
+    }
+  </script>
+</body>
+</html>

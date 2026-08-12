@@ -1,4 +1,4 @@
-# Mapa de Arquitectura y Dependencias (GRLive)
+# Mapa de Arquitectura y Dependencias (TavLive)
 
 Este documento actúa como guía obligatoria de referencia técnica y arquitectónica para evitar la alteración accidental, pérdida o corrupción del código fuente del proyecto.
 
