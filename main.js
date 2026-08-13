@@ -2,6 +2,14 @@ const { app, BrowserWindow, dialog, powerSaveBlocker, ipcMain, safeStorage } = r
 const path = require('path');
 const fs = require('fs');
 
+// Global Process Exception Protection (v1.4.2)
+process.on('uncaughtException', (error) => {
+    console.error('Unhandled Exception Captured:', error);
+});
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 function sanitizeStorageKey(key) {
     if (!key || typeof key !== 'string') return 'default';
     return key.replace(/[^a-zA-Z0-9_-]/g, '');

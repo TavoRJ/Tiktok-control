@@ -2261,7 +2261,7 @@ function stopVisualizerAnimation() {
 function startTtsWatchdog() {
     clearTtsWatchdog();
     ttsWatchdogTimeout = setTimeout(() => {
-        console.warn('[TTS Watchdog] Audio playback or SpeechSynthesis seems stuck (>20s). Resetting queue.');
+        console.warn('[TTS Watchdog] Audio playback or SpeechSynthesis timeout (>5s). Advancing queue.');
         stopVisualizerAnimation();
         if (currentAudioTts) {
             try {
@@ -2275,7 +2275,7 @@ function startTtsWatchdog() {
         }
         isPlayingTts = false;
         setTimeout(processTtsQueue, 100);
-    }, 20000); // 20 seconds safety margin
+    }, 5000); // 5 seconds strict safety timeout per audio event (v1.4.2)
 }
 
 function stopAllTTS() {
@@ -2303,8 +2303,8 @@ function queueCloudTTS(base64Audio, playLocation) {
         base64Audio,
         playLocation
     });
-    // Cap queue to max 3 waiting items to prevent massive backlog (user request #1)
-    while (ttsQueue.length > 3) {
+    // Cap queue to max 15 waiting items to prevent memory leaks during stream spikes (v1.4.2)
+    while (ttsQueue.length > 15) {
         ttsQueue.shift();
     }
     processTtsQueue();
@@ -2319,8 +2319,8 @@ function queueLocalTTS(text, voiceName, volume, pitch, rate) {
         pitch,
         rate
     });
-    // Cap queue to max 3 waiting items to prevent massive backlog (user request #1)
-    while (ttsQueue.length > 3) {
+    // Cap queue to max 15 waiting items to prevent memory leaks during stream spikes (v1.4.2)
+    while (ttsQueue.length > 15) {
         ttsQueue.shift();
     }
     processTtsQueue();

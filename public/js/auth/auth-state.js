@@ -238,8 +238,11 @@ class AuthStateManager {
 
         const refreshRes = await AuthClient.refreshToken(refreshToken);
         if (!refreshRes.success || !refreshRes.accessToken) {
-            await this.logout(false);
-            return { success: false, reason: refreshRes.error || 'Session expired.' };
+            if (refreshRes.status === 401 || refreshRes.status === 403) {
+                await this.logout(false);
+                return { success: false, reason: refreshRes.error || 'Session expired.' };
+            }
+            return { success: false, isTransient: true, reason: refreshRes.error || 'Transient network error.' };
         }
 
         this.accessToken = refreshRes.accessToken;
@@ -247,8 +250,11 @@ class AuthStateManager {
         // Verify profile to get latest user status & license
         const profileRes = await AuthClient.getProfile(this.accessToken);
         if (!profileRes.success || !profileRes.user) {
-            await this.logout(false);
-            return { success: false, reason: profileRes.error || 'User suspended or inactive.' };
+            if (profileRes.status === 401 || profileRes.status === 403) {
+                await this.logout(false);
+                return { success: false, reason: profileRes.error || 'User suspended or inactive.' };
+            }
+            return { success: false, isTransient: true, reason: profileRes.error || 'Transient network error.' };
         }
 
         this.currentUser = profileRes.user;
