@@ -2442,25 +2442,119 @@ socket.on('test_tts_error', (data) => {
     showToast(data.message || 'Error al generar la voz.', 'error');
 });
 
-// Handle playing sound alerts
+// ==========================================
+// INSTANT POLYPHONIC AUDIO ENGINE (v1.4.5)
+// ==========================================
+class InstantAudioEngine {
+    constructor() {
+        this.audioCtx = null;
+        this.bufferCache = new Map(); // soundUrl -> AudioBuffer
+        this.pendingLoads = new Map(); // soundUrl -> Promise
+    }
+
+    _getAudioContext() {
+        if (!this.audioCtx) {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (AudioContextClass) {
+                this.audioCtx = new AudioContextClass();
+            }
+        }
+        if (this.audioCtx && this.audioCtx.state === 'suspended') {
+            this.audioCtx.resume().catch(() => {});
+        }
+        return this.audioCtx;
+    }
+
+    /**
+     * Pre-buffer a sound file into RAM AudioBuffer for 0ms latency playback.
+     */
+    async preloadSound(soundUrl) {
+        if (!soundUrl) return null;
+        if (this.bufferCache.has(soundUrl)) {
+            return this.bufferCache.get(soundUrl);
+        }
+        if (this.pendingLoads.has(soundUrl)) {
+            return this.pendingLoads.get(soundUrl);
+        }
+
+        const loadPromise = (async () => {
+            try {
+                const ctx = this._getAudioContext();
+                if (!ctx) return null;
+
+                const response = await fetch(soundUrl);
+                if (!response.ok) return null;
+
+                const arrayBuffer = await response.arrayBuffer();
+                const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+                this.bufferCache.set(soundUrl, audioBuffer);
+                return audioBuffer;
+            } catch (err) {
+                console.warn('[InstantAudio] Failed to pre-buffer sound into RAM:', soundUrl, err);
+                return null;
+            } finally {
+                this.pendingLoads.delete(soundUrl);
+            }
+        })();
+
+        this.pendingLoads.set(soundUrl, loadPromise);
+        return loadPromise;
+    }
+
+    /**
+     * Bulk pre-load all gift and alert sounds into RAM upon Live connection.
+     */
+    async preloadAllSounds(soundUrls = []) {
+        if (!Array.isArray(soundUrls) || soundUrls.length === 0) return;
+        const promises = soundUrls.map(url => this.preloadSound(url));
+        await Promise.allSettled(promises);
+    }
+
+    /**
+     * Instant polyphonic playback with 0ms Web Audio API latency.
+     */
+    playSound(soundUrl, volume = 100) {
+        if (!soundUrl) return;
+
+        const ctx = this._getAudioContext();
+        const buffer = this.bufferCache.get(soundUrl);
+
+        if (ctx && buffer) {
+            try {
+                const source = ctx.createBufferSource();
+                const gainNode = ctx.createGain();
+
+                source.buffer = buffer;
+                gainNode.gain.value = Math.max(0, Math.min(1, (volume !== undefined ? volume : 100) / 100));
+
+                source.connect(gainNode);
+                gainNode.connect(ctx.destination);
+
+                source.start(0); // 0ms instant hardware buffer trigger!
+                return;
+            } catch (err) {
+                console.warn('[InstantAudio] Web Audio buffer play failed, using fallback:', err);
+            }
+        }
+
+        // Preload for next time and play HTML5 Audio fallback
+        this.preloadSound(soundUrl);
+        try {
+            const fallbackAudio = new Audio(soundUrl);
+            fallbackAudio.volume = Math.max(0, Math.min(1, (volume !== undefined ? volume : 100) / 100));
+            fallbackAudio.play().catch(() => {});
+        } catch (e) {}
+    }
+}
+
+const instantAudio = new InstantAudioEngine();
+window.instantAudio = instantAudio;
+
+// Handle playing sound alerts with zero-latency pre-buffering
 socket.on('play_sound_alert', (data) => {
     const { soundUrl, volume } = data;
-    
-    // Sound alerts always play in the panel regardless of TTS playLocation setting
     if (!soundUrl) return;
-    
-    const audio = new Audio(soundUrl);
-    audio.volume = (volume !== undefined ? volume : 100) / 100;
-    audio.play()
-        .then(() => {
-            audio.onended = () => {
-                audio.src = '';
-                audio.load();
-            };
-        })
-        .catch(err => {
-            console.error('Failed to play sound alert in panel:', err);
-        });
+    instantAudio.playSound(soundUrl, volume);
 });
 
 // Text-to-Speech Core Logic

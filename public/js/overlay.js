@@ -119,22 +119,89 @@ socket.on('play_tts_audio', (data) => {
     return;
 });
 
-// Handle playing sound alerts
+// ==========================================
+// INSTANT POLYPHONIC AUDIO ENGINE (v1.4.5)
+// ==========================================
+class InstantAudioEngineOverlay {
+    constructor() {
+        this.audioCtx = null;
+        this.bufferCache = new Map();
+        this.pendingLoads = new Map();
+    }
+
+    _getAudioContext() {
+        if (!this.audioCtx) {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (AudioContextClass) {
+                this.audioCtx = new AudioContextClass();
+            }
+        }
+        if (this.audioCtx && this.audioCtx.state === 'suspended') {
+            this.audioCtx.resume().catch(() => {});
+        }
+        return this.audioCtx;
+    }
+
+    async preloadSound(soundUrl) {
+        if (!soundUrl) return null;
+        if (this.bufferCache.has(soundUrl)) return this.bufferCache.get(soundUrl);
+        if (this.pendingLoads.has(soundUrl)) return this.pendingLoads.get(soundUrl);
+
+        const loadPromise = (async () => {
+            try {
+                const ctx = this._getAudioContext();
+                if (!ctx) return null;
+                const response = await fetch(soundUrl);
+                if (!response.ok) return null;
+                const arrayBuffer = await response.arrayBuffer();
+                const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+                this.bufferCache.set(soundUrl, audioBuffer);
+                return audioBuffer;
+            } catch (err) {
+                return null;
+            } finally {
+                this.pendingLoads.delete(soundUrl);
+            }
+        })();
+
+        this.pendingLoads.set(soundUrl, loadPromise);
+        return loadPromise;
+    }
+
+    playSound(soundUrl, volume = 100) {
+        if (!soundUrl) return;
+        const ctx = this._getAudioContext();
+        const buffer = this.bufferCache.get(soundUrl);
+
+        if (ctx && buffer) {
+            try {
+                const source = ctx.createBufferSource();
+                const gainNode = ctx.createGain();
+                source.buffer = buffer;
+                gainNode.gain.value = Math.max(0, Math.min(1, (volume !== undefined ? volume : 100) / 100));
+                source.connect(gainNode);
+                gainNode.connect(ctx.destination);
+                source.start(0);
+                return;
+            } catch (err) {}
+        }
+
+        this.preloadSound(soundUrl);
+        try {
+            const fallbackAudio = new Audio(soundUrl);
+            fallbackAudio.volume = Math.max(0, Math.min(1, (volume !== undefined ? volume : 100) / 100));
+            fallbackAudio.play().catch(() => {});
+        } catch (e) {}
+    }
+}
+
+const instantAudioOverlay = new InstantAudioEngineOverlay();
+
+// Handle playing sound alerts with zero-latency pre-buffering
 socket.on('play_sound_alert', (data) => {
     const { soundUrl, volume } = data;
     if (!soundUrl) return;
-    const audio = new Audio(soundUrl);
-    audio.volume = (volume !== undefined ? volume : 100) / 100;
-    audio.play()
-        .then(() => {
-            audio.onended = () => {
-                audio.src = '';
-                audio.load();
-            };
-        })
-        .catch(err => {
-            console.error('Failed to play sound alert in overlay:', err);
-        });
+    instantAudioOverlay.playSound(soundUrl, volume);
 });
 
 function triggerMasterAnimation(key, defaultLayer, defaultClass, defaultImg, defaultText, nickname) {
