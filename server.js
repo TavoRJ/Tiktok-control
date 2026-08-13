@@ -2500,7 +2500,11 @@ setInterval(async () => {
 
 const app = express();
 const server = http.createServer(app);
-io = new Server(server);
+io = new Server(server, {
+    pingInterval: 25000,
+    pingTimeout: 60000,
+    maxHttpBufferSize: 1e8
+});
 
 let remoteConfig = {};
 

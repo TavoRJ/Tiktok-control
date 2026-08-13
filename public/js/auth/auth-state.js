@@ -139,13 +139,17 @@ class AuthStateManager {
             if (profileRes.license) {
                 this.currentLicense = profileRes.license;
             }
+            if (profileRes.accessToken) {
+                this.accessToken = profileRes.accessToken;
+                await this._syncWithLocalServer(this.accessToken, this.currentUser);
+            }
             this._notify();
             return { success: true, user: this.currentUser, license: this.currentLicense };
         }
 
         if (profileRes.status === 401) {
-            // Case 2: Access token expired. Attempt silent background refresh token renewal (v1.4.4)
-            console.info('[Heartbeat] Access token expirado. Intentando renovación silenciosa...');
+            // Case 2: Access token expired. Attempt silent background refresh token renewal
+            console.info('[Heartbeat] Access token expirado (401). Intentando renovación silenciosa...');
             const refreshToken = await SessionManager.getRefreshToken().catch(() => null);
             if (refreshToken) {
                 const refreshRes = await AuthClient.refreshToken(refreshToken);
@@ -167,6 +171,9 @@ class AuthStateManager {
                     return { success: false, reason: refreshRes.error || 'Sesión expirada.' };
                 }
             }
+            // If refresh token attempt failed due to transient network, keep session active
+            console.warn('[Heartbeat] Red o servidor no disponible durante refresco. Manteniendo sesión activa...');
+            return { success: false, isTransient: true };
         } else if (profileRes.status === 403) {
             // Case 3: Explicit license/account suspension by admin
             console.warn('[Heartbeat] Licencia o cuenta revocada por el servidor:', profileRes.error);
@@ -175,7 +182,6 @@ class AuthStateManager {
         }
 
         // Case 4: Transient network failure (HTTP 500, status 0, timeout, Render cold start)
-        // Keep session active indefinitely during live stream (v1.4.4 keep-alive)
         this.consecutiveNetworkErrors++;
         console.warn(`[Heartbeat] Falla de red o servidor en reposo (${this.consecutiveNetworkErrors}). Manteniendo sesión activa...`);
         return { success: false, isTransient: true, consecutiveErrors: this.consecutiveNetworkErrors };

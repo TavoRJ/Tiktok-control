@@ -1,12 +1,17 @@
 /**
  * auth-client.js
  * Client wrapper for communicating with TavLive Remote Authentication API
- * featuring AbortController support, Silent Cold Start background retries for Render instances,
+ * featuring HTTP 401 Interceptor for automatic background token refresh,
+ * AbortController support, Cold Start retries for Render instances,
  * and robust error handling.
  */
+import { SessionManager } from './session-manager.js';
+
 export const AUTH_SERVER_URL = window.AUTH_SERVER_URL || 'https://tavlive-auth-server.onrender.com';
 
 let activeAbortController = null;
+let isRefreshingToken = false;
+let refreshQueue = [];
 
 export class AuthClient {
     /**
@@ -116,16 +121,44 @@ export class AuthClient {
         }
     }
 
+    /**
+     * Get User Profile with 401 Interceptor and Automatic Token Renewal
+     */
     static async getProfile(accessToken) {
         const signal = this._createSignal();
         try {
-            const response = await fetch(`${AUTH_SERVER_URL}/api/auth/me`, {
+            let response = await fetch(`${AUTH_SERVER_URL}/api/auth/me`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${accessToken}`
                 },
                 signal
             });
+
+            // 401 Interceptor: If access token expired, attempt silent refresh
+            if (response.status === 401) {
+                console.info('[AuthClient] 401 Unauthorized recibido en /me. Intentando auto-refresh silencioso...');
+                const refreshToken = await SessionManager.getRefreshToken();
+                if (refreshToken) {
+                    const refreshRes = await this.refreshToken(refreshToken);
+                    if (refreshRes.success && refreshRes.accessToken) {
+                        console.info('[AuthClient] Token renovado con éxito. Reintentando consulta de perfil...');
+                        // Retry request with new token
+                        response = await fetch(`${AUTH_SERVER_URL}/api/auth/me`, {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': `Bearer ${refreshRes.accessToken}`
+                            },
+                            signal
+                        });
+                        const retryData = await response.json().catch(() => ({ success: false }));
+                        if (response.ok && retryData.success) {
+                            retryData.accessToken = refreshRes.accessToken; // Attach new token
+                            return retryData;
+                        }
+                    }
+                }
+            }
 
             const data = await response.json().catch(() => ({ success: false, error: 'Respuesta inválida del servidor.' }));
 
@@ -150,6 +183,9 @@ export class AuthClient {
         }
     }
 
+    /**
+     * Refresh Access Token using stored Refresh Token
+     */
     static async refreshToken(refreshToken) {
         const signal = this._createSignal();
         try {

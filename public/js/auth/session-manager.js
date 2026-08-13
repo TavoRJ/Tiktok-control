@@ -1,13 +1,13 @@
 /**
  * session-manager.js
- * Handles secure storage of Refresh Tokens using Electron's native safeStorage API via IPC.
- * Ensures sensitive tokens are encrypted using OS-level DPAPI on Windows.
+ * Dual Redundant Secure Storage for Refresh Tokens using Electron's native safeStorage API via IPC
+ * with localStorage fallback for 100% session persistence reliability.
  */
 let inMemoryRefreshToken = null;
 
 export class SessionManager {
     /**
-     * Save Refresh Token securely using OS safeStorage if available.
+     * Save Refresh Token securely using OS safeStorage AND localStorage fallback.
      * @param {string} refreshToken 
      * @param {boolean} rememberMe 
      */
@@ -18,14 +18,15 @@ export class SessionManager {
         if (rememberMe) {
             try {
                 localStorage.setItem('tavlive_remember_me', 'true');
+                localStorage.setItem('tavlive_refresh_token', refreshToken);
             } catch (e) {}
 
             if (window.electronBridge && typeof window.electronBridge.saveSecureToken === 'function') {
-                await window.electronBridge.saveSecureToken('refresh_token', refreshToken);
-            } else {
                 try {
-                    localStorage.setItem('tavlive_refresh_token', refreshToken);
-                } catch (e) {}
+                    await window.electronBridge.saveSecureToken('refresh_token', refreshToken);
+                } catch (e) {
+                    console.warn('[SessionManager] safeStorage save warning:', e);
+                }
             }
         } else {
             try {
@@ -35,23 +36,33 @@ export class SessionManager {
     }
 
     /**
-     * Retrieve encrypted Refresh Token.
+     * Retrieve Refresh Token with dual-fallback strategy.
      * @returns {Promise<string|null>}
      */
     static async getRefreshToken() {
+        if (inMemoryRefreshToken) return inMemoryRefreshToken;
+
         if (window.electronBridge && typeof window.electronBridge.getSecureToken === 'function') {
-            const encryptedToken = await window.electronBridge.getSecureToken('refresh_token');
-            if (encryptedToken) {
-                inMemoryRefreshToken = encryptedToken;
-                return encryptedToken;
+            try {
+                const encryptedToken = await window.electronBridge.getSecureToken('refresh_token');
+                if (encryptedToken && encryptedToken.trim().length > 0) {
+                    inMemoryRefreshToken = encryptedToken;
+                    return encryptedToken;
+                }
+            } catch (e) {
+                console.warn('[SessionManager] safeStorage read warning:', e);
             }
         }
+
         try {
             const stored = localStorage.getItem('tavlive_refresh_token');
-            if (stored) return stored;
+            if (stored && stored.trim().length > 0) {
+                inMemoryRefreshToken = stored;
+                return stored;
+            }
         } catch (e) {}
 
-        return inMemoryRefreshToken;
+        return null;
     }
 
     /**
@@ -65,7 +76,9 @@ export class SessionManager {
         } catch (e) {}
 
         if (window.electronBridge && typeof window.electronBridge.deleteSecureToken === 'function') {
-            await window.electronBridge.deleteSecureToken('refresh_token');
+            try {
+                await window.electronBridge.deleteSecureToken('refresh_token');
+            } catch (e) {}
         }
     }
 }
