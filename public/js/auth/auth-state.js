@@ -27,7 +27,7 @@ class AuthStateManager {
         this.heartbeatTimer = null;
         this.consecutiveNetworkErrors = 0;
         this.maxGraceNetworkErrors = 3;
-        this.heartbeatIntervalMs = window.TAVLIVE_HEARTBEAT_INTERVAL_MS || 180000; // 3 minutes in prod
+        this.heartbeatIntervalMs = window.TAVLIVE_HEARTBEAT_INTERVAL_MS || 300000; // 5 minutes (v1.4.4)
         this.heartbeatGeneration = 0;
     }
 
@@ -112,7 +112,7 @@ class AuthStateManager {
     }
 
     /**
-     * Perform periodic background heartbeat check against Remote Auth API.
+     * Perform periodic background heartbeat & auto-refresh token check every 5 minutes.
      */
     async performHeartbeatCheck() {
         if (this.state !== AUTH_STATES.AUTHENTICATED || !this.accessToken) {
@@ -143,23 +143,41 @@ class AuthStateManager {
             return { success: true, user: this.currentUser, license: this.currentLicense };
         }
 
-        if (profileRes.status === 401 || profileRes.status === 403) {
-            // Case 2: Explicit authentication or license revocation error
-            console.warn('[Heartbeat] Autorización o licencia revocada por el servidor:', profileRes.error);
+        if (profileRes.status === 401) {
+            // Case 2: Access token expired. Attempt silent background refresh token renewal (v1.4.4)
+            console.info('[Heartbeat] Access token expirado. Intentando renovación silenciosa...');
+            const refreshToken = await SessionManager.getRefreshToken().catch(() => null);
+            if (refreshToken) {
+                const refreshRes = await AuthClient.refreshToken(refreshToken);
+                if (refreshRes.success && refreshRes.accessToken) {
+                    this.accessToken = refreshRes.accessToken;
+                    const profileRetry = await AuthClient.getProfile(this.accessToken);
+                    if (profileRetry.success && profileRetry.user) {
+                        this.consecutiveNetworkErrors = 0;
+                        this.currentUser = profileRetry.user;
+                        if (profileRetry.license) this.currentLicense = profileRetry.license;
+                        await this._syncWithLocalServer(this.accessToken, this.currentUser);
+                        this._notify();
+                        return { success: true, user: this.currentUser, license: this.currentLicense };
+                    }
+                }
+                if (refreshRes.status === 401 || refreshRes.status === 403) {
+                    console.warn('[Heartbeat] Sesión o refresh token revocados explícitamente por el servidor.');
+                    await this.logout(false);
+                    return { success: false, reason: refreshRes.error || 'Sesión expirada.' };
+                }
+            }
+        } else if (profileRes.status === 403) {
+            // Case 3: Explicit license/account suspension by admin
+            console.warn('[Heartbeat] Licencia o cuenta revocada por el servidor:', profileRes.error);
             await this.logout(false);
             return { success: false, reason: profileRes.error };
         }
 
-        // Case 3: Transient network failure (HTTP 500, timeout, OFFLINE)
+        // Case 4: Transient network failure (HTTP 500, status 0, timeout, Render cold start)
+        // Keep session active indefinitely during live stream (v1.4.4 keep-alive)
         this.consecutiveNetworkErrors++;
-        console.warn(`[Heartbeat] Falla de red transitoria (${this.consecutiveNetworkErrors}/${this.maxGraceNetworkErrors}):`, profileRes.error);
-
-        if (this.consecutiveNetworkErrors >= this.maxGraceNetworkErrors) {
-            console.error('[Heartbeat] Umbral de gracia de red superado. Bloqueando TavLive.');
-            await this.logout(false);
-            return { success: false, reason: 'Pérdida prolongada de conexión con el servidor de autenticación.' };
-        }
-
+        console.warn(`[Heartbeat] Falla de red o servidor en reposo (${this.consecutiveNetworkErrors}). Manteniendo sesión activa...`);
         return { success: false, isTransient: true, consecutiveErrors: this.consecutiveNetworkErrors };
     }
 
