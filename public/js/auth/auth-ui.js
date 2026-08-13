@@ -1,10 +1,12 @@
 /**
  * auth-ui.js
- * Professional Glassmorphic Login UI Overlay and Plan Badging for TavLive.
+ * Professional Glassmorphic Login UI Overlay and Plan Badging for TavLive (v1.4.3).
  * Controls rendering of the Login screen, Plan badges (FREE/PRO/VIP),
- * input handlers, error states, and Logout button with smooth continuous loading state.
+ * input handlers, error states, and Logout button with clean input focus,
+ * auto-login silent restoration, and crash prevention.
  */
 import { authState, AUTH_STATES } from './auth-state.js';
+import { SessionManager } from './session-manager.js';
 
 export class AuthUI {
     static init() {
@@ -19,18 +21,28 @@ export class AuthUI {
         // Initial state rendering
         this.renderState(authState.state, authState.currentUser, authState.currentLicense);
 
-        // Attempt silent auto-login via stored refresh token
+        // Attempt silent auto-login via stored refresh token safely
         this.attemptAutoLogin();
     }
 
     static async attemptAutoLogin() {
         try {
+            const hasToken = await SessionManager.getRefreshToken().catch(() => null);
+            if (hasToken) {
+                this.setLoading(true, 'Restaurando sesión...');
+            }
+
             const restoreRes = await authState.restoreSession();
             if (restoreRes.success) {
                 console.info('[Auto-Login] Sesión restaurada automáticamente.');
+            } else {
+                this.setLoading(false);
             }
         } catch (e) {
-            console.warn('[Auto-Login] No se pudo restaurar la sesión:', e);
+            console.warn('[Auto-Login] Excepción al restaurar la sesión:', e);
+            await SessionManager.clearRefreshToken().catch(() => {});
+            this.setLoading(false);
+            this.renderState(AUTH_STATES.LOCKED, null, null);
         }
     }
 
@@ -95,7 +107,7 @@ export class AuthUI {
                 </button>
 
                 <div class="tavlive-auth-footer">
-                    <p>TavLive v1.4.2 • Autenticación Remota Protegida</p>
+                    <p>TavLive v1.4.3 • Autenticación Remota Protegida</p>
                 </div>
             </div>
         </div>
@@ -378,7 +390,7 @@ export class AuthUI {
         }
     }
 
-    static setLoading(isLoading) {
+    static setLoading(isLoading, textOverride = null) {
         const submitBtn = document.getElementById('tavlive-btn-login');
         const googleBtn = document.getElementById('tavlive-btn-google-login');
         const btnText = document.getElementById('tavlive-btn-text');
@@ -388,7 +400,7 @@ export class AuthUI {
             submitBtn.disabled = isLoading;
             if (googleBtn) googleBtn.disabled = isLoading;
             if (isLoading) {
-                btnText.textContent = 'CONECTANDO CON EL SERVIDOR...';
+                btnText.textContent = textOverride ? textOverride.toUpperCase() : 'CONECTANDO CON EL SERVIDOR...';
                 spinner.style.display = 'block';
             } else {
                 btnText.textContent = 'INICIAR SESIÓN';
@@ -411,6 +423,9 @@ export class AuthUI {
             this.showError('Por favor completa todos los campos.');
             return;
         }
+
+        // Purge any stale stored tokens prior to submission to prevent token collision ambiguity
+        await SessionManager.clearRefreshToken().catch(() => {});
 
         this.hideError();
         this.setLoading(true);
@@ -514,7 +529,7 @@ export class AuthUI {
             }
             this.updateFeatureAvailability();
 
-            // Unlock form controls cleanly upon Logout
+            // Unlock form controls cleanly upon Logout (v1.4.3)
             const emailInput = document.getElementById('tavlive-input-email');
             const passwordInput = document.getElementById('tavlive-input-password');
             const submitBtn = document.getElementById('tavlive-btn-login');
@@ -523,13 +538,24 @@ export class AuthUI {
             if (emailInput) {
                 emailInput.disabled = false;
                 emailInput.readOnly = false;
+                emailInput.style.pointerEvents = 'auto';
+                try { emailInput.blur(); } catch(e) {}
             }
             if (passwordInput) {
                 passwordInput.disabled = false;
                 passwordInput.readOnly = false;
+                passwordInput.style.pointerEvents = 'auto';
+                passwordInput.value = ''; // Ensure password field is clean, no false dots
+                try { passwordInput.blur(); } catch(e) {}
             }
-            if (submitBtn) submitBtn.disabled = false;
-            if (googleBtn) googleBtn.disabled = false;
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.style.pointerEvents = 'auto';
+            }
+            if (googleBtn) {
+                googleBtn.disabled = false;
+                googleBtn.style.pointerEvents = 'auto';
+            }
 
             this.setLoading(false);
 
@@ -543,6 +569,13 @@ export class AuthUI {
             if (setupInput) {
                 setupInput.readOnly = false;
                 setupInput.title = '';
+            }
+
+            // Refocus email input cleanly in Electron
+            if (emailInput) {
+                setTimeout(() => {
+                    try { emailInput.focus(); } catch(e) {}
+                }, 50);
             }
         }
     }
