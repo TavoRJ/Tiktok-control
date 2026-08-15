@@ -2157,9 +2157,14 @@ async function executeAiCommand(item) {
     lastAiCallTime = Date.now();
 
     const charLimit = parseInt(aiConfig.ai_max_chars) || 150;
+    const approxMaxWords = Math.max(10, Math.floor(charLimit / 6));
 
     let systemPrompt = aiConfig.ai_prompt_personality || "Habla de forma tierna y alegre.";
-    systemPrompt += "\n[Instrucción estricta: Eres un asistente para transmisiones en vivo. Responde en un solo párrafo continuo de 2 a 3 oraciones completas, con un máximo aproximado de 150 caracteres. Termina siempre con punto final. Prohibido usar listas numeradas, viñetas o saltos de línea.]";
+    systemPrompt += `\n[INSTRUCCIONES OBLIGATORIAS DE FORMATO:
+- IDIOMA: Responde SIEMPRE en ESPAÑOL LATINO. Está strictly prohibido responder en inglés o cualquier otro idioma.
+- LONGITUD MÁXIMA: Tu respuesta NUNCA debe superar los ${charLimit} caracteres en total (máximo ${approxMaxWords} palabras). Responde en 1 o 2 oraciones breves y concisas.
+- COMPLETITUD: Toda oración debe ser gramaticalmente completa y terminar obligatoriamente con punto final. JAMÁS dejes una oración a la mitad ni te detengas sobre conectores o preposiciones (como 'por', 'de', 'con', 'para', 'en', 'y', 'o', 'que').
+- SIN FORMATO: NO uses emojis, listas numeradas, viñetas, saltos de línea ni formato markdown.]`;
 
     // Add user turn to conversational memory window
     aiChatHistory.push({
@@ -2173,7 +2178,7 @@ async function executeAiCommand(item) {
     }
 
     try {
-        console.info(`[AI Gemini] Enviando prompt y conversación a Gemini 3.5 Flash para @${uniqueId}: "${prompt}" (Turnos en memoria: ${aiChatHistory.length})`);
+        console.info(`[AI Gemini] Enviando prompt y conversación a Gemini 3.5 Flash para @${uniqueId}: "${prompt}" (CharLimit: ${charLimit}, Turnos: ${aiChatHistory.length})`);
 
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST',
@@ -2183,7 +2188,7 @@ async function executeAiCommand(item) {
                 system_instruction: { parts: [ { text: systemPrompt } ] },
                 generationConfig: {
                     maxOutputTokens: 300,
-                    temperature: 0.7
+                    temperature: 0.5
                 }
             }),
             signal: AbortSignal.timeout(10000) // 10-second timeout to prevent infinite hangs
@@ -2207,25 +2212,54 @@ async function executeAiCommand(item) {
             return;
         }
 
-        // Save generated model turn into conversational memory
+        let finalCleanText = rawResponseText.replace(/[\r\n]+/g, ' ').trim();
+
+        // Control estricto de longitud de caracteres asignado por el usuario
+        if (finalCleanText.length > charLimit) {
+            const snippet = finalCleanText.substring(0, charLimit);
+            const lastSentenceBoundary = Math.max(
+                snippet.lastIndexOf('.'),
+                snippet.lastIndexOf('?'),
+                snippet.lastIndexOf('!')
+            );
+
+            if (lastSentenceBoundary > 20) {
+                finalCleanText = snippet.substring(0, lastSentenceBoundary + 1);
+            } else {
+                const lastSpace = snippet.lastIndexOf(' ');
+                if (lastSpace > 20) {
+                    finalCleanText = snippet.substring(0, lastSpace).trim();
+                }
+            }
+        }
+
+        // Remover conectores o preposiciones colgantes al final de la oración en español (ej. "por.", "en.", "que.")
+        const danglingConnectorRegex = /\b(por|de|con|para|en|y|o|a|que|del|el|la|los|las|un|una|unos|unas|al|su|mi|tu|como|sin|sobre|tras|hasta|desde|hacia|entre|durante|mediante|según|pero|sino|porque|aunque)\s*[.!?]*$/i;
+        while (danglingConnectorRegex.test(finalCleanText)) {
+            finalCleanText = finalCleanText.replace(danglingConnectorRegex, '').trim();
+        }
+
+        // Garantizar cierre gramatical y puntuación final
+        if (!/[.!?]$/.test(finalCleanText)) {
+            finalCleanText = finalCleanText + ".";
+        }
+
+        finalCleanText = sanitizeTextForTts(finalCleanText);
+
+        // Guardar la respuesta limpia en la memoria conversacional
         aiChatHistory.push({
             role: 'model',
-            parts: [{ text: rawResponseText }]
+            parts: [{ text: finalCleanText }]
         });
         if (aiChatHistory.length > 8) {
             aiChatHistory = aiChatHistory.slice(-8);
         }
 
-        let finalCleanText = rawResponseText.replace(/[\r\n]+/g, ' ').trim();
-        if (!/[.!?]$/.test(finalCleanText)) {
-            finalCleanText = finalCleanText + ".";
-        }
-        finalCleanText = sanitizeTextForTts(finalCleanText);
-
         console.log('--- DEBUG TAVLIVE IA ---');
         console.log('INPUT PROMPT:', prompt);
         console.log('RAW GEMINI:', rawResponseText);
         console.log('SENT TO CLIENT:', finalCleanText);
+        console.log('CHAR LIMIT:', charLimit, '| ACTUAL CHARS:', finalCleanText.length);
         console.log('CHAT HISTORY LENGTH:', aiChatHistory.length);
         console.log('------------------------');
 
