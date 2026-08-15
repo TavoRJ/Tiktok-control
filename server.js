@@ -2158,12 +2158,19 @@ async function executeAiCommand(item) {
 
     const charLimit = parseInt(aiConfig.ai_max_chars) || 150;
 
-    // System prompt: natural language only, no technical rules that leak into output
-    let systemPrompt = aiConfig.ai_prompt_personality || "Eres un asistente divertido y amable para una transmisión en vivo de TikTok.";
-    systemPrompt += ` Responde siempre en español latino. Sé breve y conciso: máximo dos oraciones cortas. Termina siempre con punto final. No uses emojis, asteriscos ni formato especial.`;
+    // Build system prompt: personality + behavioral rules using charLimit dynamically
+    const personalityBase = aiConfig.ai_prompt_personality || "Eres un asistente divertido y amable para una transmisión en vivo de TikTok.";
+    const systemPrompt = `${personalityBase}
+
+Reglas obligatorias:
+- Responde SIEMPRE en español latino, sin importar en qué idioma te pregunten.
+- Tu respuesta debe tener entre ${Math.floor(charLimit * 0.5)} y ${charLimit} caracteres aproximadamente. Aprovecha el espacio para dar una respuesta completa y útil.
+- Escribe en texto corrido, como si estuvieras hablando. NO uses listas, viñetas, numeración, ni formato especial.
+- Termina siempre con una oración completa que cierre con punto, signo de interrogación o exclamación.
+- No uses emojis, asteriscos, hashtags ni markdown.`;
 
     try {
-        console.info(`[AI Gemini] Enviando prompt a Gemini 3.5 Flash para @${uniqueId}: "${prompt}" (CharLimit: ${charLimit})`);
+        console.info(`[AI Gemini] Prompt para @${uniqueId}: "${prompt}" | charLimit=${charLimit} | profile=${aiProfile} | personality="${personalityBase.substring(0, 60)}..."`);
 
         // Single-turn request — no shared global history to prevent cross-user contamination
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
@@ -2173,11 +2180,11 @@ async function executeAiCommand(item) {
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
                 system_instruction: { parts: [{ text: systemPrompt }] },
                 generationConfig: {
-                    maxOutputTokens: 300,
-                    temperature: 0.7
+                    maxOutputTokens: 400,
+                    temperature: 0.8
                 }
             }),
-            signal: AbortSignal.timeout(10000)
+            signal: AbortSignal.timeout(12000)
         });
 
         if (!response.ok) {
@@ -2191,6 +2198,10 @@ async function executeAiCommand(item) {
             rawResponseText = result.candidates[0].content.parts[0].text || "";
         }
 
+        // Check for safety/finish reason issues
+        const finishReason = result.candidates && result.candidates[0] && result.candidates[0].finishReason;
+        console.log(`[AI Gemini] finishReason: ${finishReason}`);
+
         rawResponseText = rawResponseText.trim();
         if (!rawResponseText) {
             console.warn("[AI Gemini] Respuesta vacía de Gemini.");
@@ -2198,44 +2209,55 @@ async function executeAiCommand(item) {
             return;
         }
 
-        // Clean: remove line breaks, markdown formatting, and stray special chars
+        // Clean: remove line breaks, markdown formatting, numbered list prefixes, and stray special chars
         let finalCleanText = rawResponseText
-            .replace(/[\r\n]+/g, ' ')
-            .replace(/[*_`~#]/g, '')
-            .replace(/\s+/g, ' ')
+            .replace(/[\r\n]+/g, ' ')           // collapse line breaks
+            .replace(/[*_`~#]/g, '')             // strip markdown
+            .replace(/\d+\.\s+/g, '')            // strip numbered list prefixes like "1. ", "2. "
+            .replace(/-\s+(?=[A-ZÁÉÍÓÚa-záéíóú])/g, '')  // strip bullet dashes
+            .replace(/\s+/g, ' ')                // collapse whitespace
             .trim();
 
         // Enforce character limit by cutting at last complete sentence within limit
         if (finalCleanText.length > charLimit) {
             const snippet = finalCleanText.substring(0, charLimit);
             const lastSentenceBoundary = Math.max(
+                snippet.lastIndexOf('. '),
+                snippet.lastIndexOf('? '),
+                snippet.lastIndexOf('! '),
                 snippet.lastIndexOf('.'),
                 snippet.lastIndexOf('?'),
                 snippet.lastIndexOf('!')
             );
 
-            if (lastSentenceBoundary > 20) {
+            if (lastSentenceBoundary > charLimit * 0.3) {
                 finalCleanText = snippet.substring(0, lastSentenceBoundary + 1);
             } else {
-                // No sentence boundary found — use last word boundary
+                // No sentence boundary — use last word boundary to avoid cutting mid-word
                 const lastSpace = snippet.lastIndexOf(' ');
-                if (lastSpace > 20) {
+                if (lastSpace > charLimit * 0.3) {
                     finalCleanText = snippet.substring(0, lastSpace).trim();
                 }
             }
         }
 
-        // Ensure final punctuation
+        // Ensure final punctuation — only if not already punctuated
+        finalCleanText = finalCleanText.replace(/\s+$/, '');
         if (!/[.!?]$/.test(finalCleanText)) {
             finalCleanText = finalCleanText + ".";
         }
 
-        console.log('--- DEBUG TAVLIVE IA ---');
-        console.log('INPUT PROMPT:', prompt);
-        console.log('RAW GEMINI:', rawResponseText);
-        console.log('SENT TO CLIENT:', finalCleanText);
-        console.log('CHAR LIMIT:', charLimit, '| ACTUAL CHARS:', finalCleanText.length);
-        console.log('------------------------');
+        // Diagnostic log — visible in Node console for live debugging
+        console.log('╔══════════════════════════════════════════════');
+        console.log('║ TAVLIVE IA DEBUG');
+        console.log('╠══════════════════════════════════════════════');
+        console.log('║ USER:', `@${uniqueId}`);
+        console.log('║ INPUT:', prompt);
+        console.log('║ RAW GEMINI (' + rawResponseText.length + ' chars):', rawResponseText);
+        console.log('║ FINAL (' + finalCleanText.length + ' chars):', finalCleanText);
+        console.log('║ CHAR LIMIT:', charLimit);
+        console.log('║ FINISH REASON:', finishReason);
+        console.log('╚══════════════════════════════════════════════');
 
         io.emit('tiktok_event_raw', {
             eventType: 'ai_response',
