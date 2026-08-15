@@ -1475,11 +1475,13 @@ async function generateAndPlayTTS(data) {
     }
     
     // 9. Determine voice settings
-    let voiceName = 'es-CO-SalomeNeural';
-    if (chatbotSettings.ttsEngine === 'gemini') {
+    let voiceName = 'es-CO-Neural2-B';
+    if (chatbotSettings.ttsEngine === 'google_cloud' || chatbotSettings.ttsEngine === 'cloud') {
+        voiceName = chatbotSettings.cloudVoiceName || chatbotSettings.defaultVoice || 'es-CO-Neural2-B';
+    } else if (chatbotSettings.ttsEngine === 'gemini') {
         voiceName = chatbotSettings.geminiVoiceName || 'Aoede';
     } else {
-        voiceName = chatbotSettings.cloudVoiceName || 'es-CO-SalomeNeural';
+        voiceName = chatbotSettings.cloudVoiceName || chatbotSettings.defaultVoice || chatbotSettings.voiceName || 'es-CO-SalomeNeural';
     }
     let volume = chatbotSettings.volume ?? 1;
     let pitch = chatbotSettings.pitch ?? 1;
@@ -2262,7 +2264,12 @@ async function executeAiCommand(item) {
     const nickname = item.nickname;
     const prompt = item.prompt;
 
-    const apiKey = (aiConfig.gemini_api_key || chatbotSettings.geminiApiKey || chatbotSettings.gemini_api_key || '').trim();
+    let apiKey = (aiConfig.gemini_api_key || chatbotSettings.gemini_api_key || chatbotSettings.geminiApiKey || '').trim();
+    if (apiKey.startsWith('AIzaSyCbd')) {
+        console.warn('[GEMINI AUTH] Se ignoró la clave de Cloud TTS asignada por error a texto.');
+        apiKey = '';
+    }
+
     if (!apiKey || apiKey.trim() === "") {
         console.error("[AI Gemini] Error: Gemini API Key no configurada.");
         io.emit('system', { type: 'error', message: 'ERROR: API Key de Gemini no configurada en los ajustes.' });

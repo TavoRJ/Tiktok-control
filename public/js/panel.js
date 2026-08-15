@@ -1710,13 +1710,18 @@ function sendUpdatedSettings() {
         bannedWordsAction: document.getElementById('bot-banned-action').value,
         ignoreUserList: ignoreUserList,
         bannedUsernames: bannedUsernames,
-        ttsEngine: document.getElementById('bot-tts-engine').value,
-        cloudVoiceName: document.getElementById('bot-cloud-voice').value,
+        ttsEngine: (document.getElementById('bot-tts-engine').value === 'cloud') ? 'google_cloud' : document.getElementById('bot-tts-engine').value,
+        cloudVoiceName: document.getElementById('bot-cloud-voice') ? document.getElementById('bot-cloud-voice').value : 'es-CO-Neural2-B',
         geminiModel: document.getElementById('bot-gemini-model').value,
         geminiLanguage: document.getElementById('bot-gemini-language').value,
         geminiVoiceName: document.getElementById('bot-gemini-voice').value,
         geminiStyleInstructions: document.getElementById('bot-gemini-style').value.trim(),
-        voiceName: document.getElementById('bot-default-voice').value,
+        voiceName: (document.getElementById('bot-tts-engine').value === 'cloud' || document.getElementById('bot-tts-engine').value === 'google_cloud')
+            ? (document.getElementById('bot-cloud-voice') ? document.getElementById('bot-cloud-voice').value : 'es-CO-Neural2-B')
+            : document.getElementById('bot-default-voice').value,
+        defaultVoice: (document.getElementById('bot-tts-engine').value === 'cloud' || document.getElementById('bot-tts-engine').value === 'google_cloud')
+            ? (document.getElementById('bot-cloud-voice') ? document.getElementById('bot-cloud-voice').value : 'es-CO-Neural2-B')
+            : document.getElementById('bot-default-voice').value,
         volume: parseFloat(document.getElementById('bot-default-volume').value),
         pitch: parseFloat(document.getElementById('bot-default-pitch').value),
         rate: parseFloat(document.getElementById('bot-default-rate').value),
