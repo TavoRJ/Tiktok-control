@@ -1111,9 +1111,11 @@ function updateUIWithConfig(config) {
     if (bannedUsernamesEl) bannedUsernamesEl.value = (config.bannedUsernames || []).join(', ');
 
     const aiApiKeyEl = document.getElementById('ai-api-key');
-    if (aiApiKeyEl) aiApiKeyEl.value = config.geminiApiKey || '';
+    if (aiApiKeyEl) aiApiKeyEl.value = config.geminiApiKey || config.gemini_api_key || '';
+    const cloudTtsApiKeyEl = document.getElementById('cloud-tts-api-key');
+    if (cloudTtsApiKeyEl) cloudTtsApiKeyEl.value = config.cloudTtsApiKey || config.cloud_tts_api_key || '';
     const aiApiKeyShortcutEl = document.getElementById('bot-gemini-api-key-shortcut');
-    if (aiApiKeyShortcutEl) aiApiKeyShortcutEl.value = config.geminiApiKey || '';
+    if (aiApiKeyShortcutEl) aiApiKeyShortcutEl.value = config.geminiApiKey || config.gemini_api_key || '';
     
     // Exclusive Voice Chat config fields
     const exclusiveEnabledEl = document.getElementById('bot-exclusive-enabled');
@@ -1732,9 +1734,10 @@ function sendUpdatedSettings() {
         themeName: (chatbotConfig && chatbotConfig.themeName) || 'neutral',
         visualStyle: document.getElementById('setup-visual-style') ? document.getElementById('setup-visual-style').value : 'glassmorphism',
 
-        geminiApiKey: (document.getElementById('bot-gemini-api-key-shortcut') && document.getElementById('bot-gemini-api-key-shortcut').value.trim()) 
-            ? document.getElementById('bot-gemini-api-key-shortcut').value.trim() 
-            : (document.getElementById('ai-api-key') ? document.getElementById('ai-api-key').value.trim() : ''),
+        geminiApiKey: document.getElementById('ai-api-key') ? document.getElementById('ai-api-key').value.trim() : (document.getElementById('bot-gemini-api-key-shortcut') ? document.getElementById('bot-gemini-api-key-shortcut').value.trim() : ''),
+        cloudTtsApiKey: document.getElementById('cloud-tts-api-key') ? document.getElementById('cloud-tts-api-key').value.trim() : '',
+        gemini_api_key: document.getElementById('ai-api-key') ? document.getElementById('ai-api-key').value.trim() : '',
+        cloud_tts_api_key: document.getElementById('cloud-tts-api-key') ? document.getElementById('cloud-tts-api-key').value.trim() : '',
         spotifyClientId: document.getElementById('spotify-client-id') ? document.getElementById('spotify-client-id').value.trim() : '',
         spotifyClientSecret: document.getElementById('spotify-client-secret') ? document.getElementById('spotify-client-secret').value.trim() : '',
         spotifyEnabled: document.getElementById('spotify-active') ? document.getElementById('spotify-active').checked : false,
@@ -6111,6 +6114,24 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.key === 'Enter') tryUnlockKey(pwdUnlockAi, lockScreenAi, unlockScreenAi);
         });
     }
+
+    // Toggle password visibility for API keys
+    const setupEyeToggle = (toggleId, inputId) => {
+        const toggleEl = document.getElementById(toggleId);
+        const inputEl = document.getElementById(inputId);
+        if (toggleEl && inputEl) {
+            toggleEl.addEventListener('click', () => {
+                const isPassword = inputEl.type === 'password';
+                inputEl.type = isPassword ? 'text' : 'password';
+                toggleEl.setAttribute('data-lucide', isPassword ? 'eye-off' : 'eye');
+                if (window.lucide && typeof window.lucide.createIcons === 'function') {
+                    window.lucide.createIcons();
+                }
+            });
+        }
+    };
+    setupEyeToggle('toggle-ai-api-key', 'ai-api-key');
+    setupEyeToggle('toggle-cloud-tts-api-key', 'cloud-tts-api-key');
 
     // =========================================================================
     // REGISTRO DE ESPECTADORES EN TIEMPO REAL

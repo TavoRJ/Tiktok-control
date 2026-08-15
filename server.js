@@ -2262,7 +2262,7 @@ async function executeAiCommand(item) {
     const nickname = item.nickname;
     const prompt = item.prompt;
 
-    const apiKey = chatbotSettings.geminiApiKey;
+    const apiKey = (aiConfig.gemini_api_key || chatbotSettings.geminiApiKey || chatbotSettings.gemini_api_key || '').trim();
     if (!apiKey || apiKey.trim() === "") {
         console.error("[AI Gemini] Error: Gemini API Key no configurada.");
         io.emit('system', { type: 'error', message: 'ERROR: API Key de Gemini no configurada en los ajustes.' });
@@ -6151,9 +6151,7 @@ async function synthesizeSpeech(text, voice, rateStr, pitchStr, tempFile, custom
     const geminiVoices = ["Aoede", "Charon", "Fenrir", "Kore", "Puck", "Achernar"];
     const isGoogleOrGeminiVoice = geminiVoices.includes(voice) || (chatbotSettings.ttsEngine === "gemini" && !voice.includes("-")) || (voice && voice.includes("Neural"));
 
-    const googleTtsKey = (chatbotSettings.geminiApiKey && chatbotSettings.geminiApiKey.trim()) 
-        ? chatbotSettings.geminiApiKey.trim() 
-        : "AIzaSyCbdWFhzeheVDKl16tptEmWrEUrc1Q_dz8";
+    const googleTtsKey = (chatbotSettings.cloudTtsApiKey || chatbotSettings.cloud_tts_api_key || chatbotSettings.geminiApiKey || "AIzaSyCbdWFhzeheVDKl16tptEmWrEUrc1Q_dz8").trim();
 
     if (isGoogleOrGeminiVoice && googleTtsKey) {
         try {

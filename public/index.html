@@ -2963,10 +2963,22 @@
                                 </div>
                             </div>
                             <div id="ai-key-unlocked-screen" style="display: none; margin-top: 10px;">
+                                <div class="form-group" style="margin-bottom: 15px;">
+                                    <label for="ai-api-key" style="font-weight: bold; color: var(--accent-blue);">Google Gemini API Key (Texto / Inteligencia):</label>
+                                    <div style="position: relative; display: flex; align-items: center;">
+                                        <input type="password" id="ai-api-key" placeholder="AIza... (Google AI Studio Key)" style="width: 100%; padding-right: 35px;">
+                                        <i data-lucide="eye" id="toggle-ai-api-key" style="position: absolute; right: 10px; cursor: pointer; color: var(--text-muted);" title="Mostrar/Ocultar clave"></i>
+                                    </div>
+                                    <small style="color: var(--text-muted); display: block; margin-top: 5px;">Clave para generación de respuestas de texto y memoria conversacional.</small>
+                                </div>
+
                                 <div class="form-group">
-                                    <label for="ai-api-key">Google Gemini API Key:</label>
-                                    <input type="password" id="ai-api-key" placeholder="AIzaSy..." style="width: 100%;">
-                                    <small style="color: var(--text-muted); display: block; margin-top: 5px;">Ten cuidado de no modificar esta llave accidentalmente, ya que la IA dejará de funcionar.</small>
+                                    <label for="cloud-tts-api-key" style="font-weight: bold; color: #a855f7;">Google Cloud TTS API Key (Voz Humana Neural):</label>
+                                    <div style="position: relative; display: flex; align-items: center;">
+                                        <input type="password" id="cloud-tts-api-key" placeholder="AIza... (Google Cloud Console Key)" style="width: 100%; padding-right: 35px;">
+                                        <i data-lucide="eye" id="toggle-cloud-tts-api-key" style="position: absolute; right: 10px; cursor: pointer; color: var(--text-muted);" title="Mostrar/Ocultar clave"></i>
+                                    </div>
+                                    <small style="color: var(--text-muted); display: block; margin-top: 5px;">Clave dedicada para Cloud Text-to-Speech API (Neural2 / Studio). Si se deja vacía o falla, se usará Edge TTS como respaldo.</small>
                                 </div>
                             </div>
                         </details>
