@@ -1084,6 +1084,19 @@ function cleanUsernameForReading(name) {
     return clean;
 }
 
+// Helper to sanitize AI and chat text for TTS audio reading (removing markdown, brackets, emojis, special characters)
+function sanitizeTextForTts(text) {
+    if (!text) return '';
+    return text
+        .replace(/[*_`~#]/g, '')
+        .replace(/\[.*?\]/g, '')
+        .replace(/\(.*?\)/g, '')
+        .replace(/[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F1E6}-\u{1F1FF}]|[\u{1F900}-\u{1F9FF}]/gu, '')
+        .replace(/https?:\/\/\S+/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 // Helper to normalize common chat abbreviations in Spanish
 function normalizeChatAbbreviations(text) {
     if (!text) return '';
@@ -2142,17 +2155,25 @@ async function executeAiCommand(item) {
     // Set last call time
     lastAiCallTime = Date.now();
 
+    const charLimit = parseInt(aiConfig.ai_max_chars) || 200;
+
     let systemPrompt = aiConfig.ai_prompt_personality || "Habla de forma tierna y alegre.";
-    systemPrompt += "\n[REGLAS CRÍTICAS DE FORMATO: Responde siempre en español latino de forma concisa. NO uses emojis. NO uses formato markdown (como asteriscos '*' o negrita). Termina siempre tus oraciones de forma completa, no dejes ideas a medias ni puntos suspensivos.]";
+    systemPrompt += `\n[Instrucción estricta de formato: Responde en máximo 1 o 2 oraciones concisas y completas, sin exceder ${charLimit} caracteres. SIEMPRE debes finalizar tu última oración con un punto final y nunca dejar ideas a medias o incompletas. NO uses emojis. NO uses formato markdown como asteriscos '*' o negrita.]`;
 
     try {
-        console.info(`[AI Gemini] Enviando prompt a Gemini 3.5 Flash para @${uniqueId}: "${prompt}"`);
+        console.info(`[AI Gemini] Enviando prompt a Gemini 3.5 Flash para @${uniqueId}: "${prompt}" (CharLimit: ${charLimit})`);
+        const maxTokens = Math.max(200, Math.ceil(charLimit * 1.5));
+
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [ { parts: [ { text: prompt } ] } ],
-                system_instruction: { parts: [ { text: systemPrompt } ] }
+                system_instruction: { parts: [ { text: systemPrompt } ] },
+                generationConfig: {
+                    maxOutputTokens: maxTokens,
+                    temperature: 0.7
+                }
             }),
             signal: AbortSignal.timeout(10000) // 10-second timeout to prevent infinite hangs
         });
@@ -2175,26 +2196,34 @@ async function executeAiCommand(item) {
             return;
         }
 
-        const maxChars = parseInt(aiConfig.ai_max_chars) || 150;
-        if (aiResponseText.length > maxChars) {
-            const truncated = aiResponseText.substring(0, maxChars);
+        // Cierre Gramatical Seguro (Filtro Post-generación)
+        if (aiResponseText.length > charLimit) {
+            const truncated = aiResponseText.substring(0, charLimit);
             const lastSentenceBoundary = Math.max(
                 truncated.lastIndexOf('.'),
                 truncated.lastIndexOf('?'),
                 truncated.lastIndexOf('!')
             );
             
-            if (lastSentenceBoundary > maxChars * 0.4) {
+            if (lastSentenceBoundary > 0) {
                 aiResponseText = truncated.substring(0, lastSentenceBoundary + 1);
             } else {
                 const lastSpace = truncated.lastIndexOf(' ');
                 if (lastSpace > 0) {
-                    aiResponseText = truncated.substring(0, lastSpace) + "...";
+                    aiResponseText = truncated.substring(0, lastSpace).trim() + ".";
                 } else {
-                    aiResponseText = truncated + "...";
+                    aiResponseText = truncated.trim() + ".";
                 }
             }
         }
+
+        // Ensure proper punctuation closure
+        if (!/[.!?]$/.test(aiResponseText.trim())) {
+            aiResponseText = aiResponseText.trim() + ".";
+        }
+
+        // Sanitización para visualización y TTS
+        aiResponseText = sanitizeTextForTts(aiResponseText);
 
         io.emit('tiktok_event_raw', {
             eventType: 'ai_response',
@@ -2205,6 +2234,7 @@ async function executeAiCommand(item) {
         if (aiConfig.ai_read_username) {
             spokenText = `Respondiendo a ${cleanUsernameForReading(nickname)}, ${aiResponseText}`;
         }
+        spokenText = sanitizeTextForTts(spokenText);
 
         console.info(`[AI Gemini] Generada respuesta: "${spokenText}"`);
 
