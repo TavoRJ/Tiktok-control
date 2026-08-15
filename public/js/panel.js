@@ -1115,7 +1115,7 @@ function updateUIWithConfig(config) {
     const cloudTtsApiKeyEl = document.getElementById('cloud-tts-api-key');
     if (cloudTtsApiKeyEl) cloudTtsApiKeyEl.value = config.cloudTtsApiKey || config.cloud_tts_api_key || '';
     const aiApiKeyShortcutEl = document.getElementById('bot-gemini-api-key-shortcut');
-    if (aiApiKeyShortcutEl) aiApiKeyShortcutEl.value = config.geminiApiKey || config.gemini_api_key || '';
+    if (aiApiKeyShortcutEl) aiApiKeyShortcutEl.value = config.cloudTtsApiKey || config.cloud_tts_api_key || '';
     
     // Exclusive Voice Chat config fields
     const exclusiveEnabledEl = document.getElementById('bot-exclusive-enabled');
@@ -1734,10 +1734,14 @@ function sendUpdatedSettings() {
         themeName: (chatbotConfig && chatbotConfig.themeName) || 'neutral',
         visualStyle: document.getElementById('setup-visual-style') ? document.getElementById('setup-visual-style').value : 'glassmorphism',
 
-        geminiApiKey: document.getElementById('ai-api-key') ? document.getElementById('ai-api-key').value.trim() : (document.getElementById('bot-gemini-api-key-shortcut') ? document.getElementById('bot-gemini-api-key-shortcut').value.trim() : ''),
-        cloudTtsApiKey: document.getElementById('cloud-tts-api-key') ? document.getElementById('cloud-tts-api-key').value.trim() : '',
+        geminiApiKey: document.getElementById('ai-api-key') ? document.getElementById('ai-api-key').value.trim() : '',
         gemini_api_key: document.getElementById('ai-api-key') ? document.getElementById('ai-api-key').value.trim() : '',
-        cloud_tts_api_key: document.getElementById('cloud-tts-api-key') ? document.getElementById('cloud-tts-api-key').value.trim() : '',
+        cloudTtsApiKey: (document.getElementById('bot-gemini-api-key-shortcut') && document.getElementById('bot-gemini-api-key-shortcut').value.trim())
+            ? document.getElementById('bot-gemini-api-key-shortcut').value.trim()
+            : (document.getElementById('cloud-tts-api-key') ? document.getElementById('cloud-tts-api-key').value.trim() : ''),
+        cloud_tts_api_key: (document.getElementById('bot-gemini-api-key-shortcut') && document.getElementById('bot-gemini-api-key-shortcut').value.trim())
+            ? document.getElementById('bot-gemini-api-key-shortcut').value.trim()
+            : (document.getElementById('cloud-tts-api-key') ? document.getElementById('cloud-tts-api-key').value.trim() : ''),
         spotifyClientId: document.getElementById('spotify-client-id') ? document.getElementById('spotify-client-id').value.trim() : '',
         spotifyClientSecret: document.getElementById('spotify-client-secret') ? document.getElementById('spotify-client-secret').value.trim() : '',
         spotifyEnabled: document.getElementById('spotify-active') ? document.getElementById('spotify-active').checked : false,

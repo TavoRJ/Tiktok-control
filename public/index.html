@@ -1805,64 +1805,46 @@
                             <div id="gemini-key-unlocked-screen" style="display: none;">
                                 <span style="color: #ffc107; font-weight: bold; display: block; margin-bottom: 5px;">⚠️ Requiere API Key</span>
                                 <span style="font-size: 13px; color: var(--text-muted);">
-                                    Para usar Gemini TTS, ingresa tu <strong>API Key de Google AI Studio</strong> (que inicia con <code>AIzaSy...</code>):
+                                    Para usar Cloud TTS, ingresa tu <strong>API Key de Google Cloud Console</strong> (que inicia con <code>AIzaSy...</code>):
                                 </span>
-                                <input type="password" id="bot-gemini-api-key-shortcut" placeholder="AIzaSy..." style="width: 100%; margin-top: 8px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px; border-radius: 4px;">
+                                <input type="password" id="bot-gemini-api-key-shortcut" placeholder="AIza... (Google Cloud Console Key)" style="width: 100%; margin-top: 8px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px; border-radius: 4px;">
                             </div>
                         </div>
 
-                        <div class="form-group" id="container-gemini-language" style="display: none;">
-                            <label for="bot-gemini-language">Idioma / Variante:</label>
-                            <select id="bot-gemini-language">
-                                <option value="es-MX">Español (México 🇲🇽)</option>
-                                <option value="es-CO">Español (Colombia 🇨🇴)</option>
-                                <option value="es-ES">Español (España 🇪🇸)</option>
-                                <option value="es-AR">Español (Argentina 🇦🇷)</option>
-                                <option value="es-CL">Español (Chile 🇨🇱)</option>
-                                <option value="es-PE">Español (Perú 🇵🇪)</option>
-                                <option value="es-VE">Español (Venezuela 🇻🇪)</option>
-                                <option value="es-US">Español (EE.UU. 🇺🇸)</option>
-                                <option value="en-US">Inglés (EE.UU. 🇺🇸)</option>
-                                <option value="en-GB">Inglés (Reino Unido 🇬🇧)</option>
-                            </select>
-                        </div>
+                        <div class="form-group" id="container-gemini-language" style="display: none;"></div>
                         <div class="form-group" id="container-gemini-voice" style="display: none;">
-                            <label for="bot-gemini-voice">Voz de Gemini:</label>
+                            <label for="bot-gemini-voice">Voz Neural2 de Cloud TTS:</label>
                             <select id="bot-gemini-voice">
-                                <option value="Aoede">Aoede (Femenino - Suave)</option>
-                                <option value="Charon">Charon (Masculino - Maduro)</option>
-                                <option value="Fenrir">Fenrir (Masculino - Profundo)</option>
-                                <option value="Kore">Kore (Femenino - Cálido)</option>
-                                <option value="Puck">Puck (Masculino - Joven)</option>
-                                <option value="Achernar">Achernar (Unisex - Equilibrado)</option>
+                                <option value="es-MX-Neural2-A">Dalia (México 🇲🇽 - Neural2 Femenino)</option>
+                                <option value="es-MX-Neural2-B">Jorge (México 🇲🇽 - Neural2 Masculino)</option>
+                                <option value="es-MX-Neural2-C">Ximena (México 🇲🇽 - Neural2 Femenino)</option>
+                                <option value="es-CO-Neural2-A">Salomé (Colombia 🇨🇴 - Neural2 Femenino)</option>
+                                <option value="es-CO-Neural2-B">Gonzalo (Colombia 🇨🇴 - Neural2 Masculino)</option>
+                                <option value="es-US-Neural2-A">Paloma (EE.UU. 🇺🇸 - Neural2 Femenino)</option>
+                                <option value="es-US-Neural2-B">Alonso (EE.UU. 🇺🇸 - Neural2 Masculino)</option>
+                                <option value="es-US-Neural2-C">Mateo (EE.UU. 🇺🇸 - Neural2 Masculino)</option>
                             </select>
                         </div>
-                        <div class="form-group" id="container-gemini-style" style="display: none;">
-                            <label for="bot-gemini-style">Instrucciones de Estilo (Style instructions):</label>
-                            <input type="text" id="bot-gemini-style" class="form-control" placeholder="ej. Read aloud in a warm, welcoming tone." value="Read aloud in a warm, welcoming tone.">
-                        </div>
+                        <div class="form-group" id="container-gemini-style" style="display: none;"></div>
 
                         <div class="form-group" id="container-cloud-voice">
-                            <label for="bot-cloud-voice">Seleccionar Voz Cloud:</label>
+                            <label for="bot-cloud-voice">Seleccionar Voz Neural2 / Cloud:</label>
                             <select id="bot-cloud-voice">
-                                <option value="es-CO-SalomeNeural">Salomé (Colombia 🇨🇴 - Femenino)</option>
-                                <option value="es-CO-GonzaloNeural">Gonzalo (Colombia 🇨🇴 - Masculino)</option>
-                                <option value="es-MX-DaliaNeural">Dalia (México 🇲🇽 - Femenino)</option>
-                                <option value="es-MX-JorgeNeural">Jorge (México 🇲🇽 - Masculino)</option>
-                                <option value="es-ES-ElviraNeural">Elvira (España 🇪🇸 - Femenino)</option>
-                                <option value="es-ES-AlvaroNeural">Álvaro (España 🇪🇸 - Masculino)</option>
-                                <option value="es-AR-ElenaNeural">Elena (Argentina 🇦🇷 - Femenino)</option>
-                                <option value="es-AR-TomasNeural">Tomás (Argentina 🇦🇷 - Masculino)</option>
-                                <option value="es-CL-CatalinaNeural">Catalina (Chile 🇨🇱 - Femenino)</option>
-                                <option value="es-CL-LorenzoNeural">Lorenzo (Chile 🇨🇱 - Masculino)</option>
-                                <option value="es-PE-CamilaNeural">Camila (Perú 🇵🇪 - Femenino)</option>
-                                <option value="es-PE-AlexNeural">Alex (Perú 🇵🇪 - Masculino)</option>
-                                <option value="es-VE-PaolaNeural">Paola (Venezuela 🇻🇪 - Femenino)</option>
-                                <option value="es-VE-SebastianNeural">Sebastián (Venezuela 🇻🇪 - Masculino)</option>
-                                <option value="es-US-PalomaNeural">Paloma (EE.UU. 🇺🇸 - Femenino)</option>
-                                <option value="es-US-AlonsoNeural">Alonso (EE.UU. 🇺🇸 - Masculino)</option>
-                                <option value="en-US-AriaNeural">Aria (EE.UU. 🇺🇸 - Inglés Femenino)</option>
-                                <option value="en-US-GuyNeural">Guy (EE.UU. 🇺🇸 - Inglés Masculino)</option>
+                                <option value="es-MX-Neural2-A">Dalia (México 🇲🇽 - Neural2 Femenino)</option>
+                                <option value="es-MX-Neural2-B">Jorge (México 🇲🇽 - Neural2 Masculino)</option>
+                                <option value="es-MX-Neural2-C">Ximena (México 🇲🇽 - Neural2 Femenino)</option>
+                                <option value="es-CO-Neural2-A">Salomé (Colombia 🇨🇴 - Neural2 Femenino)</option>
+                                <option value="es-CO-Neural2-B">Gonzalo (Colombia 🇨🇴 - Neural2 Masculino)</option>
+                                <option value="es-US-Neural2-A">Paloma (EE.UU. 🇺🇸 - Neural2 Femenino)</option>
+                                <option value="es-US-Neural2-B">Alonso (EE.UU. 🇺🇸 - Neural2 Masculino)</option>
+                                <option value="es-US-Neural2-C">Mateo (EE.UU. 🇺🇸 - Neural2 Masculino)</option>
+                                <option value="es-ES-Neural2-A">Elvira (España 🇪🇸 - Neural2 Femenino)</option>
+                                <option value="es-ES-Neural2-B">Álvaro (España 🇪🇸 - Neural2 Masculino)</option>
+                                <option value="es-ES-Neural2-C">Abril (España 🇪🇸 - Neural2 Femenino)</option>
+                                <option value="es-AR-Neural2-A">Elena (Argentina 🇦🇷 - Neural2 Femenino)</option>
+                                <option value="es-AR-Neural2-B">Tomás (Argentina 🇦🇷 - Neural2 Masculino)</option>
+                                <option value="es-CL-Neural2-A">Catalina (Chile 🇨🇱 - Neural2 Femenino)</option>
+                                <option value="es-CL-Neural2-B">Lorenzo (Chile 🇨🇱 - Neural2 Masculino)</option>
                             </select>
                         </div>
                         <div class="form-group" id="container-local-voice" style="display: none;">
