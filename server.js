@@ -2157,14 +2157,20 @@ async function executeAiCommand(item) {
     lastAiCallTime = Date.now();
 
     const charLimit = parseInt(aiConfig.ai_max_chars) || 150;
-    const approxMaxWords = Math.max(10, Math.floor(charLimit / 6));
+    const maxWords = Math.max(8, Math.floor(charLimit / 6));
 
-    let systemPrompt = aiConfig.ai_prompt_personality || "Habla de forma tierna y alegre.";
-    systemPrompt += `\n[INSTRUCCIONES OBLIGATORIAS DE FORMATO:
-- IDIOMA: Responde SIEMPRE en ESPAÑOL LATINO. Está strictly prohibido responder en inglés o cualquier otro idioma.
-- LONGITUD MÁXIMA: Tu respuesta NUNCA debe superar los ${charLimit} caracteres en total (máximo ${approxMaxWords} palabras). Responde en 1 o 2 oraciones breves y concisas.
-- COMPLETITUD: Toda oración debe ser gramaticalmente completa y terminar obligatoriamente con punto final. JAMÁS dejes una oración a la mitad ni te detengas sobre conectores o preposiciones (como 'por', 'de', 'con', 'para', 'en', 'y', 'o', 'que').
-- SIN FORMATO: NO uses emojis, listas numeradas, viñetas, saltos de línea ni formato markdown.]`;
+    let systemPrompt = aiConfig.ai_prompt_personality || "Habla de forma tierna, amable y alegre.";
+    systemPrompt += `\n\nREGLAS DE RESPUESTA PARA LA TRANSMISIÓN EN VIVO:
+1. IDIOMA: Responde SIEMPRE en español latino de forma completamente natural.
+2. LONGITUD: Responde en exactamente 1 o 2 oraciones breves y completas (máximo ${maxWords} palabras en total).
+3. COMPLETITUD: Toda oración debe estar totalmente terminada y finalizar obligatoriamente con punto final.
+4. PROHIBICIÓN ABSOLUTA: No incluyas notas, contadores de caracteres o palabras, viñetas, emojis, explicaciones meta ni formato markdown. Responde ÚNICAMENTE con el mensaje directo que vas a decir en voz alta.`;
+
+    // Purge any corrupted history entries containing meta notes before processing new turn
+    aiChatHistory = aiChatHistory.filter(item => {
+        const text = (item.parts && item.parts[0] && item.parts[0].text) || '';
+        return !/characters|words|->|\d+ characters/i.test(text);
+    });
 
     // Add user turn to conversational memory window
     aiChatHistory.push({
@@ -2212,7 +2218,20 @@ async function executeAiCommand(item) {
             return;
         }
 
-        let finalCleanText = rawResponseText.replace(/[\r\n]+/g, ' ').trim();
+        // Clean out any accidental meta-reasoning text, quotes, or character count notes from Gemini
+        let finalCleanText = rawResponseText
+            .replace(/->\s*\d+\s*characters.*/gi, '')
+            .replace(/\(\d+\s*words\).*/gi, '')
+            .replace(/\d+\s*characters.*/gi, '')
+            .replace(/[\r\n]+/g, ' ')
+            .trim();
+
+        // If meta cleanup resulted in empty text, clear chat history contamination and fallback
+        if (!finalCleanText || /^["'\s.,\->]+$/.test(finalCleanText)) {
+            console.warn("[AI Gemini] Respuesta con metatexto detectada. Reseteando historial de chat.");
+            aiChatHistory = [];
+            finalCleanText = "¡Hola! Con gusto te respondo en la transmisión.";
+        }
 
         // Control estricto de longitud de caracteres asignado por el usuario
         if (finalCleanText.length > charLimit) {
@@ -2233,8 +2252,8 @@ async function executeAiCommand(item) {
             }
         }
 
-        // Remover conectores o preposiciones colgantes al final de la oración en español (ej. "por.", "en.", "que.")
-        const danglingConnectorRegex = /\b(por|de|con|para|en|y|o|a|que|del|el|la|los|las|un|una|unos|unas|al|su|mi|tu|como|sin|sobre|tras|hasta|desde|hacia|entre|durante|mediante|según|pero|sino|porque|aunque)\s*[.!?]*$/i;
+        // Remover conectores o preposiciones colgantes al final de la oración en español (ej. "por.", "en.", "que.", "por culpa.")
+        const danglingConnectorRegex = /\b(por|de|con|para|en|y|o|a|que|del|el|la|los|las|un|una|unos|unas|al|su|mi|tu|como|sin|sobre|tras|hasta|desde|hacia|entre|durante|mediante|según|pero|sino|porque|aunque|por culpa)\s*[.!?]*$/i;
         while (danglingConnectorRegex.test(finalCleanText)) {
             finalCleanText = finalCleanText.replace(danglingConnectorRegex, '').trim();
         }
