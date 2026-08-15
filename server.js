@@ -2297,41 +2297,63 @@ Reglas obligatorias:
 - Termina siempre con una oración completa finalizada en punto (.), signo de interrogación (?) o exclamación (!).`;
 
     try {
-        const modelToUse = await getBestGeminiModel(apiKey);
-        console.info(`[AI Gemini] Prompt para @${uniqueId}: "${prompt}" | charLimit=${charLimit} | modelo=${modelToUse}`);
+        // Multi-turn conversation window buffer (max 8 turns)
+        aiChatHistory.push({ role: 'user', parts: [{ text: prompt }] });
+        if (aiChatHistory.length > 8) {
+            aiChatHistory = aiChatHistory.slice(-8);
+        }
+
+        // FASE 1: Modelos de texto fijados (Primario: gemini-2.0-flash | Fallback: gemini-1.5-flash)
+        const modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+        let response = null;
+        let lastErrorText = '';
+        let chosenModel = '';
+
+        for (const modelName of modelsToTry) {
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+                response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: aiChatHistory,
+                        system_instruction: { parts: [{ text: systemPrompt }] },
+                        generationConfig: {
+                            maxOutputTokens: 300,
+                            temperature: 0.7
+                        }
+                    }),
+                    signal: AbortSignal.timeout(12000)
+                });
+
+                if (response.ok) {
+                    chosenModel = modelName;
+                    console.info(`[AI Gemini] FASE 1: Respuesta generada exitosamente con el modelo '${chosenModel}' para @${uniqueId}`);
+                    break;
+                }
+                lastErrorText = await response.text();
+                console.warn(`[AI Gemini] Intento FASE 1 con ${modelName} devolvió HTTP ${response.status}: ${lastErrorText}`);
+            } catch (fetchErr) {
+                lastErrorText = fetchErr.message;
+                console.warn(`[AI Gemini] Error FASE 1 al conectar con ${modelName}: ${fetchErr.message}`);
+            }
+        }
+
+        if (!response || !response.ok) {
+            let errorMsg = `Gemini API Error: ${lastErrorText || 'No se pudo conectar con el motor de texto de Gemini'}`;
+            try {
+                const parsed = JSON.parse(lastErrorText);
+                if (parsed.error && parsed.error.message) {
+                    errorMsg = `Gemini API Error (${response ? response.status : '404'}): ${parsed.error.message}`;
+                }
+            } catch(e) {}
+            throw new Error(errorMsg);
+        }
 
         io.emit('tiktok_event_raw', {
             eventType: 'ai_processing',
-            data: { uniqueId, nickname, prompt, charLimit, modelUsed: modelToUse }
+            data: { uniqueId, nickname, prompt, charLimit, modelUsed: chosenModel }
         });
-
-        // Query the selected active model from Google API
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${apiKey}`;
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                system_instruction: { parts: [{ text: systemPrompt }] },
-                generationConfig: {
-                    maxOutputTokens: 400,
-                    temperature: 0.7
-                }
-            }),
-            signal: AbortSignal.timeout(12000)
-        });
-
-        if (!response.ok) {
-            const errText = await response.text();
-            let msg = `Google Gemini Error (${response.status}): ${errText}`;
-            try {
-                const parsed = JSON.parse(errText);
-                if (parsed.error && parsed.error.message) {
-                    msg = `Google Gemini Error (${response.status}): ${parsed.error.message}`;
-                }
-            } catch(pe) {}
-            throw new Error(msg);
-        }
 
         const result = await response.json();
         let rawResponseText = "";
@@ -6172,17 +6194,26 @@ async function synthesizeSpeech(text, voice, rateStr, pitchStr, tempFile, custom
             }
 
             let speakingRate = 1.0;
-            if (rateStr && typeof rateStr === 'string') {
-                const match = rateStr.match(/([+-]?\d+)/);
-                if (match) {
-                    const pct = parseInt(match[1], 10);
-                    speakingRate = Math.max(0.25, Math.min(4.0, 1.0 + (pct / 100)));
+            if (typeof rateStr === 'number') {
+                speakingRate = rateStr;
+            } else if (rateStr && typeof rateStr === 'string') {
+                if (rateStr.includes('%')) {
+                    const match = rateStr.match(/([+-]?\d+)/);
+                    if (match) {
+                        const pct = parseInt(match[1], 10);
+                        speakingRate = Math.max(0.25, Math.min(4.0, 1.0 + (pct / 100)));
+                    }
+                } else {
+                    const parsed = parseFloat(rateStr);
+                    if (!isNaN(parsed)) speakingRate = Math.max(0.25, Math.min(4.0, parsed));
                 }
             }
 
             let pitch = 0.0;
-            if (pitchStr && typeof pitchStr === 'string') {
-                const match = pitchStr.match(/([+-]?\d+)/);
+            if (typeof pitchStr === 'number') {
+                pitch = pitchStr;
+            } else if (pitchStr && typeof pitchStr === 'string') {
+                const match = pitchStr.match(/([+-]?\d+(?:\.\d+)?)/);
                 if (match) {
                     pitch = Math.max(-20.0, Math.min(20.0, parseFloat(match[1])));
                 }

@@ -1785,19 +1785,11 @@
                             <select id="bot-tts-engine">
                                 <option value="cloud">Microsoft Neural Cloud (Online - Sin instalación)</option>
                                 <option value="local">Sintetizador del Navegador (Local - Requiere instalar)</option>
-                                <option value="gemini">Google Gemini TTS (Online - Personalizable)</option>
+                                <option value="gemini">Google Cloud TTS (Neural2 - Oficial)</option>
                             </select>
                         </div>
                         
-                        <div class="form-group" id="container-gemini-model" style="display: none;">
-                            <label for="bot-gemini-model">Modelo Gemini TTS:</label>
-                            <select id="bot-gemini-model">
-                                <option value="gemini-3.1-flash-tts-preview">Gemini 3.1 Flash TTS (preview)</option>
-                                <option value="gemini-2.5-flash-preview-tts">Gemini 2.5 Flash TTS</option>
-                                <option value="gemini-2.5-pro-preview-tts">Gemini 2.5 Pro TTS</option>
-                                <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-                            </select>
-                        </div>
+                        <div class="form-group" id="container-gemini-model" style="display: none;"></div>
                         
                         <div class="form-group" id="container-gemini-key-warning" style="display: none; background: rgba(255, 193, 7, 0.1); border: 1px solid #ffc107; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
                             <div id="gemini-key-lock-screen">
@@ -3043,13 +3035,22 @@
                                 <option value="es-US-AlonsoNeural">Alonso (EE.UU. 🇺🇸 - Masculino)</option>
                                 <option value="en-US-AriaNeural">Aria (EE.UU. 🇺🇸 - Inglés Femenino)</option>
                                 <option value="en-US-GuyNeural">Guy (EE.UU. 🇺🇸 - Inglés Masculino)</option>
-                                <optgroup label="── Voces de Google Gemini TTS ──">
-                                    <option value="Aoede">Aoede (Gemini - Femenino - Suave)</option>
-                                    <option value="Charon">Charon (Gemini - Masculino - Maduro)</option>
-                                    <option value="Fenrir">Fenrir (Gemini - Masculino - Grueso)</option>
-                                    <option value="Kore">Kore (Gemini - Femenino - Fuerte)</option>
-                                    <option value="Puck">Puck (Gemini - Masculino - Alegre)</option>
-                                    <option value="Achernar">Achernar (Gemini - Masculino - Neutral)</option>
+                                <optgroup label="── Voces Oficiales Google Cloud TTS (Neural2) ──">
+                                    <option value="es-CO-Neural2-A">Salomé (Colombia 🇨🇴 - Neural2 Femenino)</option>
+                                    <option value="es-CO-Neural2-B">Gonzalo (Colombia 🇨🇴 - Neural2 Masculino)</option>
+                                    <option value="es-MX-Neural2-A">Dalia (México 🇲🇽 - Neural2 Femenino)</option>
+                                    <option value="es-MX-Neural2-B">Jorge (México 🇲🇽 - Neural2 Masculino)</option>
+                                    <option value="es-MX-Neural2-C">Ximena (México 🇲🇽 - Neural2 Femenino)</option>
+                                    <option value="es-US-Neural2-A">Paloma (EE.UU. 🇺🇸 - Neural2 Femenino)</option>
+                                    <option value="es-US-Neural2-B">Alonso (EE.UU. 🇺🇸 - Neural2 Masculino)</option>
+                                    <option value="es-US-Neural2-C">Mateo (EE.UU. 🇺🇸 - Neural2 Masculino)</option>
+                                    <option value="es-ES-Neural2-A">Elvira (España 🇪🇸 - Neural2 Femenino)</option>
+                                    <option value="es-ES-Neural2-B">Álvaro (España 🇪🇸 - Neural2 Masculino)</option>
+                                    <option value="es-ES-Neural2-C">Abril (España 🇪🇸 - Neural2 Femenino)</option>
+                                    <option value="es-AR-Neural2-A">Elena (Argentina 🇦🇷 - Neural2 Femenino)</option>
+                                    <option value="es-AR-Neural2-B">Tomás (Argentina 🇦🇷 - Neural2 Masculino)</option>
+                                    <option value="es-CL-Neural2-A">Catalina (Chile 🇨🇱 - Neural2 Femenino)</option>
+                                    <option value="es-CL-Neural2-B">Lorenzo (Chile 🇨🇱 - Neural2 Masculino)</option>
                                 </optgroup>
                             </select>
                         </div>
