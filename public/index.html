@@ -1792,23 +1792,7 @@
                         <div class="form-group" id="container-gemini-model" style="display: none;"></div>
                         
                         <div class="form-group" id="container-gemini-key-warning" style="display: none; background: rgba(255, 193, 7, 0.1); border: 1px solid #ffc107; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
-                            <div id="gemini-key-lock-screen">
-                                <span style="color: #ffc107; font-weight: bold; display: block; margin-bottom: 5px;">🔒 Configuración Protegida</span>
-                                <span style="font-size: 13px; color: var(--text-muted); display: block; margin-bottom: 8px;">
-                                    Ingresa la contraseña para desbloquear la configuración de la API Key:
-                                </span>
-                                <div style="display: flex; gap: 8px;">
-                                    <input type="password" id="gemini-key-lock-password" placeholder="Contraseña de desarrollador..." style="flex-grow: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px; border-radius: 4px; font-size: 12px; outline: none;">
-                                    <button type="button" id="btn-unlock-gemini-key" style="padding: 6px 12px; background: #ffc107; color: #000; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Desbloquear</button>
-                                </div>
-                            </div>
-                            <div id="gemini-key-unlocked-screen" style="display: none;">
-                                <span style="color: #ffc107; font-weight: bold; display: block; margin-bottom: 5px;">⚠️ Requiere API Key</span>
-                                <span style="font-size: 13px; color: var(--text-muted);">
-                                    Para usar Cloud TTS, ingresa tu <strong>API Key de Google Cloud Console</strong> (que inicia con <code>AIzaSy...</code>):
-                                </span>
-                                <input type="password" id="bot-gemini-api-key-shortcut" placeholder="AIza... (Google Cloud Console Key)" style="width: 100%; margin-top: 8px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px; border-radius: 4px;">
-                            </div>
+
                         </div>
 
                         <div class="form-group" id="container-gemini-language" style="display: none;"></div>
@@ -2925,37 +2909,28 @@
                             </label>
                         </div>
 
-                        <details style="margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 8px;">
-                            <summary style="cursor: pointer; color: var(--accent-blue); font-weight: bold; list-style-type: '🔐 ';">Mostrar/Editar API Key (Avanzado)</summary>
-                            <div id="ai-key-lock-screen" style="margin-top: 10px;">
-                                <span style="font-size: 13px; color: var(--text-muted); display: block; margin-bottom: 8px;">
-                                    Ingresa la contraseña para desbloquear la configuración de la API Key:
-                                </span>
-                                <div style="display: flex; gap: 8px;">
-                                    <input type="password" id="ai-key-lock-password" placeholder="Contraseña de desarrollador..." style="flex-grow: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px; border-radius: 4px; font-size: 12px; outline: none;">
-                                    <button type="button" id="btn-unlock-ai-key" style="padding: 6px 12px; background: var(--accent-blue); color: #fff; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Desbloquear</button>
+                        <div class="card" id="master-api-keys-card" style="margin-bottom: 20px; border: 1px solid rgba(168, 85, 247, 0.3); background: rgba(20, 10, 30, 0.4); padding: 15px; border-radius: 10px;">
+                            <h4 style="margin-top: 0; color: #a855f7; display: flex; align-items: center; gap: 8px;">
+                                <i data-lucide="key"></i> Configuración Maestra de API Keys (IA & Voz)
+                            </h4>
+                            <div class="form-group" style="margin-bottom: 15px;">
+                                <label for="master-gemini-api-key" style="font-weight: bold; color: var(--accent-blue);">Google Gemini API Key (Texto / Inteligencia - Google AI Studio):</label>
+                                <div style="position: relative; display: flex; align-items: center;">
+                                    <input type="password" id="master-gemini-api-key" placeholder="AQ. o AIza... (Clave de Google AI Studio)" style="width: 100%; padding-right: 35px;">
+                                    <i data-lucide="eye" id="toggle-master-gemini-api-key" style="position: absolute; right: 10px; cursor: pointer; color: var(--text-muted);" title="Mostrar/Ocultar clave"></i>
                                 </div>
+                                <small style="color: var(--text-muted); display: block; margin-top: 5px;">Clave para respuesta de texto conversacional !ia y memoria de turnos.</small>
                             </div>
-                            <div id="ai-key-unlocked-screen" style="display: none; margin-top: 10px;">
-                                <div class="form-group" style="margin-bottom: 15px;">
-                                    <label for="ai-api-key" style="font-weight: bold; color: var(--accent-blue);">Google Gemini API Key (Texto / Inteligencia):</label>
-                                    <div style="position: relative; display: flex; align-items: center;">
-                                        <input type="password" id="ai-api-key" placeholder="AIza... o AQ... (Google AI Studio Key)" style="width: 100%; padding-right: 35px;">
-                                        <i data-lucide="eye" id="toggle-ai-api-key" style="position: absolute; right: 10px; cursor: pointer; color: var(--text-muted);" title="Mostrar/Ocultar clave"></i>
-                                    </div>
-                                    <small style="color: var(--text-muted); display: block; margin-top: 5px;">Clave para generación de respuestas de texto y memoria conversacional (acepta prefijos AIza y AQ.).</small>
-                                </div>
 
-                                <div class="form-group">
-                                    <label for="cloud-tts-api-key" style="font-weight: bold; color: #a855f7;">Google Cloud TTS API Key (Voz Humana Neural):</label>
-                                    <div style="position: relative; display: flex; align-items: center;">
-                                        <input type="password" id="cloud-tts-api-key" placeholder="AIza... (Google Cloud Console Key)" style="width: 100%; padding-right: 35px;">
-                                        <i data-lucide="eye" id="toggle-cloud-tts-api-key" style="position: absolute; right: 10px; cursor: pointer; color: var(--text-muted);" title="Mostrar/Ocultar clave"></i>
-                                    </div>
-                                    <small style="color: var(--text-muted); display: block; margin-top: 5px;">Clave dedicada para Cloud Text-to-Speech API (Neural2 / Studio). Si se deja vacía o falla, se usará Edge TTS como respaldo.</small>
+                            <div class="form-group">
+                                <label for="master-cloud-tts-api-key" style="font-weight: bold; color: #a855f7;">Google Cloud TTS API Key (Voz Humana - Google Cloud Console):</label>
+                                <div style="position: relative; display: flex; align-items: center;">
+                                    <input type="password" id="master-cloud-tts-api-key" placeholder="AIzaSy... (Clave de Google Cloud Console)" style="width: 100%; padding-right: 35px;">
+                                    <i data-lucide="eye" id="toggle-master-cloud-tts-api-key" style="position: absolute; right: 10px; cursor: pointer; color: var(--text-muted);" title="Mostrar/Ocultar clave"></i>
                                 </div>
+                                <small style="color: var(--text-muted); display: block; margin-top: 5px;">Clave dedicada para síntesis de voz humana Google Cloud TTS (Neural2 / Studio).</small>
                             </div>
-                        </details>
+                        </div>
 
                         <div class="form-group">
                             <label for="ai-min-coins">Monedas Mínimas (Diamonds) para Chat de Pago:</label>

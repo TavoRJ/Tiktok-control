@@ -1110,12 +1110,17 @@ function updateUIWithConfig(config) {
     const bannedUsernamesEl = document.getElementById('bot-banned-username-words');
     if (bannedUsernamesEl) bannedUsernamesEl.value = (config.bannedUsernames || []).join(', ');
 
+    const masterGeminiKeyEl = document.getElementById('master-gemini-api-key');
+    if (masterGeminiKeyEl) masterGeminiKeyEl.value = config.gemini_api_key || config.geminiApiKey || '';
+    const masterCloudTtsKeyEl = document.getElementById('master-cloud-tts-api-key');
+    if (masterCloudTtsKeyEl) masterCloudTtsKeyEl.value = config.cloud_tts_api_key || config.cloudTtsApiKey || '';
+
     const aiApiKeyEl = document.getElementById('ai-api-key');
-    if (aiApiKeyEl) aiApiKeyEl.value = config.geminiApiKey || config.gemini_api_key || '';
+    if (aiApiKeyEl) aiApiKeyEl.value = config.gemini_api_key || config.geminiApiKey || '';
     const cloudTtsApiKeyEl = document.getElementById('cloud-tts-api-key');
-    if (cloudTtsApiKeyEl) cloudTtsApiKeyEl.value = config.cloudTtsApiKey || config.cloud_tts_api_key || '';
+    if (cloudTtsApiKeyEl) cloudTtsApiKeyEl.value = config.cloud_tts_api_key || config.cloudTtsApiKey || '';
     const aiApiKeyShortcutEl = document.getElementById('bot-gemini-api-key-shortcut');
-    if (aiApiKeyShortcutEl) aiApiKeyShortcutEl.value = config.cloudTtsApiKey || config.cloud_tts_api_key || '';
+    if (aiApiKeyShortcutEl) aiApiKeyShortcutEl.value = config.cloud_tts_api_key || config.cloudTtsApiKey || '';
     
     // Exclusive Voice Chat config fields
     const exclusiveEnabledEl = document.getElementById('bot-exclusive-enabled');
@@ -1739,13 +1744,17 @@ function sendUpdatedSettings() {
         themeName: (chatbotConfig && chatbotConfig.themeName) || 'neutral',
         visualStyle: document.getElementById('setup-visual-style') ? document.getElementById('setup-visual-style').value : 'glassmorphism',
 
-        geminiApiKey: document.getElementById('ai-api-key') ? document.getElementById('ai-api-key').value.trim() : '',
-        gemini_api_key: document.getElementById('ai-api-key') ? document.getElementById('ai-api-key').value.trim() : '',
-        cloudTtsApiKey: (document.getElementById('bot-gemini-api-key-shortcut') && document.getElementById('bot-gemini-api-key-shortcut').value.trim())
-            ? document.getElementById('bot-gemini-api-key-shortcut').value.trim()
+        geminiApiKey: (document.getElementById('master-gemini-api-key') && document.getElementById('master-gemini-api-key').value.trim())
+            ? document.getElementById('master-gemini-api-key').value.trim()
+            : (document.getElementById('ai-api-key') ? document.getElementById('ai-api-key').value.trim() : ''),
+        gemini_api_key: (document.getElementById('master-gemini-api-key') && document.getElementById('master-gemini-api-key').value.trim())
+            ? document.getElementById('master-gemini-api-key').value.trim()
+            : (document.getElementById('ai-api-key') ? document.getElementById('ai-api-key').value.trim() : ''),
+        cloudTtsApiKey: (document.getElementById('master-cloud-tts-api-key') && document.getElementById('master-cloud-tts-api-key').value.trim())
+            ? document.getElementById('master-cloud-tts-api-key').value.trim()
             : (document.getElementById('cloud-tts-api-key') ? document.getElementById('cloud-tts-api-key').value.trim() : ''),
-        cloud_tts_api_key: (document.getElementById('bot-gemini-api-key-shortcut') && document.getElementById('bot-gemini-api-key-shortcut').value.trim())
-            ? document.getElementById('bot-gemini-api-key-shortcut').value.trim()
+        cloud_tts_api_key: (document.getElementById('master-cloud-tts-api-key') && document.getElementById('master-cloud-tts-api-key').value.trim())
+            ? document.getElementById('master-cloud-tts-api-key').value.trim()
             : (document.getElementById('cloud-tts-api-key') ? document.getElementById('cloud-tts-api-key').value.trim() : ''),
         spotifyClientId: document.getElementById('spotify-client-id') ? document.getElementById('spotify-client-id').value.trim() : '',
         spotifyClientSecret: document.getElementById('spotify-client-secret') ? document.getElementById('spotify-client-secret').value.trim() : '',
@@ -1891,10 +1900,12 @@ function sendUpdatedSettings() {
                     ai_command_prefix: aiCommandPrefix,
                     ai_gift_auto: aiGiftAuto,
                     ai_gift_min_coins: aiGiftMinCoins,
-                    gemini_api_key: document.getElementById('ai-api-key') ? document.getElementById('ai-api-key').value.trim() : '',
-                    cloud_tts_api_key: (document.getElementById('cloud-tts-api-key') && document.getElementById('cloud-tts-api-key').value.trim())
-                        ? document.getElementById('cloud-tts-api-key').value.trim()
-                        : (document.getElementById('bot-gemini-api-key-shortcut') ? document.getElementById('bot-gemini-api-key-shortcut').value.trim() : '')
+                    gemini_api_key: (document.getElementById('master-gemini-api-key') && document.getElementById('master-gemini-api-key').value.trim())
+                        ? document.getElementById('master-gemini-api-key').value.trim()
+                        : (document.getElementById('ai-api-key') ? document.getElementById('ai-api-key').value.trim() : ''),
+                    cloud_tts_api_key: (document.getElementById('master-cloud-tts-api-key') && document.getElementById('master-cloud-tts-api-key').value.trim())
+                        ? document.getElementById('master-cloud-tts-api-key').value.trim()
+                        : (document.getElementById('cloud-tts-api-key') ? document.getElementById('cloud-tts-api-key').value.trim() : '')
                 }
             };
         })()
@@ -1909,7 +1920,7 @@ const inputsToWatch = [
     'bot-prefix-required', 'bot-permission', 'bot-block-rare-languages', 
     'bot-banned-action', 'bot-default-voice', 'bot-tts-engine', 'bot-cloud-voice',
     'bot-gemini-model', 'bot-gemini-language', 'bot-gemini-voice', 'bot-gemini-style', 'bot-gemini-api-key-shortcut',
-    'ai-api-key', 'cloud-tts-api-key',
+    'ai-api-key', 'cloud-tts-api-key', 'master-gemini-api-key', 'master-cloud-tts-api-key',
     'bot-exclusive-enabled',
     'bot-read-follows', 'bot-read-shares', 'bot-read-gifts', 'bot-read-likes',
     'bot-share-action', 'bot-share-sound',
@@ -1927,7 +1938,7 @@ const inputsToWatch = [
 ];
 
 // Blur and change event listeners for key persistence
-['ai-api-key', 'cloud-tts-api-key', 'bot-gemini-api-key-shortcut'].forEach(keyId => {
+['master-gemini-api-key', 'master-cloud-tts-api-key', 'ai-api-key', 'cloud-tts-api-key', 'bot-gemini-api-key-shortcut'].forEach(keyId => {
     const keyEl = document.getElementById(keyId);
     if (keyEl) {
         keyEl.addEventListener('blur', () => {
@@ -1938,6 +1949,26 @@ const inputsToWatch = [
         });
     }
 });
+
+// Toggle password visibility for master keys
+const toggleMasterGeminiBtn = document.getElementById('toggle-master-gemini-api-key');
+if (toggleMasterGeminiBtn) {
+    toggleMasterGeminiBtn.addEventListener('click', () => {
+        const input = document.getElementById('master-gemini-api-key');
+        if (input) {
+            input.type = input.type === 'password' ? 'text' : 'password';
+        }
+    });
+}
+const toggleMasterCloudBtn = document.getElementById('toggle-master-cloud-tts-api-key');
+if (toggleMasterCloudBtn) {
+    toggleMasterCloudBtn.addEventListener('click', () => {
+        const input = document.getElementById('master-cloud-tts-api-key');
+        if (input) {
+            input.type = input.type === 'password' ? 'text' : 'password';
+        }
+    });
+}
 
 inputsToWatch.forEach(id => {
     const el = document.getElementById(id);

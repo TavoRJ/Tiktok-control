@@ -2285,7 +2285,7 @@ async function executeAiCommand(item) {
         return;
     }
 
-    console.log('[GEMINI AUTH] Usando Key que termina en:', apiKey.slice(-6));
+    console.log('[GEMINI SUCCESS] Petición enviada con Key que termina en:', apiKey.slice(-6));
 
     // Set last call time
     lastAiCallTime = Date.now();
