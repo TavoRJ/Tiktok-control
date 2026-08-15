@@ -2312,6 +2312,7 @@ Reglas obligatorias:
 
         for (const modelName of modelsToTry) {
             try {
+                console.log(`[GEMINI REQUEST] Key: ...${apiKey.slice(-6)} | Modelo: ${modelName}`);
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
                 response = await fetch(url, {
                     method: 'POST',
@@ -6244,7 +6245,7 @@ async function synthesizeSpeech(text, voice, rateStr, pitchStr, tempFile, custom
             };
 
             const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${googleTtsKey}`;
-            console.log('[CLOUD TTS] Usando Key que termina en:', googleTtsKey.slice(-6));
+            console.log(`[CLOUD TTS REQUEST] Key: ...${googleTtsKey.slice(-6)} | Endpoint: texttospeech.googleapis.com`);
             const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
