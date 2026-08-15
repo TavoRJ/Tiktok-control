@@ -2258,10 +2258,11 @@ function stopVisualizerAnimation() {
     });
 }
 
-function startTtsWatchdog() {
+function startTtsWatchdog(textLength = 100) {
     clearTtsWatchdog();
+    const AUDIO_TIMEOUT_MS = Math.max(25000, (textLength || 100) * 150);
     ttsWatchdogTimeout = setTimeout(() => {
-        console.warn('[TTS Watchdog] Audio playback or SpeechSynthesis timeout (>5s). Advancing queue.');
+        console.warn(`[TTS Watchdog] Audio playback or SpeechSynthesis timeout (>${AUDIO_TIMEOUT_MS}ms). Advancing queue.`);
         stopVisualizerAnimation();
         if (currentAudioTts) {
             try {
@@ -2275,7 +2276,7 @@ function startTtsWatchdog() {
         }
         isPlayingTts = false;
         setTimeout(processTtsQueue, 100);
-    }, 5000); // 5 seconds strict safety timeout per audio event (v1.4.2)
+    }, AUDIO_TIMEOUT_MS);
 }
 
 function stopAllTTS() {
@@ -2290,18 +2291,17 @@ function stopAllTTS() {
         } catch (e) {}
         currentAudioTts = null;
     }
-    if (window.speechSynthesis) {
-        try {
-            window.speechSynthesis.cancel();
-        } catch (e) {}
+    if (window.speechSynthesis && window.speechSynthesis.speaking) {
+        try { window.speechSynthesis.cancel(); } catch (e) {}
     }
 }
 
-function queueCloudTTS(base64Audio, playLocation) {
+function queueCloudTTS(base64Audio, playLocation, comment = '') {
     ttsQueue.push({
         type: 'cloud',
         base64Audio,
-        playLocation
+        playLocation,
+        comment
     });
     // Cap queue to max 15 waiting items to prevent memory leaks during stream spikes (v1.4.2)
     while (ttsQueue.length > 15) {
@@ -2332,11 +2332,7 @@ function processTtsQueue() {
     isPlayingTts = true;
     const item = ttsQueue.shift();
     
-    // Auto speed-up (rate-adjust) if queue is getting overloaded (more than 4 items)
-    let rateMultiplier = 1.0;
-    if (ttsQueue.length >= 4) {
-        rateMultiplier = 1.3; // 30% faster to catch up
-    }
+    const rateMultiplier = (chatbotConfig && chatbotConfig.ttsSpeedMultiplier) ? parseFloat(chatbotConfig.ttsSpeedMultiplier) : 1.0;
     
     if (item.type === 'cloud') {
         try {
@@ -2347,7 +2343,7 @@ function processTtsQueue() {
                 currentAudioTts.playbackRate = rateMultiplier;
             }
             
-            startTtsWatchdog(); // Start the 20-second safety watchdog
+            startTtsWatchdog(item.comment ? item.comment.length : 150); // Dynamic 25s+ safety watchdog
             
             currentAudioTts.onended = () => {
                 clearTtsWatchdog();
@@ -2402,7 +2398,7 @@ function processTtsQueue() {
         utterance.pitch = parseFloat(item.pitch);
         utterance.rate = parseFloat(item.rate) * rateMultiplier;
         
-        startTtsWatchdog(); // Start the 20-second safety watchdog
+        startTtsWatchdog(item.text ? item.text.length : 150); // Dynamic 25s+ safety watchdog
         
         utterance.onend = () => {
             clearTtsWatchdog();

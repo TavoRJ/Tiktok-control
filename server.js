@@ -2155,14 +2155,13 @@ async function executeAiCommand(item) {
     // Set last call time
     lastAiCallTime = Date.now();
 
-    const charLimit = parseInt(aiConfig.ai_max_chars) || 200;
-    const maxWords = Math.max(10, Math.floor(charLimit / 6));
+    const charLimit = parseInt(aiConfig.ai_max_chars) || 150;
 
     let systemPrompt = aiConfig.ai_prompt_personality || "Habla de forma tierna y alegre.";
-    systemPrompt += `\n[Instrucción estricta: Responde en exactamente 1 o 2 oraciones breves (máximo ${maxWords} palabras en total). Tu respuesta debe ser natural, terminar obligatoriamente con punto final y NO incluir notas, aclaraciones ni contadores de caracteres. NO uses emojis. NO uses formato markdown como asteriscos '*' o negrita.]`;
+    systemPrompt += "\n[Instrucción estricta: Eres un asistente para transmisiones en vivo. Responde en un solo párrafo continuo de 2 a 3 oraciones completas, con un máximo aproximado de 150 caracteres. Termina siempre con punto final. Prohibido usar listas numeradas, viñetas o saltos de línea.]";
 
     try {
-        console.info(`[AI Gemini] Enviando prompt a Gemini 3.5 Flash para @${uniqueId}: "${prompt}" (CharLimit: ${charLimit}, MaxWords: ${maxWords})`);
+        console.info(`[AI Gemini] Enviando prompt a Gemini 3.5 Flash para @${uniqueId}: "${prompt}"`);
 
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST',
@@ -2184,41 +2183,40 @@ async function executeAiCommand(item) {
         }
 
         const result = await response.json();
-        let aiResponseText = "";
+        let rawResponseText = "";
         if (result.candidates && result.candidates[0] && result.candidates[0].content && result.candidates[0].content.parts[0]) {
-            aiResponseText = result.candidates[0].content.parts[0].text || "";
+            rawResponseText = result.candidates[0].content.parts[0].text || "";
         }
 
-        aiResponseText = aiResponseText.trim();
-        if (!aiResponseText) {
+        rawResponseText = rawResponseText.trim();
+        if (!rawResponseText) {
             console.warn("[AI Gemini] Respuesta vacía de Gemini.");
             isAiProcessing = false;
             return;
         }
 
-        // Log raw response text from Gemini API before any formatting or sanitization
-        console.log('[DEBUG RAW GEMINI RESPONSE]:', aiResponseText);
-
-        // Ensure proper punctuation closure without cutting words or slicing text
-        if (!/[.!?]$/.test(aiResponseText.trim())) {
-            aiResponseText = aiResponseText.trim() + ".";
+        let finalCleanText = rawResponseText.replace(/[\r\n]+/g, ' ').trim();
+        if (!/[.!?]$/.test(finalCleanText)) {
+            finalCleanText = finalCleanText + ".";
         }
+        finalCleanText = sanitizeTextForTts(finalCleanText);
 
-        // Sanitización para visualización y TTS (remover asteriscos, corchetes, emojis)
-        aiResponseText = sanitizeTextForTts(aiResponseText);
+        console.log('--- DEBUG TAVLIVE IA ---');
+        console.log('INPUT PROMPT:', prompt);
+        console.log('RAW GEMINI:', rawResponseText);
+        console.log('SENT TO CLIENT:', finalCleanText);
+        console.log('------------------------');
 
         io.emit('tiktok_event_raw', {
             eventType: 'ai_response',
-            data: { nickname: 'AI', comment: aiResponseText }
+            data: { nickname: 'AI', comment: finalCleanText }
         });
 
-        let spokenText = aiResponseText;
+        let spokenText = finalCleanText;
         if (aiConfig.ai_read_username) {
-            spokenText = `Respondiendo a ${cleanUsernameForReading(nickname)}, ${aiResponseText}`;
+            spokenText = `Respondiendo a ${cleanUsernameForReading(nickname)}, ${finalCleanText}`;
         }
         spokenText = sanitizeTextForTts(spokenText);
-
-        console.info(`[AI Gemini] Generada respuesta: "${spokenText}"`);
 
         ttsQueue.push({
             data: {
