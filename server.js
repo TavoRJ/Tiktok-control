@@ -2271,13 +2271,14 @@ async function executeAiCommand(item) {
             data: { uniqueId, nickname, error: 'API Key de Gemini no configurada.' }
         });
         
-        // Refund credit if it was a manual command and monetization was active
         if (!item.isAutoGift && aiConfig.ai_monetization_active) {
             userAiCredits[uniqueId] = (userAiCredits[uniqueId] || 0) + 1;
         }
         isAiProcessing = false;
         return;
     }
+
+    console.log('[GEMINI AUTH] Usando Key que termina en:', apiKey.slice(-6));
 
     // Set last call time
     lastAiCallTime = Date.now();
@@ -5733,6 +5734,14 @@ io.on('connection', (socket) => {
         
         try {
             fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
+            if (chatbotSettings.geminiApiKey || chatbotSettings.gemini_api_key) {
+                const gKey = (chatbotSettings.geminiApiKey || chatbotSettings.gemini_api_key).trim();
+                console.log('[SETTINGS PERSISTED] Gemini Key guardada que termina en:', gKey.slice(-6));
+            }
+            if (chatbotSettings.cloudTtsApiKey || chatbotSettings.cloud_tts_api_key) {
+                const cKey = (chatbotSettings.cloudTtsApiKey || chatbotSettings.cloud_tts_api_key).trim();
+                console.log('[SETTINGS PERSISTED] Cloud TTS Key guardada que termina en:', cKey.slice(-6));
+            }
             io.emit('chatbot_settings_updated', chatbotSettings);
             io.emit('goals_updated', chatbotSettings.goals);
             
@@ -6235,6 +6244,7 @@ async function synthesizeSpeech(text, voice, rateStr, pitchStr, tempFile, custom
             };
 
             const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${googleTtsKey}`;
+            console.log('[CLOUD TTS] Usando Key que termina en:', googleTtsKey.slice(-6));
             const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -6244,6 +6254,7 @@ async function synthesizeSpeech(text, voice, rateStr, pitchStr, tempFile, custom
 
             if (!response.ok) {
                 const errText = await response.text();
+                console.error(`[CLOUD TTS API ERROR] HTTP ${response.status}: ${errText}`);
                 throw new Error(`Google Cloud TTS API HTTP ${response.status}: ${errText}`);
             }
 

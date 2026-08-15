@@ -1885,7 +1885,11 @@ function sendUpdatedSettings() {
                     ai_prompt_personality: aiPromptPersonality,
                     ai_command_prefix: aiCommandPrefix,
                     ai_gift_auto: aiGiftAuto,
-                    ai_gift_min_coins: aiGiftMinCoins
+                    ai_gift_min_coins: aiGiftMinCoins,
+                    gemini_api_key: document.getElementById('ai-api-key') ? document.getElementById('ai-api-key').value.trim() : '',
+                    cloud_tts_api_key: (document.getElementById('cloud-tts-api-key') && document.getElementById('cloud-tts-api-key').value.trim())
+                        ? document.getElementById('cloud-tts-api-key').value.trim()
+                        : (document.getElementById('bot-gemini-api-key-shortcut') ? document.getElementById('bot-gemini-api-key-shortcut').value.trim() : '')
                 }
             };
         })()
@@ -1900,6 +1904,7 @@ const inputsToWatch = [
     'bot-prefix-required', 'bot-permission', 'bot-block-rare-languages', 
     'bot-banned-action', 'bot-default-voice', 'bot-tts-engine', 'bot-cloud-voice',
     'bot-gemini-model', 'bot-gemini-language', 'bot-gemini-voice', 'bot-gemini-style', 'bot-gemini-api-key-shortcut',
+    'ai-api-key', 'cloud-tts-api-key',
     'bot-exclusive-enabled',
     'bot-read-follows', 'bot-read-shares', 'bot-read-gifts', 'bot-read-likes',
     'bot-share-action', 'bot-share-sound',
@@ -1915,6 +1920,19 @@ const inputsToWatch = [
     'recipe-goal-color-input',
     'social-rotator-enabled', 'social-display-time', 'social-pause-time'
 ];
+
+// Blur and change event listeners for key persistence
+['ai-api-key', 'cloud-tts-api-key', 'bot-gemini-api-key-shortcut'].forEach(keyId => {
+    const keyEl = document.getElementById(keyId);
+    if (keyEl) {
+        keyEl.addEventListener('blur', () => {
+            sendUpdatedSettings();
+        });
+        keyEl.addEventListener('change', () => {
+            sendUpdatedSettings();
+        });
+    }
+});
 
 inputsToWatch.forEach(id => {
     const el = document.getElementById(id);
