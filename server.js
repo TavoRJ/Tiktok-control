@@ -2156,13 +2156,14 @@ async function executeAiCommand(item) {
     lastAiCallTime = Date.now();
 
     const charLimit = parseInt(aiConfig.ai_max_chars) || 200;
+    const maxWords = Math.max(10, Math.floor(charLimit / 6));
 
     let systemPrompt = aiConfig.ai_prompt_personality || "Habla de forma tierna y alegre.";
-    systemPrompt += `\n[Instrucción estricta de formato: Responde en máximo 1 o 2 oraciones concisas y completas, sin exceder ${charLimit} caracteres. SIEMPRE debes finalizar tu última oración con un punto final y nunca dejar ideas a medias o incompletas. NO uses emojis. NO uses formato markdown como asteriscos '*' o negrita.]`;
+    systemPrompt += `\n[Instrucción estricta: Responde en exactamente 1 o 2 oraciones breves (máximo ${maxWords} palabras en total). Tu respuesta debe ser natural, terminar obligatoriamente con punto final y NO incluir notas, aclaraciones ni contadores de caracteres. NO uses emojis. NO uses formato markdown como asteriscos '*' o negrita.]`;
 
     try {
-        console.info(`[AI Gemini] Enviando prompt a Gemini 3.5 Flash para @${uniqueId}: "${prompt}" (CharLimit: ${charLimit})`);
-        const maxTokens = Math.max(200, Math.ceil(charLimit * 1.5));
+        console.info(`[AI Gemini] Enviando prompt a Gemini 3.5 Flash para @${uniqueId}: "${prompt}" (CharLimit: ${charLimit}, MaxWords: ${maxWords})`);
+        const maxTokens = Math.max(250, Math.ceil(charLimit * 1.5));
 
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST',
@@ -2196,28 +2197,21 @@ async function executeAiCommand(item) {
             return;
         }
 
-        // Cierre Gramatical Seguro (Filtro Post-generación)
-        if (aiResponseText.length > charLimit) {
-            const truncated = aiResponseText.substring(0, charLimit);
+        // Cierre Gramatical Natural (Sin mutilar palabras a la mitad)
+        if (aiResponseText.length > charLimit + 30) {
+            const truncated = aiResponseText.substring(0, charLimit + 30);
             const lastSentenceBoundary = Math.max(
                 truncated.lastIndexOf('.'),
                 truncated.lastIndexOf('?'),
                 truncated.lastIndexOf('!')
             );
             
-            if (lastSentenceBoundary > 0) {
+            if (lastSentenceBoundary > 20) {
                 aiResponseText = truncated.substring(0, lastSentenceBoundary + 1);
-            } else {
-                const lastSpace = truncated.lastIndexOf(' ');
-                if (lastSpace > 0) {
-                    aiResponseText = truncated.substring(0, lastSpace).trim() + ".";
-                } else {
-                    aiResponseText = truncated.trim() + ".";
-                }
             }
         }
 
-        // Ensure proper punctuation closure
+        // Ensure proper punctuation closure without cutting words
         if (!/[.!?]$/.test(aiResponseText.trim())) {
             aiResponseText = aiResponseText.trim() + ".";
         }
