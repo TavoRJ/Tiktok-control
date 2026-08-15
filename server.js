@@ -2163,7 +2163,6 @@ async function executeAiCommand(item) {
 
     try {
         console.info(`[AI Gemini] Enviando prompt a Gemini 3.5 Flash para @${uniqueId}: "${prompt}" (CharLimit: ${charLimit}, MaxWords: ${maxWords})`);
-        const maxTokens = Math.max(250, Math.ceil(charLimit * 1.5));
 
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST',
@@ -2172,7 +2171,7 @@ async function executeAiCommand(item) {
                 contents: [ { parts: [ { text: prompt } ] } ],
                 system_instruction: { parts: [ { text: systemPrompt } ] },
                 generationConfig: {
-                    maxOutputTokens: maxTokens,
+                    maxOutputTokens: 300,
                     temperature: 0.7
                 }
             }),
@@ -2197,26 +2196,15 @@ async function executeAiCommand(item) {
             return;
         }
 
-        // Cierre Gramatical Natural (Sin mutilar palabras a la mitad)
-        if (aiResponseText.length > charLimit + 30) {
-            const truncated = aiResponseText.substring(0, charLimit + 30);
-            const lastSentenceBoundary = Math.max(
-                truncated.lastIndexOf('.'),
-                truncated.lastIndexOf('?'),
-                truncated.lastIndexOf('!')
-            );
-            
-            if (lastSentenceBoundary > 20) {
-                aiResponseText = truncated.substring(0, lastSentenceBoundary + 1);
-            }
-        }
+        // Log raw response text from Gemini API before any formatting or sanitization
+        console.log('[DEBUG RAW GEMINI RESPONSE]:', aiResponseText);
 
-        // Ensure proper punctuation closure without cutting words
+        // Ensure proper punctuation closure without cutting words or slicing text
         if (!/[.!?]$/.test(aiResponseText.trim())) {
             aiResponseText = aiResponseText.trim() + ".";
         }
 
-        // Sanitización para visualización y TTS
+        // Sanitización para visualización y TTS (remover asteriscos, corchetes, emojis)
         aiResponseText = sanitizeTextForTts(aiResponseText);
 
         io.emit('tiktok_event_raw', {
