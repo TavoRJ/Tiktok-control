@@ -224,6 +224,17 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('¡Configuración de IA guardada con éxito!', 'success');
         });
     }
+
+    // Listen to clear AI memory button click
+    const clearAiMemoryBtn = document.getElementById('btn-clear-ai-memory');
+    if (clearAiMemoryBtn) {
+        clearAiMemoryBtn.addEventListener('click', () => {
+            if (confirm('¿Deseas borrar la memoria, cola e historial de la IA?')) {
+                socket.emit('clear_ai_queue');
+                showToast('Memoria y cola de la IA borradas con éxito.', 'info');
+            }
+        });
+    }
 });
 
 // Socket.io Events
@@ -544,7 +555,7 @@ socket.on('tiktok_event_raw', (payload) => {
     // Filtering logic
     if (filterGiftsCheckbox.checked) {
         // Incluimos envelope y social ya que los guantes y cofres suelen llegar por ahí
-        if (!['gift', 'linkMicBattle', 'linkMicArmies', 'envelope', 'social', 'ai_response'].includes(eventType)) {
+        if (!['gift', 'linkMicBattle', 'linkMicArmies', 'envelope', 'social', 'ai_response', 'ai_question', 'ai_processing', 'ai_error', 'ai_info'].includes(eventType)) {
             return;
         }
     }
@@ -579,9 +590,21 @@ socket.on('tiktok_event_raw', (payload) => {
     } else if (eventType === 'social') {
         cssClass = 'system';
         logMessage = `[SOCIAL] Acción: ${data.label || 'Interacción'} por ${data.nickname}`;
+    } else if (eventType === 'ai_question') {
+        cssClass = 'system';
+        logMessage = `<span style="color: #e9d5ff; font-weight: bold; background: rgba(168, 85, 247, 0.22); border-left: 4px solid #a855f7; padding: 4px 8px; border-radius: 4px; display: inline-block; width: 100%;">[IA PREGUNTA] @${data.nickname}: "${data.prompt}" (Límite: ${data.charLimit || 150} chars | Posición Cola: #${data.position || 1})</span>`;
+    } else if (eventType === 'ai_processing') {
+        cssClass = 'system';
+        logMessage = `<span style="color: #c084fc; font-weight: bold; background: rgba(147, 51, 234, 0.15); border-left: 4px solid #c084fc; padding: 4px 8px; border-radius: 4px; display: inline-block; width: 100%;">[IA PROCESANDO] Generando respuesta para @${data.nickname}... (Límite máximo: ${data.charLimit} chars)</span>`;
     } else if (eventType === 'ai_response') {
         cssClass = 'system';
-        logMessage = `<span style="color: #ffeb3b; font-weight: bold; background: rgba(255,235,59,0.1); padding: 3px 6px; border-radius: 4px;">[IA RESPONSE] ${data.nickname}: ${data.comment}</span>`;
+        logMessage = `<span style="color: #f0abfc; font-weight: bold; background: rgba(192, 38, 211, 0.2); border-left: 4px solid #e879f9; padding: 4px 8px; border-radius: 4px; display: inline-block; width: 100%;">[IA RESPUESTA] AI ➔ @${data.nickname}: "${data.comment}" (${data.finalLength || data.comment.length} chars / Límite ${data.charLimit || 150})</span>`;
+    } else if (eventType === 'ai_error') {
+        cssClass = 'system';
+        logMessage = `<span style="color: #f43f5e; font-weight: bold; background: rgba(225, 29, 72, 0.2); border-left: 4px solid #f43f5e; padding: 4px 8px; border-radius: 4px; display: inline-block; width: 100%;">[IA ERROR] @${data.nickname}: ${data.error}</span>`;
+    } else if (eventType === 'ai_info') {
+        cssClass = 'system';
+        logMessage = `<span style="color: #d8b4fe; font-weight: bold; background: rgba(168, 85, 247, 0.15); border-left: 4px solid #a855f7; padding: 4px 8px; border-radius: 4px; display: inline-block; width: 100%;">[IA MEMORIA] ${data.message}</span>`;
     } else {
         logMessage = `[${eventType.toUpperCase()}] ${JSON.stringify(data)}`;
     }
@@ -2439,7 +2462,7 @@ socket.on('test_tts_error', (data) => {
 });
 
 // ==========================================
-// INSTANT POLYPHONIC AUDIO ENGINE (v1.4.5)
+// INSTANT POLYPHONIC AUDIO ENGINE (v1.4.6)
 // ==========================================
 class InstantAudioEngine {
     constructor() {

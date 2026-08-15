@@ -2111,6 +2111,8 @@ async function handleAiChatCommand(data) {
         });
     }
 
+    const charLimit = parseInt(aiConfig.ai_max_chars) || 150;
+
     // Add to queue
     aiQueueCounter++;
     aiCommandQueue.push({
@@ -2124,7 +2126,127 @@ async function handleAiChatCommand(data) {
     
     console.info(`[AI Gemini] Petición de @${uniqueId} añadida a la cola. Posición: ${aiCommandQueue.length}`);
     io.emit('system', { type: 'info', message: `IA encolada para @${nickname} (Posición ${aiCommandQueue.length})` });
+    
+    // Emit detailed log event for RAW Event Scanner (lines moradas)
+    io.emit('tiktok_event_raw', {
+        eventType: 'ai_question',
+        data: {
+            uniqueId,
+            nickname,
+            prompt,
+            comment,
+            charLimit,
+            position: aiCommandQueue.length
+        }
+    });
+
     emitAiQueueUpdate();
+}
+
+function truncateAiResponse(rawResponseText, charLimit) {
+    let clean = (rawResponseText || '')
+        .replace(/[\r\n]+/g, ' ')           // collapse line breaks
+        .replace(/[*_`~#]/g, '')             // strip markdown
+        .replace(/\d+\.\s+/g, '')            // strip numbered list prefixes like "1. "
+        .replace(/-\s+(?=[A-ZÁÉÍÓÚa-záéíóú])/g, '')  // strip bullet dashes
+        .replace(/\s+/g, ' ')                // collapse whitespace
+        .trim();
+
+    if (clean.length <= charLimit) {
+        clean = clean.replace(/\s+$/, '');
+        if (!/[.!?]$/.test(clean)) {
+            clean += ".";
+        }
+        return clean;
+    }
+
+    // Snippet up to charLimit
+    const snippet = clean.substring(0, charLimit);
+
+    // Find the last complete sentence punctuation (. ! ?) within snippet
+    const lastPunctuation = Math.max(
+        snippet.lastIndexOf('.'),
+        snippet.lastIndexOf('?'),
+        snippet.lastIndexOf('!')
+    );
+
+    // If a sentence punctuation exists and offers a valid sentence (at least 15 chars)
+    if (lastPunctuation >= 15) {
+        clean = snippet.substring(0, lastPunctuation + 1).trim();
+    } else {
+        // Cut at last word boundary to avoid cutting mid-word
+        const lastSpace = snippet.lastIndexOf(' ');
+        if (lastSpace > 10) {
+            clean = snippet.substring(0, lastSpace).trim();
+        } else {
+            clean = snippet.trim();
+        }
+    }
+
+    clean = clean.replace(/\s+$/, '');
+    if (!/[.!?]$/.test(clean)) {
+        clean += ".";
+    }
+
+    return clean;
+}
+
+let cachedGeminiModel = null;
+let lastModelCheckTime = 0;
+
+async function getBestGeminiModel(apiKey) {
+    if (cachedGeminiModel && (Date.now() - lastModelCheckTime < 300000)) {
+        return cachedGeminiModel;
+    }
+
+    try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`, {
+            signal: AbortSignal.timeout(8000)
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            if (data.models && Array.isArray(data.models)) {
+                const validModels = data.models
+                    .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
+                    .map(m => m.name.replace(/^models\//, ''));
+
+                console.info('[AI Gemini] Modelos autorizados en tu clave de Google AI Studio:', validModels);
+
+                const priorities = [
+                    'gemini-2.0-flash',
+                    'gemini-2.5-flash',
+                    'gemini-1.5-flash-latest',
+                    'gemini-1.5-flash',
+                    'gemini-1.5-flash-8b',
+                    'gemini-1.5-pro-latest',
+                    'gemini-1.5-pro',
+                    'gemini-pro'
+                ];
+
+                for (const prio of priorities) {
+                    if (validModels.includes(prio)) {
+                        cachedGeminiModel = prio;
+                        lastModelCheckTime = Date.now();
+                        return prio;
+                    }
+                }
+
+                if (validModels.length > 0) {
+                    cachedGeminiModel = validModels[0];
+                    lastModelCheckTime = Date.now();
+                    return validModels[0];
+                }
+            }
+        } else {
+            const errText = await res.text();
+            console.warn(`[AI Gemini] ListModels devolvió HTTP ${res.status}: ${errText}`);
+        }
+    } catch (e) {
+        console.warn(`[AI Gemini] Advertencia al consultar modelos de Gemini: ${e.message}`);
+    }
+
+    return 'gemini-1.5-flash-latest';
 }
 
 async function executeAiCommand(item) {
@@ -2144,6 +2266,10 @@ async function executeAiCommand(item) {
     if (!apiKey || apiKey.trim() === "") {
         console.error("[AI Gemini] Error: Gemini API Key no configurada.");
         io.emit('system', { type: 'error', message: 'ERROR: API Key de Gemini no configurada en los ajustes.' });
+        io.emit('tiktok_event_raw', {
+            eventType: 'ai_error',
+            data: { uniqueId, nickname, error: 'API Key de Gemini no configurada.' }
+        });
         
         // Refund credit if it was a manual command and monetization was active
         if (!item.isAutoGift && aiConfig.ai_monetization_active) {
@@ -2158,22 +2284,30 @@ async function executeAiCommand(item) {
 
     const charLimit = parseInt(aiConfig.ai_max_chars) || 150;
 
-    // Build system prompt: personality + behavioral rules using charLimit dynamically
+    // Build system prompt: personality + behavioral rules for natural brevity without character counting meta-text
     const personalityBase = aiConfig.ai_prompt_personality || "Eres un asistente divertido y amable para una transmisión en vivo de TikTok.";
+    const approxWords = Math.max(10, Math.floor(charLimit / 6));
     const systemPrompt = `${personalityBase}
 
 Reglas obligatorias:
-- Responde SIEMPRE en español latino, sin importar en qué idioma te pregunten.
-- Tu respuesta debe tener entre ${Math.floor(charLimit * 0.5)} y ${charLimit} caracteres aproximadamente. Aprovecha el espacio para dar una respuesta completa y útil.
-- Escribe en texto corrido, como si estuvieras hablando. NO uses listas, viñetas, numeración, ni formato especial.
-- Termina siempre con una oración completa que cierre con punto, signo de interrogación o exclamación.
-- No uses emojis, asteriscos, hashtags ni markdown.`;
+- Responde SIEMPRE en español latino, en un tono natural, directo y fluido.
+- Mantén tu respuesta concisa (LÍMITE ESTRICTO: MÁXIMO ${charLimit} CARACTERES TOTALES, aproximadamente ${approxWords} palabras).
+- NUNCA incluyas conteos de caracteres, ni notas entre paréntesis sobre la longitud de tu respuesta.
+- Escribe en un solo texto continuo sin saltos de línea, viñetas, listas ni formato markdown (sin asteriscos, sin hashtags, sin emojis).
+- Termina siempre con una oración completa finalizada en punto (.), signo de interrogación (?) o exclamación (!).`;
 
     try {
-        console.info(`[AI Gemini] Prompt para @${uniqueId}: "${prompt}" | charLimit=${charLimit} | profile=${aiProfile} | personality="${personalityBase.substring(0, 60)}..."`);
+        const modelToUse = await getBestGeminiModel(apiKey);
+        console.info(`[AI Gemini] Prompt para @${uniqueId}: "${prompt}" | charLimit=${charLimit} | modelo=${modelToUse}`);
 
-        // Single-turn request — no shared global history to prevent cross-user contamination
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+        io.emit('tiktok_event_raw', {
+            eventType: 'ai_processing',
+            data: { uniqueId, nickname, prompt, charLimit, modelUsed: modelToUse }
+        });
+
+        // Query the selected active model from Google API
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${apiKey}`;
+        const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -2181,7 +2315,7 @@ Reglas obligatorias:
                 system_instruction: { parts: [{ text: systemPrompt }] },
                 generationConfig: {
                     maxOutputTokens: 400,
-                    temperature: 0.8
+                    temperature: 0.7
                 }
             }),
             signal: AbortSignal.timeout(12000)
@@ -2189,7 +2323,14 @@ Reglas obligatorias:
 
         if (!response.ok) {
             const errText = await response.text();
-            throw new Error(`Gemini API error (Status ${response.status}): ${errText}`);
+            let msg = `Google Gemini Error (${response.status}): ${errText}`;
+            try {
+                const parsed = JSON.parse(errText);
+                if (parsed.error && parsed.error.message) {
+                    msg = `Google Gemini Error (${response.status}): ${parsed.error.message}`;
+                }
+            } catch(pe) {}
+            throw new Error(msg);
         }
 
         const result = await response.json();
@@ -2198,56 +2339,24 @@ Reglas obligatorias:
             rawResponseText = result.candidates[0].content.parts[0].text || "";
         }
 
-        // Check for safety/finish reason issues
         const finishReason = result.candidates && result.candidates[0] && result.candidates[0].finishReason;
         console.log(`[AI Gemini] finishReason: ${finishReason}`);
 
         rawResponseText = rawResponseText.trim();
         if (!rawResponseText) {
             console.warn("[AI Gemini] Respuesta vacía de Gemini.");
+            io.emit('tiktok_event_raw', {
+                eventType: 'ai_error',
+                data: { uniqueId, nickname, error: 'Gemini devolvió una respuesta vacía.' }
+            });
             isAiProcessing = false;
             return;
         }
 
-        // Clean: remove line breaks, markdown formatting, numbered list prefixes, and stray special chars
-        let finalCleanText = rawResponseText
-            .replace(/[\r\n]+/g, ' ')           // collapse line breaks
-            .replace(/[*_`~#]/g, '')             // strip markdown
-            .replace(/\d+\.\s+/g, '')            // strip numbered list prefixes like "1. ", "2. "
-            .replace(/-\s+(?=[A-ZÁÉÍÓÚa-záéíóú])/g, '')  // strip bullet dashes
-            .replace(/\s+/g, ' ')                // collapse whitespace
-            .trim();
+        // Apply sentence-aware clean truncation
+        const finalCleanText = truncateAiResponse(rawResponseText, charLimit);
 
-        // Enforce character limit by cutting at last complete sentence within limit
-        if (finalCleanText.length > charLimit) {
-            const snippet = finalCleanText.substring(0, charLimit);
-            const lastSentenceBoundary = Math.max(
-                snippet.lastIndexOf('. '),
-                snippet.lastIndexOf('? '),
-                snippet.lastIndexOf('! '),
-                snippet.lastIndexOf('.'),
-                snippet.lastIndexOf('?'),
-                snippet.lastIndexOf('!')
-            );
-
-            if (lastSentenceBoundary > charLimit * 0.3) {
-                finalCleanText = snippet.substring(0, lastSentenceBoundary + 1);
-            } else {
-                // No sentence boundary — use last word boundary to avoid cutting mid-word
-                const lastSpace = snippet.lastIndexOf(' ');
-                if (lastSpace > charLimit * 0.3) {
-                    finalCleanText = snippet.substring(0, lastSpace).trim();
-                }
-            }
-        }
-
-        // Ensure final punctuation — only if not already punctuated
-        finalCleanText = finalCleanText.replace(/\s+$/, '');
-        if (!/[.!?]$/.test(finalCleanText)) {
-            finalCleanText = finalCleanText + ".";
-        }
-
-        // Diagnostic log — visible in Node console for live debugging
+        // Diagnostic log
         console.log('╔══════════════════════════════════════════════');
         console.log('║ TAVLIVE IA DEBUG');
         console.log('╠══════════════════════════════════════════════');
@@ -2261,7 +2370,15 @@ Reglas obligatorias:
 
         io.emit('tiktok_event_raw', {
             eventType: 'ai_response',
-            data: { nickname: 'AI', comment: finalCleanText }
+            data: {
+                uniqueId,
+                nickname,
+                comment: finalCleanText,
+                rawLength: rawResponseText.length,
+                finalLength: finalCleanText.length,
+                charLimit: charLimit,
+                finishReason: finishReason
+            }
         });
 
         let spokenText = finalCleanText;
@@ -2285,6 +2402,10 @@ Reglas obligatorias:
     } catch (err) {
         console.error('[AI Gemini] Error al llamar a Gemini:', err);
         io.emit('system', { type: 'error', message: `Error en la IA: ${err.message}` });
+        io.emit('tiktok_event_raw', {
+            eventType: 'ai_error',
+            data: { uniqueId, nickname, error: err.message }
+        });
         
         if (!item.isAutoGift && aiConfig.ai_monetization_active) {
             userAiCredits[uniqueId] = (userAiCredits[uniqueId] || 0) + 1;
@@ -5874,10 +5995,17 @@ io.on('connection', (socket) => {
     });
 
     socket.on('clear_ai_queue', () => {
-        console.info('[AI Gemini] Cola de IA vaciada desde el panel.');
+        console.info('[AI Gemini] Memoria y cola de IA vaciadas desde el panel.');
         aiCommandQueue = [];
         aiQueueCounter = 0;
+        isAiProcessing = false;
+        aiChatHistory = [];
         emitAiQueueUpdate();
+        io.emit('system', { type: 'info', message: 'Memoria y cola de la IA borradas correctamente.' });
+        io.emit('tiktok_event_raw', {
+            eventType: 'ai_info',
+            data: { message: 'Memoria, cola e historial de la IA borrados por el usuario.' }
+        });
     });
 
     socket.on('remove_ai_queue_item', (id) => {
@@ -6021,124 +6149,92 @@ io.on('connection', (socket) => {
 
 async function synthesizeSpeech(text, voice, rateStr, pitchStr, tempFile, customStyle = null) {
     const geminiVoices = ["Aoede", "Charon", "Fenrir", "Kore", "Puck", "Achernar"];
-    const isGeminiVoice = geminiVoices.includes(voice) || (chatbotSettings.ttsEngine === "gemini" && !voice.includes("-"));
+    const isGoogleOrGeminiVoice = geminiVoices.includes(voice) || (chatbotSettings.ttsEngine === "gemini" && !voice.includes("-")) || (voice && voice.includes("Neural"));
 
-    if (isGeminiVoice) {
-        let model = chatbotSettings.geminiModel || "gemini-3.1-flash-tts-preview";
-        if (model === "gemini-3.1-flash-tts") model = "gemini-3.1-flash-tts-preview";
-        if (model === "gemini-2.5-flash-tts") model = "gemini-2.5-flash-preview-tts";
-        if (model === "gemini-2.5-pro-tts") model = "gemini-2.5-pro-preview-tts";
-        if (model === "gemini-2.5-flash-lite-tts") model = "gemini-2.5-flash-preview-tts";
-        const voiceName = geminiVoices.includes(voice) ? voice : (chatbotSettings.geminiVoiceName || "Aoede");
-        // customStyle overrides global style if provided (user rule or AI config)
-        const style = (customStyle && customStyle.trim()) ? customStyle.trim() : (chatbotSettings.geminiStyleInstructions || "Read aloud in a warm, welcoming tone.");
-        const lang = chatbotSettings.geminiLanguage || "es-MX";
-        const apiKey = chatbotSettings.geminiApiKey;
-        
-        if (!apiKey) {
-            throw new Error("No Gemini API key provided. Please configure it in settings.");
-        }
-        
-        const langMap = {
-            "es-MX": "Spanish (Mexico)",
-            "es-CO": "Spanish (Colombia)",
-            "es-ES": "Spanish (Spain)",
-            "es-AR": "Spanish (Argentina)",
-            "es-CL": "Spanish (Chile)",
-            "es-PE": "Spanish (Peru)",
-            "es-VE": "Spanish (Venezuela)",
-            "es-US": "Spanish (United States)",
-            "en-US": "English (United States)",
-            "en-GB": "English (United Kingdom)"
-        };
-        const friendlyLanguage = langMap[lang] || lang;
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        
-        // Wrap in narration framing to avoid Gemini's internal impersonation/PROHIBITED_CONTENT filter
-        // Direct style commands like "habla coqueta" can trigger blocks; narration framing avoids this
-        const promptText = `Read the following text aloud as a voice narrator. Narration style: ${style}. Language: ${friendlyLanguage}. Text to read: "${text}"`;
-        
-        const requestBody = {
-            contents: [
-                { role: "user", parts: [{ text: promptText }] }
-            ],
-            generationConfig: {
-                responseModalities: ["AUDIO"],
-                speechConfig: {
-                    voiceConfig: {
-                        prebuiltVoiceConfig: {
-                            voiceName: voiceName
-                        }
-                    }
+    const googleTtsKey = (chatbotSettings.geminiApiKey && chatbotSettings.geminiApiKey.trim()) 
+        ? chatbotSettings.geminiApiKey.trim() 
+        : "AIzaSyCbdWFhzeheVDKl16tptEmWrEUrc1Q_dz8";
+
+    if (isGoogleOrGeminiVoice && googleTtsKey) {
+        try {
+            let langCode = "es-US";
+            let voiceName = "es-US-Neural2-B";
+
+            if (voice && voice.includes("-")) {
+                const parts = voice.split("-");
+                if (parts.length >= 2) {
+                    langCode = `${parts[0]}-${parts[1]}`;
                 }
-            },
-            safetySettings: [
-                { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
-            ]
-        };
-        
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody),
-            signal: AbortSignal.timeout(12000) // 12-second timeout to prevent infinite hangs
-        });
-        
-        if (!response.ok) {
-            const errText = await response.text();
-            throw new Error(`Gemini API HTTP ${response.status}: ${errText}`);
-        }
-        
-        const resData = await response.json();
-        if (resData.error) {
-            throw new Error(`Gemini API Error: ${resData.error.message || JSON.stringify(resData.error)}`);
-        }
-        
-        if (resData.promptFeedback && resData.promptFeedback.blockReason) {
-            // Log but don't throw — skip silently so the queue continues
-            console.warn(`[Gemini TTS] Solicitud bloqueada en promptFeedback (${resData.promptFeedback.blockReason}). Texto: "${text.substring(0, 60)}"`);
-            return; // Skip this message, don't crash the queue
-        }
-        
-        const candidate = resData.candidates && resData.candidates[0];
-        
-        // If candidate was blocked at generation level (PROHIBITED_CONTENT, SAFETY, etc), skip silently
-        if (!candidate || candidate.finishReason === 'PROHIBITED_CONTENT' || candidate.finishReason === 'SAFETY' || candidate.finishReason === 'RECITATION') {
-            console.warn(`[Gemini TTS] Candidato bloqueado (finishReason: ${candidate ? candidate.finishReason : 'sin candidato'}). Texto: "${text.substring(0, 60)}". Saltando...`);
-            return; // Skip silently
-        }
-        
-        const parts = candidate && candidate.content && candidate.content.parts;
-        const audioPart = parts && parts.find(p => p.inlineData);
-        
-        if (audioPart && audioPart.inlineData && audioPart.inlineData.data) {
-            let pcmBuffer = Buffer.from(audioPart.inlineData.data, 'base64');
-            
-            // Prepend standard WAV header for 24kHz 16-bit Mono PCM so browser can play it
-            const wavHeader = Buffer.alloc(44);
-            wavHeader.write('RIFF', 0);
-            wavHeader.writeUInt32LE(36 + pcmBuffer.length, 4);
-            wavHeader.write('WAVE', 8);
-            wavHeader.write('fmt ', 12);
-            wavHeader.writeUInt32LE(16, 16);
-            wavHeader.writeUInt16LE(1, 20); // PCM format = 1
-            wavHeader.writeUInt16LE(1, 22); // 1 channel (mono)
-            wavHeader.writeUInt32LE(24000, 24); // 24kHz sample rate
-            wavHeader.writeUInt32LE(24000 * 1 * 2, 28); // byte rate
-            wavHeader.writeUInt16LE(1 * 2, 32); // block align
-            wavHeader.writeUInt16LE(16, 34); // 16 bits per sample
-            wavHeader.write('data', 36);
-            wavHeader.writeUInt32LE(pcmBuffer.length, 40);
-            
-            fs.writeFileSync(tempFile, Buffer.concat([wavHeader, pcmBuffer]));
-            pcmBuffer = null;
-        } else {
-            // No audio returned — Gemini silently skipped (can happen with certain text patterns)
-            console.warn(`[Gemini TTS] Sin datos de audio en la respuesta. Texto: "${text.substring(0, 60)}". Saltando...`);
-            return; // Don't throw — just skip this message
+                voiceName = voice;
+            } else if (chatbotSettings.geminiLanguage) {
+                langCode = chatbotSettings.geminiLanguage;
+                if (langCode === "es-MX") voiceName = "es-MX-Neural2-A";
+                else if (langCode === "es-ES") voiceName = "es-ES-Neural2-C";
+                else voiceName = "es-US-Neural2-B";
+            }
+
+            let speakingRate = 1.0;
+            if (rateStr && typeof rateStr === 'string') {
+                const match = rateStr.match(/([+-]?\d+)/);
+                if (match) {
+                    const pct = parseInt(match[1], 10);
+                    speakingRate = Math.max(0.25, Math.min(4.0, 1.0 + (pct / 100)));
+                }
+            }
+
+            let pitch = 0.0;
+            if (pitchStr && typeof pitchStr === 'string') {
+                const match = pitchStr.match(/([+-]?\d+)/);
+                if (match) {
+                    pitch = Math.max(-20.0, Math.min(20.0, parseFloat(match[1])));
+                }
+            }
+
+            const cleanTextForVoice = (text || '').trim();
+
+            const requestBody = {
+                input: { text: cleanTextForVoice },
+                voice: {
+                    languageCode: langCode,
+                    name: voiceName
+                },
+                audioConfig: {
+                    audioEncoding: "MP3",
+                    speakingRate: speakingRate,
+                    pitch: pitch
+                }
+            };
+
+            const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${googleTtsKey}`;
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody),
+                signal: AbortSignal.timeout(12000)
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Google Cloud TTS API HTTP ${response.status}: ${errText}`);
+            }
+
+            const resData = await response.json();
+            if (resData.audioContent) {
+                const mp3Buffer = Buffer.from(resData.audioContent, 'base64');
+                fs.writeFileSync(tempFile, mp3Buffer);
+                return;
+            } else {
+                throw new Error("No audioContent in Google Cloud TTS response.");
+            }
+        } catch (googleTtsErr) {
+            console.warn(`[Google Cloud TTS Fallback] ${googleTtsErr.message}. Alternando de inmediato a Edge TTS...`);
+            const fallbackVoice = (voice && voice.includes('-')) ? voice : (chatbotSettings.cloudVoiceName || 'es-CO-SalomeNeural');
+            const tts = new EdgeTTS({
+                voice: fallbackVoice,
+                rate: rateStr,
+                pitch: pitchStr
+            });
+            await tts.ttsPromise(text, tempFile);
         }
     } else {
         const tts = new EdgeTTS({

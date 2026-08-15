@@ -120,7 +120,7 @@ socket.on('play_tts_audio', (data) => {
 });
 
 // ==========================================
-// INSTANT POLYPHONIC AUDIO ENGINE (v1.4.5)
+// INSTANT POLYPHONIC AUDIO ENGINE (v1.4.6)
 // ==========================================
 class InstantAudioEngineOverlay {
     constructor() {

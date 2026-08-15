@@ -2915,11 +2915,11 @@
                 </div>
             </section>
 
-            <!-- View: IA (Gemini 3.5 Flash) -->
+            <!-- View: IA (Gemini 2.5 Flash) -->
             <section id="ai-view" class="view" style="display: none;">
                 <div class="view-header">
                     <h2>INTELIGENCIA ARTIFICIAL MONETIZADA</h2>
-                    <p>CONFIGURACIÓN DE RESPUESTAS CON GOOGLE GEMINI 3.5 FLASH</p>
+                    <p>CONFIGURACIÓN DE RESPUESTAS CON GOOGLE GEMINI 2.5 FLASH</p>
                 </div>
 
                 <div class="grid-12">
@@ -3072,7 +3072,10 @@
                             </small>
                         </div>
                         
-                        <div style="margin-top: 15px; display: flex; justify-content: flex-end;">
+                        <div style="margin-top: 15px; display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap;">
+                            <button id="btn-clear-ai-memory" class="btn primary danger" style="background: #dc2626; color: #fff;">
+                                <i data-lucide="trash-2"></i> Borrar Memoria y Cola de IA
+                            </button>
                             <button id="btn-save-ai-config" class="btn primary">
                                 <i data-lucide="save"></i> Guardar Configuración de IA
                             </button>

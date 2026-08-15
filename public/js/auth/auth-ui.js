@@ -107,7 +107,7 @@ export class AuthUI {
                 </button>
 
                 <div class="tavlive-auth-footer">
-                    <p>TavLive v1.4.5 • Autenticación Remota Protegida</p>
+                    <p>TavLive v1.4.6 • Autenticación Remota Protegida</p>
                 </div>
             </div>
         </div>
