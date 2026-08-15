@@ -2157,47 +2157,27 @@ async function executeAiCommand(item) {
     lastAiCallTime = Date.now();
 
     const charLimit = parseInt(aiConfig.ai_max_chars) || 150;
-    const maxWords = Math.max(8, Math.floor(charLimit / 6));
 
-    let systemPrompt = aiConfig.ai_prompt_personality || "Habla de forma tierna, amable y alegre.";
-    systemPrompt += `\n\nREGLAS DE RESPUESTA PARA LA TRANSMISIÓN EN VIVO:
-1. IDIOMA: Responde SIEMPRE en español latino de forma completamente natural.
-2. LONGITUD: Responde en exactamente 1 o 2 oraciones breves y completas (máximo ${maxWords} palabras en total).
-3. COMPLETITUD: Toda oración debe estar totalmente terminada y finalizar obligatoriamente con punto final.
-4. PROHIBICIÓN ABSOLUTA: No incluyas notas, contadores de caracteres o palabras, viñetas, emojis, explicaciones meta ni formato markdown. Responde ÚNICAMENTE con el mensaje directo que vas a decir en voz alta.`;
-
-    // Purge any corrupted history entries containing meta notes before processing new turn
-    aiChatHistory = aiChatHistory.filter(item => {
-        const text = (item.parts && item.parts[0] && item.parts[0].text) || '';
-        return !/characters|words|->|\d+ characters/i.test(text);
-    });
-
-    // Add user turn to conversational memory window
-    aiChatHistory.push({
-        role: 'user',
-        parts: [{ text: prompt }]
-    });
-
-    // Maintain sliding window of maximum 8 turns (4 user-model exchanges)
-    if (aiChatHistory.length > 8) {
-        aiChatHistory = aiChatHistory.slice(-8);
-    }
+    // System prompt: natural language only, no technical rules that leak into output
+    let systemPrompt = aiConfig.ai_prompt_personality || "Eres un asistente divertido y amable para una transmisión en vivo de TikTok.";
+    systemPrompt += ` Responde siempre en español latino. Sé breve y conciso: máximo dos oraciones cortas. Termina siempre con punto final. No uses emojis, asteriscos ni formato especial.`;
 
     try {
-        console.info(`[AI Gemini] Enviando prompt y conversación a Gemini 3.5 Flash para @${uniqueId}: "${prompt}" (CharLimit: ${charLimit}, Turnos: ${aiChatHistory.length})`);
+        console.info(`[AI Gemini] Enviando prompt a Gemini 3.5 Flash para @${uniqueId}: "${prompt}" (CharLimit: ${charLimit})`);
 
+        // Single-turn request — no shared global history to prevent cross-user contamination
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                contents: aiChatHistory,
-                system_instruction: { parts: [ { text: systemPrompt } ] },
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                system_instruction: { parts: [{ text: systemPrompt }] },
                 generationConfig: {
                     maxOutputTokens: 300,
-                    temperature: 0.5
+                    temperature: 0.7
                 }
             }),
-            signal: AbortSignal.timeout(10000) // 10-second timeout to prevent infinite hangs
+            signal: AbortSignal.timeout(10000)
         });
 
         if (!response.ok) {
@@ -2218,22 +2198,14 @@ async function executeAiCommand(item) {
             return;
         }
 
-        // Clean out any accidental meta-reasoning text, quotes, or character count notes from Gemini
+        // Clean: remove line breaks, markdown formatting, and stray special chars
         let finalCleanText = rawResponseText
-            .replace(/->\s*\d+\s*characters.*/gi, '')
-            .replace(/\(\d+\s*words\).*/gi, '')
-            .replace(/\d+\s*characters.*/gi, '')
             .replace(/[\r\n]+/g, ' ')
+            .replace(/[*_`~#]/g, '')
+            .replace(/\s+/g, ' ')
             .trim();
 
-        // If meta cleanup resulted in empty text, clear chat history contamination and fallback
-        if (!finalCleanText || /^["'\s.,\->]+$/.test(finalCleanText)) {
-            console.warn("[AI Gemini] Respuesta con metatexto detectada. Reseteando historial de chat.");
-            aiChatHistory = [];
-            finalCleanText = "¡Hola! Con gusto te respondo en la transmisión.";
-        }
-
-        // Control estricto de longitud de caracteres asignado por el usuario
+        // Enforce character limit by cutting at last complete sentence within limit
         if (finalCleanText.length > charLimit) {
             const snippet = finalCleanText.substring(0, charLimit);
             const lastSentenceBoundary = Math.max(
@@ -2245,6 +2217,7 @@ async function executeAiCommand(item) {
             if (lastSentenceBoundary > 20) {
                 finalCleanText = snippet.substring(0, lastSentenceBoundary + 1);
             } else {
+                // No sentence boundary found — use last word boundary
                 const lastSpace = snippet.lastIndexOf(' ');
                 if (lastSpace > 20) {
                     finalCleanText = snippet.substring(0, lastSpace).trim();
@@ -2252,26 +2225,9 @@ async function executeAiCommand(item) {
             }
         }
 
-        // Remover conectores o preposiciones colgantes al final de la oración en español (ej. "por.", "en.", "que.", "por culpa.")
-        const danglingConnectorRegex = /\b(por|de|con|para|en|y|o|a|que|del|el|la|los|las|un|una|unos|unas|al|su|mi|tu|como|sin|sobre|tras|hasta|desde|hacia|entre|durante|mediante|según|pero|sino|porque|aunque|por culpa)\s*[.!?]*$/i;
-        while (danglingConnectorRegex.test(finalCleanText)) {
-            finalCleanText = finalCleanText.replace(danglingConnectorRegex, '').trim();
-        }
-
-        // Garantizar cierre gramatical y puntuación final
+        // Ensure final punctuation
         if (!/[.!?]$/.test(finalCleanText)) {
             finalCleanText = finalCleanText + ".";
-        }
-
-        finalCleanText = sanitizeTextForTts(finalCleanText);
-
-        // Guardar la respuesta limpia en la memoria conversacional
-        aiChatHistory.push({
-            role: 'model',
-            parts: [{ text: finalCleanText }]
-        });
-        if (aiChatHistory.length > 8) {
-            aiChatHistory = aiChatHistory.slice(-8);
         }
 
         console.log('--- DEBUG TAVLIVE IA ---');
@@ -2279,7 +2235,6 @@ async function executeAiCommand(item) {
         console.log('RAW GEMINI:', rawResponseText);
         console.log('SENT TO CLIENT:', finalCleanText);
         console.log('CHAR LIMIT:', charLimit, '| ACTUAL CHARS:', finalCleanText.length);
-        console.log('CHAT HISTORY LENGTH:', aiChatHistory.length);
         console.log('------------------------');
 
         io.emit('tiktok_event_raw', {
