@@ -438,6 +438,7 @@ let lastAiCallTime = 0;
 let aiCommandQueue = [];
 let isAiProcessing = false;
 let aiQueueCounter = 0;
+let aiChatHistory = []; // Buffer for multi-turn conversation window (max 8 turns)
 
 // Track gift coins received per user in current session (for monetization)
 let sessionGiftCoins = {}; // { uniqueId: totalCoinsReceivedThisSession }
@@ -2160,14 +2161,25 @@ async function executeAiCommand(item) {
     let systemPrompt = aiConfig.ai_prompt_personality || "Habla de forma tierna y alegre.";
     systemPrompt += "\n[Instrucción estricta: Eres un asistente para transmisiones en vivo. Responde en un solo párrafo continuo de 2 a 3 oraciones completas, con un máximo aproximado de 150 caracteres. Termina siempre con punto final. Prohibido usar listas numeradas, viñetas o saltos de línea.]";
 
+    // Add user turn to conversational memory window
+    aiChatHistory.push({
+        role: 'user',
+        parts: [{ text: prompt }]
+    });
+
+    // Maintain sliding window of maximum 8 turns (4 user-model exchanges)
+    if (aiChatHistory.length > 8) {
+        aiChatHistory = aiChatHistory.slice(-8);
+    }
+
     try {
-        console.info(`[AI Gemini] Enviando prompt a Gemini 3.5 Flash para @${uniqueId}: "${prompt}"`);
+        console.info(`[AI Gemini] Enviando prompt y conversación a Gemini 3.5 Flash para @${uniqueId}: "${prompt}" (Turnos en memoria: ${aiChatHistory.length})`);
 
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                contents: [ { parts: [ { text: prompt } ] } ],
+                contents: aiChatHistory,
                 system_instruction: { parts: [ { text: systemPrompt } ] },
                 generationConfig: {
                     maxOutputTokens: 300,
@@ -2195,6 +2207,15 @@ async function executeAiCommand(item) {
             return;
         }
 
+        // Save generated model turn into conversational memory
+        aiChatHistory.push({
+            role: 'model',
+            parts: [{ text: rawResponseText }]
+        });
+        if (aiChatHistory.length > 8) {
+            aiChatHistory = aiChatHistory.slice(-8);
+        }
+
         let finalCleanText = rawResponseText.replace(/[\r\n]+/g, ' ').trim();
         if (!/[.!?]$/.test(finalCleanText)) {
             finalCleanText = finalCleanText + ".";
@@ -2205,6 +2226,7 @@ async function executeAiCommand(item) {
         console.log('INPUT PROMPT:', prompt);
         console.log('RAW GEMINI:', rawResponseText);
         console.log('SENT TO CLIENT:', finalCleanText);
+        console.log('CHAT HISTORY LENGTH:', aiChatHistory.length);
         console.log('------------------------');
 
         io.emit('tiktok_event_raw', {
