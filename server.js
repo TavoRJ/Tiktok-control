@@ -6179,13 +6179,32 @@ io.on('connection', (socket) => {
     });
 });
 
+function getEdgeVoiceFallback(voice) {
+    let v = voice || 'es-CO-SalomeNeural';
+    if (v.includes('es-CO') && v.includes('-B')) return 'es-CO-GonzaloNeural';
+    if (v.includes('es-CO')) return 'es-CO-SalomeNeural';
+    if (v.includes('es-MX') && v.includes('-B')) return 'es-MX-JorgeNeural';
+    if (v.includes('es-MX')) return 'es-MX-DaliaNeural';
+    if (v.includes('es-US') && v.includes('-B')) return 'es-US-AlonsoNeural';
+    if (v.includes('es-US') && v.includes('-C')) return 'es-US-AlonsoNeural';
+    if (v.includes('es-US')) return 'es-US-PalomaNeural';
+    if (v.includes('es-ES') && v.includes('-B')) return 'es-ES-AlvaroNeural';
+    if (v.includes('es-ES')) return 'es-ES-ElviraNeural';
+    if (v.includes('es-AR') && v.includes('-B')) return 'es-AR-TomasNeural';
+    if (v.includes('es-AR')) return 'es-AR-ElenaNeural';
+    if (v.includes('es-CL') && v.includes('-B')) return 'es-CL-LorenzoNeural';
+    if (v.includes('es-CL')) return 'es-CL-CatalinaNeural';
+    if (v.includes('Neural') && !v.includes('Neural2')) return v;
+    return 'es-CO-SalomeNeural';
+}
+
 async function synthesizeSpeech(text, voice, rateStr, pitchStr, tempFile, customStyle = null) {
     const geminiVoices = ["Aoede", "Charon", "Fenrir", "Kore", "Puck", "Achernar"];
-    const isGoogleOrGeminiVoice = geminiVoices.includes(voice) || (chatbotSettings.ttsEngine === "gemini" && !voice.includes("-")) || (voice && voice.includes("Neural"));
+    const isGoogleCloudEngine = (chatbotSettings.ttsEngine === "google_cloud" || chatbotSettings.ttsEngine === "gemini" || (voice && voice.includes("Neural2")) || geminiVoices.includes(voice));
 
-    const googleTtsKey = (chatbotSettings.cloudTtsApiKey || chatbotSettings.cloud_tts_api_key || chatbotSettings.geminiApiKey || "AIzaSyCbdWFhzeheVDKl16tptEmWrEUrc1Q_dz8").trim();
+    const googleTtsKey = (chatbotSettings.cloudTtsApiKey || chatbotSettings.cloud_tts_api_key || '').trim();
 
-    if (isGoogleOrGeminiVoice && googleTtsKey) {
+    if (isGoogleCloudEngine && googleTtsKey) {
         try {
             let langCode = "es-US";
             let voiceName = "es-US-Neural2-B";
@@ -6245,7 +6264,7 @@ async function synthesizeSpeech(text, voice, rateStr, pitchStr, tempFile, custom
             };
 
             const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${googleTtsKey}`;
-            console.log(`[CLOUD TTS REQUEST] Key: ...${googleTtsKey.slice(-6)} | Endpoint: texttospeech.googleapis.com`);
+            console.log(`[CLOUD TTS REQUEST] Key: ...${googleTtsKey.slice(-6)} | Voice: ${voiceName} | Endpoint: texttospeech.googleapis.com`);
             const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -6269,7 +6288,7 @@ async function synthesizeSpeech(text, voice, rateStr, pitchStr, tempFile, custom
             }
         } catch (googleTtsErr) {
             console.warn(`[Google Cloud TTS Fallback] ${googleTtsErr.message}. Alternando de inmediato a Edge TTS...`);
-            const fallbackVoice = (voice && voice.includes('-')) ? voice : (chatbotSettings.cloudVoiceName || 'es-CO-SalomeNeural');
+            const fallbackVoice = getEdgeVoiceFallback(voice);
             const tts = new EdgeTTS({
                 voice: fallbackVoice,
                 rate: rateStr,
@@ -6278,8 +6297,9 @@ async function synthesizeSpeech(text, voice, rateStr, pitchStr, tempFile, custom
             await tts.ttsPromise(text, tempFile);
         }
     } else {
+        const fallbackVoice = getEdgeVoiceFallback(voice);
         const tts = new EdgeTTS({
-            voice: voice || 'es-CO-SalomeNeural',
+            voice: fallbackVoice,
             rate: rateStr,
             pitch: pitchStr
         });
