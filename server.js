@@ -3038,10 +3038,7 @@ app.get('/overlay', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'overlay.html'));
 });
 
-// Route for isolated recetas widget
-app.get('/recetas', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'recetas.html'));
-});
+
 
 // Route for isolated dinamicas widget
 app.get('/dinamicas', (req, res) => {
@@ -3781,10 +3778,7 @@ app.post('/api/tiktok/connect', (req, res) => {
     return res.json({ success: true, username: requestedHandle });
 });
 
-// Route for Banner Cocina Widget
-app.get('/banner-cocina', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'banner-cocina.html'));
-});
+
 
 // Rankings update and retrieval helpers
 function extractAvatarUrl(roomInfo) {
@@ -5513,51 +5507,6 @@ io.on('connection', (socket) => {
 
     // Relay manual control commands from the panel to the overlay
     socket.on('manual_control', (data) => {
-        if (data) {
-            if (data.action === 'vs_update') {
-                recetasConfig.title = data.title;
-                recetasConfig.items = data.items;
-                try {
-                    fs.writeFileSync(RECETAS_CONFIG_FILE, JSON.stringify(recetasConfig, null, 2), 'utf8');
-                } catch (err) {
-                    console.error('Error saving recetas_config.json:', err);
-                }
-                io.emit('initReceta', recetasConfig);
-            } else if (data.action === 'vs_show') {
-                recetasConfig.visible = true;
-                try {
-                    fs.writeFileSync(RECETAS_CONFIG_FILE, JSON.stringify(recetasConfig, null, 2), 'utf8');
-                } catch (err) {
-                    console.error('Error saving recetas_config.json:', err);
-                }
-                io.emit('initReceta', recetasConfig);
-            } else if (data.action === 'vs_hide') {
-                recetasConfig.visible = false;
-                try {
-                    fs.writeFileSync(RECETAS_CONFIG_FILE, JSON.stringify(recetasConfig, null, 2), 'utf8');
-                } catch (err) {
-                    console.error('Error saving recetas_config.json:', err);
-                }
-                io.emit('initReceta', recetasConfig);
-            } else if (data.action === 'vs_reset') {
-                recetasConfig = {
-                    title: "RECETA DEL DÍA: PASTEL DE FRESAS",
-                    items: [
-                        { name: "Fresas Frescas 10 tazas" },
-                        { name: "Harina de Trigo 300g" },
-                        { name: "Azúcar Morena 150g" },
-                        { name: "Esencia de Vainilla 2 cdas" }
-                    ],
-                    visible: true
-                };
-                try {
-                    fs.writeFileSync(RECETAS_CONFIG_FILE, JSON.stringify(recetasConfig, null, 2), 'utf8');
-                } catch (err) {
-                    console.error('Error saving recetas_config.json:', err);
-                }
-                io.emit('initReceta', recetasConfig);
-            }
-        }
         io.emit('overlay_command', data);
     });
 
@@ -6314,7 +6263,14 @@ async function synthesizeSpeech(text, voice, rateStr, pitchStr, tempFile, custom
     }
 }
 
-
+// Carga del Módulo Piloto de Recetas de Cocina
+const recetasModule = require('./src/modules/recetas');
+recetasModule.init(app, io, {
+    rootDir: __dirname,
+    getConfig: () => recetasConfig,
+    setConfig: (val) => { recetasConfig = val; },
+    getFilePath: () => RECETAS_CONFIG_FILE
+});
 
 server.listen(PORT, () => {
     console.log(`🚀 Servidor ejecutándose en http://127.0.0.1:${PORT}`);

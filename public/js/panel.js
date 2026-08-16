@@ -4,6 +4,7 @@ import { ThemesManager } from './modules/themes.js';
 import { CanvasEditorManager } from './modules/canvas-editor.js';
 import { AuthUI } from './auth/auth-ui.js';
 import { authState } from './auth/auth-state.js';
+import { initRecetasUI } from './modules/recetas-controller.js';
 
 // Initialize TavLive Auth System (FASE 2)
 if (document.readyState === 'loading') {
@@ -110,6 +111,7 @@ window.confirm = function(msg) {
 };
 
 const socket = SocketClient.init();
+initRecetasUI(socket);
 let latestRemoteConfig = {};
 let canvasEditor = null;
 
@@ -695,18 +697,7 @@ document.getElementById('btn-toggle-sidebar').addEventListener('click', () => {
     document.querySelector('.sidebar').classList.toggle('collapsed');
 });
 
-// Versus / Receta Table Controls
-window.addEventListener('ui:recipeAction', (e) => {
-    socket.emit('manual_control', { action: e.detail.action });
-});
 
-window.addEventListener('ui:recipeUpdate', (e) => {
-    socket.emit('manual_control', {
-        action: 'vs_update',
-        title: e.detail.title,
-        items: e.detail.items
-    });
-});
 
 
 // Card clicks (Manual trigger for testing)
@@ -4440,62 +4431,7 @@ if (dinamicasGoalTypeSelect) {
         renderDynamicsMetasTable();
     });
 
-    socket.on('initReceta', (config) => {
-        if (!config) return;
-        
-        const titleInput = document.getElementById('vs-title-input');
-        if (titleInput && titleInput.value !== config.title) {
-            titleInput.value = config.title || '';
-        }
-        
-        const container = document.getElementById('ingredients-container');
-        if (container) {
-            const inputs = container.querySelectorAll('.vs-item-name-input');
-            const items = config.items || [];
-            if (inputs.length !== items.length || inputs.length === 0) {
-                container.innerHTML = '';
-                items.forEach(item => {
-                    const row = document.createElement('div');
-                    row.className = 'vs-control-row';
-                    row.style = 'display: flex; gap: 10px; align-items: center; width: 100%; margin-bottom: 8px;';
-                    row.innerHTML = `
-                        <input type="text" class="vs-item-name-input" value="${item.name || ''}" placeholder="Ingrediente...">
-                        <button type="button" class="btn-delete-ingredient" style="background: transparent; border: none; color: #ff3b30; cursor: pointer; padding: 4px; display: inline-flex; align-items: center; justify-content: center; transition: background-color 0.2s; border-radius: 4px; height: 38px; width: 38px; flex-shrink: 0;">
-                            <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
-                        </button>
-                    `;
 
-                    row.querySelector('.btn-delete-ingredient').addEventListener('click', () => {
-                        row.remove();
-                        const updatedItems = [];
-                        document.querySelectorAll('.vs-item-name-input').forEach(input => {
-                            if (input.value.trim() !== '') updatedItems.push({ name: input.value, count: 1 });
-                        });
-                        socket.emit('manual_control', {
-                            action: 'vs_update',
-                            title: titleInput ? titleInput.value : '',
-                            items: updatedItems
-                        });
-                    });
-
-                    row.querySelector('.vs-item-name-input').addEventListener('input', () => {
-                        const updatedItems = [];
-                        document.querySelectorAll('.vs-item-name-input').forEach(input => {
-                            if (input.value.trim() !== '') updatedItems.push({ name: input.value, count: 1 });
-                        });
-                        socket.emit('manual_control', {
-                            action: 'vs_update',
-                            title: titleInput ? titleInput.value : '',
-                            items: updatedItems
-                        });
-                    });
-
-                    container.appendChild(row);
-                });
-                if (window.lucide) window.lucide.createIcons();
-            }
-        }
-    });
 
     function renderDynamicsMetasTable() {
         if (!dynamicsMetasTbody) return;
