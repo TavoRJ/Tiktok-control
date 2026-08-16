@@ -349,10 +349,6 @@ let chatbotSettings = {
     customSounds: [],
     giftMetadata: {},
     goals: [],
-    wheelEnabled: false,
-    wheelTriggerCoins: 10,
-    wheelTriggerGift: "any",
-    wheelOptions: ["5 Sentadillas", "Cantar un fragmento", "Contar un chiste", "Saludar como ardilla", "Omitir canción gratis", "Hacer una mueca graciosa"],
     overlayMusicQueueEnabled: true,
     overlayChatEnabled: true,
     overlayChatFilterPremium: true,
@@ -370,7 +366,6 @@ let chatbotSettings = {
         songlist: { active: false, x: 5, y: 46, width: 90, height: 12 },
         recetas: { active: false, x: 5, y: 59, width: 90, height: 10 },
         dinamicas: { active: false, x: 5, y: 70, width: 90, height: 10 },
-        ruleta: { active: false, x: 5, y: 30, width: 90, height: 40 },
         socials: { active: false, x: 5, y: 82, width: 90, height: 8 },
         tts: { active: false, x: 25, y: 5, width: 50, height: 12 }
     },
@@ -811,7 +806,6 @@ try {
         if (goalsModified || settingsModified) {
             fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
         }
-        chatbotSettings.wheelOptions = chatbotSettings.wheelOptions || ["5 Sentadillas", "Cantar un fragmento", "Contar un chiste", "Saludar como ardilla", "Omitir canción gratis", "Hacer una mueca graciosa"];
         chatbotSettings.soundAlerts = chatbotSettings.soundAlerts || [];
         chatbotSettings.customSounds = chatbotSettings.customSounds || [];
         
@@ -937,7 +931,6 @@ try {
         chatbotSettings.bannerSlide2 = chatbotSettings.bannerSlide2 || "¡Pide tu canción en el chat usando !song 🎵";
         chatbotSettings.bannerSlide3 = chatbotSettings.bannerSlide3 || "Meta de Regalos Activa (Calculada automáticamente)";
         chatbotSettings.goals = chatbotSettings.goals || [];
-        chatbotSettings.wheelOptions = chatbotSettings.wheelOptions || ["5 Sentadillas", "Cantar un fragmento", "Contar un chiste", "Saludar como ardilla", "Omitir canción gratis", "Hacer una mueca graciosa"];
         chatbotSettings.widgets = chatbotSettings.widgets || {};
         chatbotSettings.widgets.spotify  = chatbotSettings.widgets.spotify  || { active: true,  x: 80, y: 10 };
         chatbotSettings.widgets.donors   = chatbotSettings.widgets.donors   || { active: true,  x: 5,  y: 30 };
@@ -4076,40 +4069,6 @@ function processAccumulatedGift(data, repeatCount) {
         }
     }
 
-
-    // Check Interactive Wheel trigger (only once per accumulated gift combo)
-    if (chatbotSettings.wheelEnabled && chatbotSettings.wheelOptions && chatbotSettings.wheelOptions.length > 0) {
-        const triggerGift = (chatbotSettings.wheelTriggerGift || 'any').toLowerCase().trim();
-        const triggerCoins = parseInt(chatbotSettings.wheelTriggerCoins || 10);
-        
-        let qualifies = false;
-        if (triggerGift !== 'any' && giftNamesMatch(triggerGift, data.giftName)) {
-            qualifies = true;
-        } else if (triggerGift === 'any' && totalCoins >= triggerCoins) {
-            qualifies = true;
-        }
-        
-        if (qualifies) {
-            const winIndex = Math.floor(Math.random() * chatbotSettings.wheelOptions.length);
-            const winText = chatbotSettings.wheelOptions[winIndex];
-            console.log(`[WHEEL] Triggered! Winner option index ${winIndex}: "${winText}"`);
-            
-            io.emit('trigger_wheel', {
-                sender: data.nickname,
-                giftName: data.giftName,
-                winningIndex: winIndex,
-                optionText: winText
-            });
-            
-            setTimeout(() => {
-                const cleanSender = stripEmojis(data.nickname || data.uniqueId);
-                const speakText = `¡Wow! ${cleanSender} activó la ruleta y tocó: ${winText}!`;
-                if (!isBannedText(uniqueId, true) && !isBannedText(cleanSender, true)) {
-                    speakCustomTts(speakText);
-                }
-            }, 7000);
-        }
-    }
 
     // 3. Speak custom TTS for the gift
     if (chatbotSettings.readGiftsEnabled && !isBannedText(uniqueId, true) && !isBannedText(nickname, true)) {
