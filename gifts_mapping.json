@@ -57,16 +57,46 @@
     "image": "you're_awesome.png",
     "sound": ""
   },
+  "17105": {
+    "name": "Sundae Bowl",
+    "coins": 99,
+    "image": "sundae_bowl.png"
+  },
   "28445": {
     "name": "Ari Radiante",
     "coins": 1,
     "image": "ari_radiante.png",
     "sound": ""
   },
+  "74580": {
+    "name": "Alita de Naya",
+    "coins": 1,
+    "image": "alita_de_naya.png"
+  },
   "105781": {
     "name": "Spinning Soccer",
     "coins": 5,
     "image": "spinning_soccer.png",
     "sound": ""
+  },
+  "437561": {
+    "name": "Pearl Chime",
+    "coins": 99,
+    "image": "pearl_chime.png"
+  },
+  "842704": {
+    "name": "Spin Seal",
+    "coins": 349,
+    "image": "spin_seal.png"
+  },
+  "842718": {
+    "name": "Cow-napping",
+    "coins": 99,
+    "image": "cow-napping.png"
+  },
+  "1046332": {
+    "name": "Baby Hippo",
+    "coins": 15,
+    "image": "baby_hippo.png"
   }
 }

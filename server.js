@@ -8,8 +8,7 @@ const fs = require('fs');
 const { EdgeTTS } = require('node-edge-tts');
 const os = require('os');
 const packageJson = require('./package.json');
-const ytdl = require('@distube/ytdl-core');
-const play = require('play-dl');
+const spotifyModule = require('./src/modules/spotify');
 
 var io = null;
 
@@ -588,64 +587,6 @@ function parseDurationToMs(durationStr) {
     }
     return Number(durationStr) * 1000 || 0;
 }
-
-// Search and retrieve track details from SoundCloud using play-dl
-async function searchSoundCloud(query) {
-    try {
-        console.log(`[SoundCloud] Buscando: "${query}"...`);
-        // Get free Client ID dynamically
-        const client_id = await play.getFreeClientID();
-        await play.setToken({
-            soundcloud: {
-                client_id: client_id
-            }
-        });
-
-        const results = await play.search(query, {
-            limit: 1,
-            source: { soundcloud: 'tracks' }
-        });
-
-        if (results && results.length > 0) {
-            const track = results[0];
-            const durationSec = track.durationInSec || 0;
-            const durationMs = durationSec * 1000;
-            
-            // Format duration as minutes:seconds
-            const mins = Math.floor(durationSec / 60);
-            const secs = durationSec % 60;
-            const durationText = `${mins}:${secs.toString().padStart(2, '0')}`;
-
-            return {
-                id: track.id ? String(track.id) : 'sc-' + Date.now(),
-                title: track.name || track.title || 'SoundCloud Track',
-                artist: track.user?.username || track.author?.name || 'SoundCloud',
-                albumArt: track.thumbnail || track.artwork_url || '',
-                uri: track.permalink || track.url || '',
-                durationText: durationText,
-                durationMs: durationMs,
-                source: 'soundcloud'
-            };
-        } else {
-            console.log(`[SoundCloud] No se encontraron canciones para: "${query}"`);
-            return null;
-        }
-    } catch (err) {
-        console.error('[SoundCloud] Error en searchSoundCloud:', err);
-        const errMsg = err.message || '';
-        if (errMsg.includes('ENOTFOUND') || errMsg.includes('ETIMEDOUT') || errMsg.includes('ECONN') || errMsg.includes('fetch failed')) {
-            if (typeof io !== 'undefined') {
-                io.emit('system', { 
-                    type: 'warning', 
-                    message: '⚠️ Error de red con SoundCloud: Se detectó un bloqueo de conexión. Si estás en una red corporativa/de trabajo, el cortafuegos podría estar bloqueando SoundCloud. Intenta en tu WiFi de hogar.' 
-                });
-            }
-        }
-        return null;
-    }
-}
-
-
 
 // Helper to strip emojis and symbols from names to prevent TTS from spelling them out
 function stripEmojis(text) {
@@ -1265,17 +1206,19 @@ async function handleCloudTTS(data) {
     ttsMessageTimestamps = ttsMessageTimestamps.filter(t => nowTimestamp - t < 1000);
     const isHighFlowMode = ttsMessageTimestamps.length > 3;
 
-    const isExclusiveUser = isVipUser || (chatbotSettings.exclusiveTtsEnabled && 
+    const isExclusiveUser = isVipUser || ((chatbotSettings.exclusiveTtsEnabled === true || chatbotSettings.exclusiveTtsEnabled === 'true') && 
                             chatbotSettings.exclusiveTtsUser && 
                             uniqueId === chatbotSettings.exclusiveTtsUser.toLowerCase().trim());
 
+    const isBotActive = chatbotSettings.active === true || chatbotSettings.active === 'true' || chatbotSettings.active === undefined;
+
     // If chatbot is inactive, ONLY allow exclusive user / VIP user (@tavorj)
-    if (!chatbotSettings.active) {
+    if (!isBotActive) {
         if (!isExclusiveUser) return;
     }
 
     // If exclusive user mode is enabled, ONLY read from this user
-    if (chatbotSettings.exclusiveTtsEnabled) {
+    if (chatbotSettings.exclusiveTtsEnabled === true || chatbotSettings.exclusiveTtsEnabled === 'true') {
         if (!isExclusiveUser) return;
     }
 
@@ -1558,465 +1501,6 @@ async function generateAndPlayTTS(data) {
 
 
 
-// ==========================================
-// SPOTIFY REAL-TIME PLAYER API & POLLING
-// ==========================================
-
-let currentSpotifyTrack = { isPlaying: false };
-let spotifyQueue = [];
-let spotifyVoteSkips = new Set();
-
-function levenshtein(a, b) {
-    const matrix = [];
-    for (let i = 0; i <= b.length; i++) {
-        matrix[i] = [i];
-    }
-    for (let j = 0; j <= a.length; j++) {
-        matrix[0][j] = j;
-    }
-    for (let i = 1; i <= b.length; i++) {
-        for (let j = 1; j <= a.length; j++) {
-            if (b.charAt(i - 1) === a.charAt(j - 1)) {
-                matrix[i][j] = matrix[i - 1][j - 1];
-            } else {
-                matrix[i][j] = Math.min(
-                    matrix[i - 1][j - 1] + 1,
-                    matrix[i][j - 1] + 1,
-                    matrix[i - 1][j] + 1
-                );
-            }
-        }
-    }
-    return matrix[b.length][a.length];
-}
-
-function wordsMatchFuzzy(w1, w2) {
-    if (w1 === w2) return true;
-    if (w1.includes(w2) || w2.includes(w1)) return true;
-    if (w1.length >= 3 && w2.length >= 3) {
-        const distance = levenshtein(w1, w2);
-        const maxAllowed = Math.min(2, Math.floor(Math.min(w1.length, w2.length) / 2));
-        if (distance <= maxAllowed) return true;
-    }
-    return false;
-}
-
-function scoreTrack(track, query) {
-    const cleanQuery = query.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "");
-    const queryWords = cleanQuery.split(/\s+/).filter(w => w.length > 0);
-    
-    const cleanTitle = track.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "");
-    const titleWords = cleanTitle.split(/\s+/).filter(w => w.length > 0);
-    
-    const artists = track.artists.map(a => a.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, ""));
-    const artistWords = artists.flatMap(a => a.split(/\s+/)).filter(w => w.length > 0);
-    
-    let matchedQueryWords = 0;
-    for (const qw of queryWords) {
-        let titleMatched = false;
-        for (const tw of titleWords) {
-            if (wordsMatchFuzzy(tw, qw)) {
-                titleMatched = true;
-                break;
-            }
-        }
-        if (titleMatched || cleanTitle.includes(qw)) {
-            matchedQueryWords += 2;
-        } else {
-            let artistMatched = false;
-            for (const aw of artistWords) {
-                if (wordsMatchFuzzy(aw, qw)) {
-                    artistMatched = true;
-                    break;
-                }
-            }
-            if (artistMatched) {
-                matchedQueryWords += 1;
-            }
-        }
-    }
-    
-    if (cleanTitle.includes(cleanQuery)) {
-        matchedQueryWords += 3;
-    }
-    
-    return matchedQueryWords;
-}
-
-async function searchSpotify(query, type = 'track,artist', limit = 5) {
-    if (!chatbotSettings.spotifyAccessToken) return null;
-    
-    if (Date.now() + 60000 >= chatbotSettings.spotifyExpiresAt) {
-        const success = await refreshSpotifyToken();
-        if (!success) return null;
-    }
-    
-    try {
-        const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=${type}&limit=${limit}`;
-        const response = await fetch(url, {
-            headers: {
-                'Authorization': `Bearer ${chatbotSettings.spotifyAccessToken}`
-            }
-        });
-        
-        if (!response.ok) {
-            console.error('Spotify search failed:', response.status, await response.text());
-            return null;
-        }
-        
-        return await response.json();
-    } catch (err) {
-        console.error('Error searching Spotify:', err);
-        return null;
-    }
-}
-
-async function playSpotifyTrack(uri) {
-    if (!chatbotSettings.spotifyAccessToken) return false;
-    if (Date.now() + 60000 >= chatbotSettings.spotifyExpiresAt) {
-        const success = await refreshSpotifyToken();
-        if (!success) return false;
-    }
-    try {
-        const response = await fetch('https://api.spotify.com/v1/me/player/play', {
-            method: 'PUT',
-            headers: {
-                'Authorization': `Bearer ${chatbotSettings.spotifyAccessToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ uris: [uri] })
-        });
-        if (response.status === 204 || response.ok) {
-            return true;
-        }
-        let errText = '';
-        try {
-            errText = await response.text();
-        } catch (e) {}
-        console.error('Spotify play failed:', response.status, errText);
-        
-        let customMessage = `Error de reproducción (${response.status}).`;
-        if (response.status === 401) {
-            customMessage = "Faltan permisos de control. Desvincula y vuelve a vincular Spotify.";
-        } else if (response.status === 404 || errText.includes("NO_ACTIVE_DEVICE")) {
-            customMessage = "No hay dispositivo activo. Abre Spotify en tu PC/móvil y reproduce cualquier canción para activarlo.";
-        } else if (response.status === 403) {
-            customMessage = "Acción prohibida. Asegúrate de que la cuenta vinculada tiene Spotify Premium.";
-        }
-        
-        io.emit('system', { type: 'error', message: `Spotify: ${customMessage}` });
-        return false;
-    } catch (err) {
-        console.error('Error playing Spotify track:', err);
-        return false;
-    }
-}
-
-async function setSpotifyVolume(volumePercent) {
-    if (!chatbotSettings.spotifyAccessToken) return false;
-    if (Date.now() + 60000 >= chatbotSettings.spotifyExpiresAt) {
-        const success = await refreshSpotifyToken();
-        if (!success) return false;
-    }
-    try {
-        const response = await fetch(`https://api.spotify.com/v1/me/player/volume?volume_percent=${volumePercent}`, {
-            method: 'PUT',
-            headers: {
-                'Authorization': `Bearer ${chatbotSettings.spotifyAccessToken}`
-            }
-        });
-        if (response.status === 204 || response.ok) {
-            return true;
-        }
-        console.error('Spotify volume change failed:', response.status, await response.text());
-        return false;
-    } catch (err) {
-        console.error('Error setting Spotify volume:', err);
-        return false;
-    }
-}
-
-async function pauseSpotify() {
-    if (!chatbotSettings.spotifyAccessToken) return false;
-    if (Date.now() + 60000 >= chatbotSettings.spotifyExpiresAt) {
-        const success = await refreshSpotifyToken();
-        if (!success) return false;
-    }
-    try {
-        const response = await fetch('https://api.spotify.com/v1/me/player/pause', {
-            method: 'PUT',
-            headers: {
-                'Authorization': `Bearer ${chatbotSettings.spotifyAccessToken}`
-            }
-        });
-        return response.ok;
-    } catch (err) {
-        console.error('Error pausing Spotify:', err);
-        return false;
-    }
-}
-
-async function resumeSpotify() {
-    if (!chatbotSettings.spotifyAccessToken) return false;
-    if (Date.now() + 60000 >= chatbotSettings.spotifyExpiresAt) {
-        const success = await refreshSpotifyToken();
-        if (!success) return false;
-    }
-    try {
-        const response = await fetch('https://api.spotify.com/v1/me/player/play', {
-            method: 'PUT',
-            headers: {
-                'Authorization': `Bearer ${chatbotSettings.spotifyAccessToken}`
-            }
-        });
-        return response.ok;
-    } catch (err) {
-        console.error('Error resuming Spotify:', err);
-        return false;
-    }
-}
-
-async function previousSpotifyTrack() {
-    if (!chatbotSettings.spotifyAccessToken) return false;
-    if (Date.now() + 60000 >= chatbotSettings.spotifyExpiresAt) {
-        const success = await refreshSpotifyToken();
-        if (!success) return false;
-    }
-    try {
-        const response = await fetch('https://api.spotify.com/v1/me/player/previous', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${chatbotSettings.spotifyAccessToken}`
-            }
-        });
-        return response.ok;
-    } catch (err) {
-        console.error('Error skipping to previous Spotify track:', err);
-        return false;
-    }
-}
-
-async function playNextInQueue() {
-    if (spotifyQueue.length === 0) {
-        try {
-            const response = await fetch('https://api.spotify.com/v1/me/player/next', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${chatbotSettings.spotifyAccessToken}`
-                }
-            });
-            currentActiveQueueTrack = null;
-            if (response.ok) {
-                // Force play/resume after skipping native track
-                await resumeSpotify();
-            }
-            return response.ok;
-        } catch (e) {
-            console.error('Error skipping to next native song:', e);
-            return false;
-        }
-    }
-    
-    const nextTrack = spotifyQueue.shift();
-    io.emit('spotify_queue_updated', spotifyQueue);
-    emitMonetizedUsersUpdate(true);
-    
-    spotifyVoteSkips.clear();
-    io.emit('spotify_votes_updated', { votes: 0, limit: chatbotSettings.spotifyVoteSkipLimit });
-    
-    console.info(`Reproduciendo siguiente en cola: ${nextTrack.title} por ${nextTrack.artist} (Pedido por @${nextTrack.requester})`);
-    
-    currentActiveQueueTrack = nextTrack;
-    const success = await playSpotifyTrack(nextTrack.uri);
-    
-    setTimeout(async () => {
-        const track = await getSpotifyCurrentlyPlaying();
-        if (track) {
-            currentSpotifyTrack = track;
-            if (currentActiveQueueTrack && (track.title === currentActiveQueueTrack.title || track.spotifyUrl === currentActiveQueueTrack.uri)) {
-                track.requester = currentActiveQueueTrack.requester;
-            }
-            io.emit('spotify_track', track);
-        }
-    }, 1000);
-    
-    return success;
-}
-
-function addTrackToQueue(track) {
-    spotifyQueue.push(track);
-    io.emit('spotify_queue_updated', spotifyQueue);
-    emitMonetizedUsersUpdate(true);
-    console.info(`Agregado a la cola: ${track.title} - ${track.artist} (Pedido por @${track.requester})`);
-    
-    if (spotifyQueue.length === 1 && (!currentSpotifyTrack || !currentSpotifyTrack.isPlaying)) {
-        playNextInQueue();
-    }
-}
-
-function handleVoteSkip(requester, isStaff) {
-    // !skip SIEMPRE requiere votos para TODOS (incluyendo moderadores)
-    // Los moderadores pueden usar !skipforce o !skipsong para saltar sin votos
-    
-    if (!currentSpotifyTrack || !currentSpotifyTrack.isPlaying) {
-        return;
-    }
-    
-    if (spotifyVoteSkips.has(requester)) {
-        io.emit('system', { type: 'warning', message: `@${requester} ya votó para omitir esta canción.` });
-        return;
-    }
-    
-    spotifyVoteSkips.add(requester);
-    const votesNeeded = chatbotSettings.spotifyVoteSkipLimit || 3;
-    const currentVotes = spotifyVoteSkips.size;
-    
-    io.emit('spotify_votes_updated', { votes: currentVotes, limit: votesNeeded });
-    io.emit('system', { type: 'info', message: `@${requester} votó para omitir la canción. (${currentVotes}/${votesNeeded})` });
-    
-    if (currentVotes >= votesNeeded) {
-        console.log(`Límite de votos alcanzado (${currentVotes}/${votesNeeded}). Omitiendo canción...`);
-        io.emit('system', { type: 'info', message: `🎵 Límite de votos alcanzado. Omitiendo canción...` });
-        playNextInQueue();
-    }
-}
-
-async function handleSongRequest(query, requester) {
-    if (!chatbotSettings.spotifyAccessToken) return;
-    
-    console.log(`Procesando solicitud de canción: "${query}" por @${requester}`);
-    
-    let artistTrack = null;
-    try {
-        const artistSearch = await searchSpotify(query, 'artist', 5);
-        let matchedArtist = null;
-        if (artistSearch && artistSearch.artists && artistSearch.artists.items.length > 0) {
-            matchedArtist = artistSearch.artists.items.find(
-                artist => artist.name.toLowerCase() === query.toLowerCase().trim()
-            );
-        }
-        
-        if (matchedArtist) {
-            console.log(`Artista coincidente exacto encontrado: "${matchedArtist.name}". Buscando canciones con filtro artist:...`);
-            const searchTracks = await searchSpotify(`artist:"${matchedArtist.name}"`, 'track', 5);
-            if (searchTracks && searchTracks.tracks && searchTracks.tracks.items.length > 0) {
-                const tracks = searchTracks.tracks.items;
-                let allowedTracks = tracks;
-                if (!chatbotSettings.spotifyExplicitAllowed) {
-                    allowedTracks = tracks.filter(t => !t.explicit);
-                }
-                
-                if (allowedTracks.length > 0) {
-                    const randomIndex = Math.floor(Math.random() * allowedTracks.length);
-                    artistTrack = allowedTracks[randomIndex];
-                    console.log(`Pista de artista aleatoria elegida: "${artistTrack.name}"`);
-                } else {
-                    io.emit('system', { type: 'warning', message: `Todas las canciones encontradas de ${matchedArtist.name} son explícitas y están bloqueadas.` });
-                    return;
-                }
-            }
-        }
-    } catch (e) {
-        console.error('Error in artist smart search:', e);
-    }
-    
-    let chosenTrack = artistTrack;
-    
-    if (!chosenTrack) {
-        try {
-            // Limpiar query de operadores de búsqueda (como el guion "-" y el signo "+") que causan problemas de exclusión en Spotify
-            const cleanQuery = query.replace(/[-+]/g, ' ').trim();
-            console.log(`Buscando pistas para query limpio: "${cleanQuery}"`);
-            const trackSearch = await searchSpotify(cleanQuery, 'track', 5);
-            if (trackSearch && trackSearch.tracks && trackSearch.tracks.items.length > 0) {
-                const tracks = trackSearch.tracks.items;
-                let allowedTracks = tracks;
-                if (!chatbotSettings.spotifyExplicitAllowed) {
-                    allowedTracks = tracks.filter(t => !t.explicit);
-                }
-                
-                if (allowedTracks.length > 0) {
-                    const tracksWithScores = allowedTracks.map(track => ({
-                        track,
-                        score: scoreTrack(track, cleanQuery)
-                    }));
-                    
-                    // Ordenar por puntaje descendente y usar la popularidad como desempate
-                    tracksWithScores.sort((a, b) => {
-                        if (b.score !== a.score) {
-                            return b.score - a.score;
-                        }
-                        return (b.track.popularity || 0) - (a.track.popularity || 0);
-                    });
-                    
-                    chosenTrack = tracksWithScores[0].track;
-                    console.log(`Mejor pista coincidente elegida: "${chosenTrack.name}" por "${chosenTrack.artists.map(a => a.name).join(', ')}" (Score: ${tracksWithScores[0].score}, Pop: ${chosenTrack.popularity})`);
-                }
-            }
-        } catch (e) {
-            console.error('Error in track search:', e);
-        }
-    }
-    
-    if (!chosenTrack) {
-        io.emit('system', { type: 'warning', message: `No se encontraron canciones para "${query}".` });
-        return;
-    }
-    
-    if (!chatbotSettings.spotifyExplicitAllowed && chosenTrack.explicit) {
-        console.log(`Canción explícita bloqueada: "${chosenTrack.name}" por "${chosenTrack.artists.map(a => a.name).join(', ')}"`);
-        io.emit('system', { type: 'warning', message: `La canción "${chosenTrack.name}" contiene contenido explícito y fue bloqueada.` });
-        return;
-    }
-    
-    const trackItem = {
-        id: chosenTrack.id,
-        title: chosenTrack.name,
-        artist: chosenTrack.artists.map(a => a.name).join(', '),
-        albumArt: (chosenTrack.album.images && chosenTrack.album.images.length > 0) ? chosenTrack.album.images[0].url : '',
-        uri: chosenTrack.uri,
-        requester: requester,
-        durationMs: chosenTrack.duration_ms
-    };
-    
-    addTrackToQueue(trackItem);
-    io.emit('system', { type: 'success', message: `@${requester} añadió a la cola: "${trackItem.title}" - ${trackItem.artist}` });
-}
-
-function sendCurrentTrackToChatInfo() {
-    if (currentSpotifyTrack && currentSpotifyTrack.isPlaying) {
-        io.emit('system', { 
-            type: 'info', 
-            message: `Canción actual: "${currentSpotifyTrack.title}" por ${currentSpotifyTrack.artist}` 
-        });
-    } else {
-        io.emit('system', { 
-            type: 'info', 
-            message: `No hay ninguna canción reproduciéndose.` 
-        });
-    }
-}
-
-function sendQueueToChatInfo() {
-    if (spotifyQueue.length === 0) {
-        io.emit('system', { type: 'info', message: `La cola de música está vacía.` });
-        return;
-    }
-    const nextSongs = spotifyQueue.slice(0, 3).map((s, idx) => `${idx + 1}. "${s.title}" (@${s.requester})`).join(', ');
-    io.emit('system', { 
-        type: 'info', 
-        message: `Cola actual (total ${spotifyQueue.length}): ${nextSongs}${spotifyQueue.length > 3 ? '...' : ''}` 
-    });
-}
-
-function sendVoteStatusToChatInfo() {
-    const votesNeeded = chatbotSettings.spotifyVoteSkipLimit || 3;
-    const currentVotes = spotifyVoteSkips.size;
-    io.emit('system', { 
-        type: 'info', 
-        message: `Votos para omitir: ${currentVotes}/${votesNeeded}` 
-    });
-}
 
 function getMonetizedUsersData() {
     const minCoins = chatbotSettings.spotifyMinCoins || 5;
@@ -2439,270 +1923,6 @@ Reglas obligatorias:
     isAiProcessing = false;
 }
 
-async function handleSpotifyChatCommand(data) {
-    if (!chatbotSettings.spotifyConnected || !chatbotSettings.spotifyEnabled || !chatbotSettings.spotifyChatQueueEnabled) {
-        return;
-    }
-
-    const comment = (data.comment || '').trim();
-    const uniqueId = data.uniqueId;
-    const nickname = data.nickname || uniqueId;
-    
-    const isAnchor = (data.userIdentity && typeof data.userIdentity.isAnchor !== 'undefined')
-        ? data.userIdentity.isAnchor
-        : (uniqueId && chatbotSettings.tiktokUsername && uniqueId.toLowerCase() === chatbotSettings.tiktokUsername.toLowerCase());
-        
-    const isModerator = isAnchor || ((data.userIdentity && typeof data.userIdentity.isModeratorOfAnchor !== 'undefined')
-        ? data.userIdentity.isModeratorOfAnchor
-        : !!data.isModerator);
-        
-    const isSubscriber = isAnchor || ((data.userIdentity && typeof data.userIdentity.isSubscriberOfAnchor !== 'undefined')
-        ? data.userIdentity.isSubscriberOfAnchor
-        : !!data.isSubscriber);
-    
-    const prefix = (chatbotSettings.spotifyCommandPrefix || '!song').trim();
-    const lowerComment = comment.toLowerCase();
-    
-    if (lowerComment.startsWith(prefix.toLowerCase())) {
-        const query = comment.substring(prefix.length).trim();
-        if (query.length > 0) {
-            const perm = chatbotSettings.spotifyPermission || 'all';
-            if (perm === 'mods' && !isModerator && !isAnchor) {
-                io.emit('system', { type: 'warning', message: `@${uniqueId} intentó pedir canción sin permisos (Mods).` });
-                return;
-            }
-            if (perm === 'subs' && !isSubscriber && !isModerator && !isAnchor) {
-                io.emit('system', { type: 'warning', message: `@${uniqueId} intentó pedir canción sin permisos (Subs).` });
-                return;
-            }
-            
-            // Monetization credit check
-            if (chatbotSettings.spotifyMonetizationEnabled) {
-                if (!isModerator && !isAnchor) {
-                    const minCoins = chatbotSettings.spotifyMinCoins || 5;
-                    const sessionCoins = sessionGiftCoins[uniqueId.toLowerCase()] || 0;
-                    const credits = userMusicCredits[uniqueId.toLowerCase()] || 0;
-                    const hasPermission = (sessionCoins >= minCoins) || (credits >= 1);
-                    
-                    if (!hasPermission) {
-                        io.emit('system', { 
-                            type: 'warning', 
-                            message: `@${uniqueId} no tiene permiso para pedir canción. Requiere enviar un regalo de al menos ${minCoins} monedas.` 
-                        });
-                        return;
-                    }
-                    
-                    // Deduct credit (prefer session coins first)
-                    if (sessionCoins >= minCoins) {
-                        sessionGiftCoins[uniqueId.toLowerCase()] -= minCoins;
-                        io.emit('system', { 
-                            type: 'info', 
-                            message: `@${uniqueId} usó ${minCoins} monedas de regalos para pedir canción. Monedas restantes en sesión: ${sessionGiftCoins[uniqueId.toLowerCase()]}` 
-                        });
-                    } else if (credits >= 1) {
-                        userMusicCredits[uniqueId.toLowerCase()] = credits - 1;
-                        io.emit('system', { 
-                            type: 'info', 
-                            message: `@${uniqueId} usó 1 crédito de música. Créditos restantes: ${userMusicCredits[uniqueId.toLowerCase()]}` 
-                        });
-                    }
-                }
-            }
-
-            await handleSongRequest(query, uniqueId);
-        } else {
-            sendCurrentTrackToChatInfo();
-        }
-    } else if (lowerComment === '!current' || lowerComment === '!cancion') {
-        sendCurrentTrackToChatInfo();
-    } else if (lowerComment === '!queue' || lowerComment === '!cola') {
-        sendQueueToChatInfo();
-    } else if (lowerComment === '!skip' || lowerComment === '!omitir') {
-        handleVoteSkip(uniqueId, isModerator || isAnchor);
-    } else if (lowerComment === '!votos') {
-        sendVoteStatusToChatInfo();
-    } else if (lowerComment === '!skipsong' || lowerComment === '!skipforce') {
-        const allowedUsers = (chatbotSettings.spotifySkipAllowedUsers || '')
-            .split(',')
-            .map(u => u.trim().toLowerCase())
-            .filter(Boolean);
-        const isAllowedUser = allowedUsers.includes(uniqueId.toLowerCase());
-        
-        if (isModerator || isAnchor || isAllowedUser) {
-            console.log(`Force skip por @${uniqueId}`);
-            io.emit('system', { type: 'info', message: `@${uniqueId} omitió la canción.` });
-            playNextInQueue();
-        }
-    } else if (lowerComment === '!clearqueue' || lowerComment === '!limpiarcola') {
-        if (isModerator || isAnchor) {
-            console.log(`Cola vaciada por @${uniqueId}`);
-            spotifyQueue = [];
-            io.emit('spotify_queue_updated', spotifyQueue);
-            emitMonetizedUsersUpdate(true);
-            io.emit('system', { type: 'info', message: `@${uniqueId} vació la cola.` });
-        }
-    }
-}
-
-async function refreshSpotifyToken() {
-    const clientId = chatbotSettings.spotifyClientId || '28b2a2ea9ff34b989b9b13fc7979691f';
-    const clientSecret = chatbotSettings.spotifyClientSecret || 'b2e0324ac37f4a6abef68319d285fda2';
-    
-    if (!chatbotSettings.spotifyRefreshToken) {
-        console.error('No refresh token available to renew Spotify session.');
-        return false;
-    }
-    
-    try {
-        console.info('Refrescando token de Spotify...');
-        const response = await fetch('https://accounts.spotify.com/api/token', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Authorization': 'Basic ' + Buffer.from(clientId + ':' + clientSecret).toString('base64')
-            },
-            body: new URLSearchParams({
-                grant_type: 'refresh_token',
-                refresh_token: chatbotSettings.spotifyRefreshToken
-            })
-        });
-        
-        const data = await response.json();
-        if (!response.ok || data.error) {
-            console.error('Spotify token refresh error response:', data);
-            return false;
-        }
-        
-        chatbotSettings.spotifyAccessToken = data.access_token;
-        chatbotSettings.spotifyExpiresAt = Date.now() + (data.expires_in * 1000);
-        if (data.refresh_token) {
-            chatbotSettings.spotifyRefreshToken = data.refresh_token;
-        }
-        
-        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
-        io.emit('chatbot_settings_updated', chatbotSettings);
-        console.info('Token de Spotify refrescado exitosamente.');
-        return true;
-    } catch (err) {
-        console.error('Failed to refresh Spotify token:', err);
-        return false;
-    }
-}
-
-async function getSpotifyCurrentlyPlaying() {
-    if (!chatbotSettings.spotifyConnected || !chatbotSettings.spotifyAccessToken) {
-        return { isPlaying: false };
-    }
-    
-    // Check if expired (or within 60s of expiration)
-    if (Date.now() + 60000 >= chatbotSettings.spotifyExpiresAt) {
-        const success = await refreshSpotifyToken();
-        if (!success) {
-            return { isPlaying: false };
-        }
-    }
-    
-    try {
-        const response = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
-            headers: {
-                'Authorization': `Bearer ${chatbotSettings.spotifyAccessToken}`
-            }
-        });
-        
-        if (response.status === 204 || response.status === 404) {
-            return { isPlaying: false };
-        }
-        
-        if (!response.ok) {
-            // If token expired unexpectedly
-            if (response.status === 401) {
-                console.info('Recibido 401 de Spotify. Intentando forzar refresco de token.');
-                const success = await refreshSpotifyToken();
-                if (success) {
-                    // Retry once
-                    return getSpotifyCurrentlyPlaying();
-                }
-            }
-            const errText = await response.text();
-            console.error('Spotify API error status:', response.status, errText);
-            return { isPlaying: false };
-        }
-        
-        const data = await response.json();
-        if (!data || !data.item) {
-            return { isPlaying: false };
-        }
-        
-        return {
-            isPlaying: data.is_playing,
-            title: data.item.name,
-            artist: data.item.artists.map(a => a.name).join(', '),
-            albumArt: (data.item.album.images && data.item.album.images.length > 0) ? data.item.album.images[0].url : '',
-            progressMs: data.progress_ms,
-            durationMs: data.item.duration_ms,
-            spotifyUrl: data.item.external_urls.spotify
-        };
-    } catch (err) {
-        console.error('Error fetching currently playing from Spotify:', err);
-        return { isPlaying: false };
-    }
-}
-
-// Background Polling Loop
-let lastTriggeredUri = null;
-let lastPollUri = null;
-let currentActiveQueueTrack = null;
-let lastEmittedTrackUri = null;
-let lastEmittedIsPlaying = null;
-
-setInterval(async () => {
-    if (chatbotSettings.spotifyConnected && chatbotSettings.spotifyEnabled) {
-        try {
-            const track = await getSpotifyCurrentlyPlaying();
-            if (track) {
-                // Si empezó una nueva canción (URL cambió en comparación con el último sondeo)
-                if (track.spotifyUrl !== lastPollUri) {
-                    lastTriggeredUri = null;
-                    lastPollUri = track.spotifyUrl;
-                    spotifyVoteSkips.clear();
-                    io.emit('spotify_votes_updated', { votes: 0, limit: chatbotSettings.spotifyVoteSkipLimit });
-                }
-
-                // Si la canción está sonando y restan menos de 5 segundos
-                if (track.isPlaying && track.durationMs && track.progressMs !== undefined) {
-                    const remainingTime = track.durationMs - track.progressMs;
-                    if (remainingTime <= 5000 && track.spotifyUrl !== lastTriggeredUri) {
-                        console.log(`Finalización de track detectada (Restan: ${remainingTime}ms). Reproduciendo siguiente en cola...`);
-                        lastTriggeredUri = track.spotifyUrl;
-                        playNextInQueue();
-                    }
-                }
-
-                currentSpotifyTrack = track;
-                
-                // Agregar el requester si esta canción proviene de nuestra cola
-                if (currentActiveQueueTrack && (track.title === currentActiveQueueTrack.title || track.spotifyUrl === currentActiveQueueTrack.uri)) {
-                    track.requester = currentActiveQueueTrack.requester;
-                } else if (currentActiveQueueTrack && track.spotifyUrl !== currentActiveQueueTrack.uri) {
-                    currentActiveQueueTrack = null;
-                }
-                
-                // Emitir spotify_track ÚNICAMENTE cuando la canción cambia o cambia el estado de reproducción (play/pause)
-                const hasTrackChanged = track.spotifyUrl !== lastEmittedTrackUri;
-                const hasStatusChanged = track.isPlaying !== lastEmittedIsPlaying;
-
-                if (hasTrackChanged || hasStatusChanged) {
-                    lastEmittedTrackUri = track.spotifyUrl;
-                    lastEmittedIsPlaying = track.isPlaying;
-                    io.emit('spotify_track', track);
-                }
-            }
-        } catch (e) {
-            console.error('Error in Spotify background polling interval:', e);
-        }
-    }
-}, 3000);
-
 
 
 const app = express();
@@ -3056,75 +2276,6 @@ app.get('/social-rotator', (req, res) => {
 // Route for isolated TTS & IA soundwave visualizer widget
 app.get('/tts-widget', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'tts-widget.html'));
-});
-
-// Route for Spotify Authorization Redirect
-app.get('/spotify-login', (req, res) => {
-    const clientId = chatbotSettings.spotifyClientId || '28b2a2ea9ff34b989b9b13fc7979691f';
-    const redirectUri = 'http://127.0.0.1:3000/spotify-callback';
-    const scopes = 'user-read-currently-playing user-read-playback-state user-read-private user-modify-playback-state';
-    const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}`;
-    res.redirect(authUrl);
-});
-
-// Route for Spotify Authorization Callback
-app.get('/spotify-callback', async (req, res) => {
-    const code = req.query.code;
-    if (!code) {
-        return res.redirect('/?spotify=error&message=no_code');
-    }
-    
-    const clientId = chatbotSettings.spotifyClientId || '28b2a2ea9ff34b989b9b13fc7979691f';
-    const clientSecret = chatbotSettings.spotifyClientSecret || 'b2e0324ac37f4a6abef68319d285fda2';
-    const redirectUri = 'http://127.0.0.1:3000/spotify-callback';
-    
-    try {
-        const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Authorization': 'Basic ' + Buffer.from(clientId + ':' + clientSecret).toString('base64')
-            },
-            body: new URLSearchParams({
-                grant_type: 'authorization_code',
-                code: code,
-                redirect_uri: redirectUri
-            })
-        });
-        
-        const tokenData = await tokenResponse.json();
-        if (!tokenResponse.ok || tokenData.error) {
-            console.error('Spotify token exchange failed:', tokenData);
-            return res.redirect('/?spotify=error&message=' + encodeURIComponent(tokenData.error_description || 'token_exchange_failed'));
-        }
-        
-        const profileResponse = await fetch('https://api.spotify.com/v1/me', {
-            headers: {
-                'Authorization': `Bearer ${tokenData.access_token}`
-            }
-        });
-        
-        const profileData = await profileResponse.json();
-        const userName = profileData.display_name || profileData.id || 'Usuario Spotify';
-        const profilePic = (profileData.images && profileData.images.length > 0) ? profileData.images[0].url : '';
-        
-        chatbotSettings.spotifyAccessToken = tokenData.access_token;
-        chatbotSettings.spotifyRefreshToken = tokenData.refresh_token;
-        chatbotSettings.spotifyExpiresAt = Date.now() + (tokenData.expires_in * 1000);
-        chatbotSettings.spotifyUserName = userName;
-        chatbotSettings.spotifyUserProfilePic = profilePic;
-        chatbotSettings.spotifyUserCountry = profileData.country || 'US';
-        chatbotSettings.spotifyConnected = true;
-        chatbotSettings.spotifyEnabled = true;
-        
-        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
-        io.emit('chatbot_settings_updated', chatbotSettings);
-        
-        res.redirect('/?spotify=connected');
-    } catch (err) {
-        console.error('Error in Spotify Callback:', err);
-        res.redirect('/?spotify=error&message=' + encodeURIComponent(err.message));
-    }
 });
 
 // Middleware to close connections and prevent caching on dynamic API requests
@@ -4700,7 +3851,7 @@ function connectToTikTok(username) {
         console.info(`[TikTok Connector] Backlog buffering ended. Processing last ${messagesToProcess.length} of ${backlogChatMessages.length} comments.`);
         messagesToProcess.forEach(msg => {
             handleCloudTTS(msg);
-            handleSpotifyChatCommand(msg);
+            spotifyModule.handleSpotifyChatCommand(msg);
             handleAiChatCommand(msg);
         });
         backlogChatMessages = [];
@@ -4876,7 +4027,7 @@ function connectToTikTok(username) {
                     backlogChatMessages.push(data);
                 } else {
                     handleCloudTTS(data);
-                    handleSpotifyChatCommand(data);
+                    spotifyModule.handleSpotifyChatCommand(data);
                     handleAiChatCommand(data);
                 }
             }
@@ -5449,8 +4600,8 @@ io.on('connection', (socket) => {
     socket.emit('local_ips', getLocalIPs());
 
     // Send Spotify queue and votes on connection
-    socket.emit('spotify_queue_updated', spotifyQueue);
-    socket.emit('spotify_votes_updated', { votes: spotifyVoteSkips.size, limit: chatbotSettings.spotifyVoteSkipLimit });
+    socket.emit('spotify_queue_updated', spotifyModule.getSpotifyQueue());
+    socket.emit('spotify_votes_updated', { votes: spotifyModule.getSpotifyVoteSkipsCount(), limit: chatbotSettings.spotifyVoteSkipLimit });
     socket.emit('spotify_monetized_users_updated', getMonetizedUsersData());
     socket.emit('remote_config_updated', remoteConfig);
 
@@ -5633,6 +4784,12 @@ io.on('connection', (socket) => {
         delete newSettings.ai;
         
         chatbotSettings = { ...chatbotSettings, ...newSettings };
+        if (newSettings.spotifyMonetizationEnabled !== undefined) {
+            chatbotSettings.spotifyMonetizationEnabled = newSettings.spotifyMonetizationEnabled;
+        }
+        if (newSettings.spotifyPaidOnly !== undefined) {
+            chatbotSettings.spotifyPaidOnly = newSettings.spotifyPaidOnly;
+        }
         
         if (incomingAi) {
             chatbotSettings.ai = chatbotSettings.ai || {};
@@ -5644,8 +4801,12 @@ io.on('connection', (socket) => {
             }
         }
         
+        if (spotifyModule && typeof spotifyModule.updateConfig === 'function') {
+            spotifyModule.updateConfig(chatbotSettings);
+        }
+
         if (newSettings.spotifyVolume !== undefined && newSettings.spotifyVolume !== oldVolume) {
-            setSpotifyVolume(chatbotSettings.spotifyVolume);
+            spotifyModule.setVolume(chatbotSettings.spotifyVolume);
         }
         
         try {
@@ -5861,24 +5022,6 @@ io.on('connection', (socket) => {
         io.emit('tiktok_disconnected');
     });
 
-    // Handle disconnect spotify request
-    socket.on('disconnect_spotify', () => {
-        console.log('Desvinculando Spotify...');
-        chatbotSettings.spotifyAccessToken = '';
-        chatbotSettings.spotifyRefreshToken = '';
-        chatbotSettings.spotifyExpiresAt = 0;
-        chatbotSettings.spotifyUserName = '';
-        chatbotSettings.spotifyUserProfilePic = '';
-        chatbotSettings.spotifyConnected = false;
-        chatbotSettings.spotifyEnabled = false;
-        try {
-            fs.writeFileSync(SETTINGS_FILE, JSON.stringify(chatbotSettings, null, 2));
-            io.emit('chatbot_settings_updated', chatbotSettings);
-        } catch (err) {
-            console.error('Error saving settings after Spotify disconnect:', err);
-        }
-    });
-
     // Handle user change
     socket.on('change_user', (data) => {
         const { username } = data;
@@ -5892,53 +5035,6 @@ io.on('connection', (socket) => {
                 io.emit('system', { type: 'error', message: `Fallo al cambiar de usuario: ${err.message}` });
             }
         }
-    });
-
-    // Queue control events
-    socket.on('get_spotify_queue', () => {
-        socket.emit('spotify_queue_updated', spotifyQueue);
-    });
-    
-    socket.on('delete_queue_item', (index) => {
-        if (index >= 0 && index < spotifyQueue.length) {
-            const removed = spotifyQueue.splice(index, 1);
-            io.emit('spotify_queue_updated', spotifyQueue);
-            console.info(`Eliminado de la cola por el anfitrión: ${removed[0].title}`);
-        }
-    });
-    
-    socket.on('play_queue_item', async (index) => {
-        if (index >= 0 && index < spotifyQueue.length) {
-            const track = spotifyQueue.splice(index, 1)[0];
-            io.emit('spotify_queue_updated', spotifyQueue);
-            
-            spotifyVoteSkips.clear();
-            io.emit('spotify_votes_updated', { votes: 0, limit: chatbotSettings.spotifyVoteSkipLimit });
-            
-            currentActiveQueueTrack = track;
-            await playSpotifyTrack(track.uri);
-            setTimeout(async () => {
-                const trackData = await getSpotifyCurrentlyPlaying();
-                if (trackData) {
-                    currentSpotifyTrack = trackData;
-                    if (currentActiveQueueTrack && (trackData.title === currentActiveQueueTrack.title || trackData.spotifyUrl === currentActiveQueueTrack.uri)) {
-                        trackData.requester = currentActiveQueueTrack.requester;
-                    }
-                    io.emit('spotify_track', trackData);
-                }
-            }, 1000);
-        }
-    });
-    
-    socket.on('skip_spotify_track', () => {
-        console.info('Skip manual solicitado desde el panel.');
-        playNextInQueue();
-    });
-    
-    socket.on('clear_spotify_queue', () => {
-        console.info('Cola vaciada desde el panel.');
-        spotifyQueue = [];
-        io.emit('spotify_queue_updated', spotifyQueue);
     });
 
     socket.on('clear_ai_queue', () => {
@@ -5961,39 +5057,6 @@ io.on('connection', (socket) => {
         emitAiQueueUpdate();
     });
 
-    socket.on('spotify_toggle_play', async () => {
-        console.info('Play/Pause solicitado desde el panel.');
-        if (currentSpotifyTrack && currentSpotifyTrack.isPlaying) {
-            await pauseSpotify();
-        } else {
-            await resumeSpotify();
-        }
-        setTimeout(async () => {
-            const trackData = await getSpotifyCurrentlyPlaying();
-            if (trackData) {
-                currentSpotifyTrack = trackData;
-                if (currentActiveQueueTrack && (trackData.title === currentActiveQueueTrack.title || trackData.spotifyUrl === currentActiveQueueTrack.uri)) {
-                    trackData.requester = currentActiveQueueTrack.requester;
-                }
-                io.emit('spotify_track', trackData);
-            }
-        }, 600);
-    });
-
-    socket.on('spotify_prev', async () => {
-        console.info('Anterior track solicitado desde el panel.');
-        await previousSpotifyTrack();
-        setTimeout(async () => {
-            const trackData = await getSpotifyCurrentlyPlaying();
-            if (trackData) {
-                currentSpotifyTrack = trackData;
-                if (currentActiveQueueTrack && (trackData.title === currentActiveQueueTrack.title || trackData.spotifyUrl === currentActiveQueueTrack.uri)) {
-                    trackData.requester = currentActiveQueueTrack.requester;
-                }
-                io.emit('spotify_track', trackData);
-            }
-        }, 600);
-    });
 
 
 
@@ -6045,7 +5108,7 @@ io.on('connection', (socket) => {
 
         if (eventType === 'chat') {
             handleCloudTTS(eventData);
-            handleSpotifyChatCommand(eventData);
+            spotifyModule.handleSpotifyChatCommand(eventData);
             handleAiChatCommand(eventData);
         } else if (eventType === 'gift') {
             const uniqueId = (eventData.uniqueId || '').toLowerCase();
@@ -6230,6 +5293,17 @@ recetasModule.init(app, io, {
     setConfig: (val) => { recetasConfig = val; },
     getFilePath: () => RECETAS_CONFIG_FILE
 });
+
+// Carga del Módulo de Spotify
+spotifyModule.init(app, io, {
+    getConfig: () => chatbotSettings,
+    setConfig: (newCfg) => { chatbotSettings = newCfg; },
+    getFilePath: () => SETTINGS_FILE,
+    sessionGiftCoins,
+    userMusicCredits,
+    emitMonetizedUsersUpdate: () => emitMonetizedUsersUpdate()
+});
+
 
 server.listen(PORT, () => {
     console.log(`🚀 Servidor ejecutándose en http://127.0.0.1:${PORT}`);

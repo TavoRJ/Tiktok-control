@@ -1542,8 +1542,12 @@ function updateUIWithConfig(config) {
     const spotMonetizationEl = document.getElementById('spotify-monetization-active');
     const spotMonetizationCoinsEl = document.getElementById('spotify-monetization-coins');
     
-    if (spotMonetizationEl) spotMonetizationEl.checked = !!config.spotifyMonetizationEnabled;
-    if (spotMonetizationCoinsEl) spotMonetizationCoinsEl.value = config.spotifyMinCoins || 5;
+    if (spotMonetizationEl) {
+        spotMonetizationEl.checked = Boolean(config.spotifyMonetizationEnabled ?? config.spotifyPaidOnly ?? config.musicPaidOnly);
+    }
+    if (spotMonetizationCoinsEl) {
+        spotMonetizationCoinsEl.value = parseInt(config.spotifyMinCoins, 10) || 1;
+    }
     
     // Toggle coins group visibility based on checkbox status
     const spotCoinsGroup = document.getElementById('spotify-monetization-coins-group');
@@ -1691,47 +1695,48 @@ function sendUpdatedSettings() {
         .map(w => w.trim())
         .filter(w => w.length > 0) : [];
 
+    const ttsEngineVal = document.getElementById('bot-tts-engine')?.value || 'edge';
+    const isCloud = (ttsEngineVal === 'cloud' || ttsEngineVal === 'google_cloud');
+    const cloudVoice = document.getElementById('bot-cloud-voice')?.value || 'es-CO-Neural2-B';
+    const defaultVoice = document.getElementById('bot-default-voice')?.value || 'Spanish Male';
+
     const updated = {
-        active: document.getElementById('bot-active').checked,
-        playLocation: document.getElementById('bot-play-location').value,
-        exclusiveTtsEnabled: document.getElementById('bot-exclusive-enabled').checked,
-        exclusiveTtsUser: document.getElementById('bot-exclusive-user').value.trim().replace('@', ''),
-        readUsername: document.getElementById('bot-read-username').checked,
-        readPrefixRequired: document.getElementById('bot-prefix-required').checked,
+        active: document.getElementById('bot-active')?.checked ?? true,
+        playLocation: document.getElementById('bot-play-location')?.value || 'obs',
+        exclusiveTtsEnabled: document.getElementById('bot-exclusive-enabled')?.checked ?? false,
+        exclusiveTtsUser: document.getElementById('bot-exclusive-user')?.value?.trim()?.replace('@', '') || '',
+        readUsername: document.getElementById('bot-read-username')?.checked ?? true,
+        readPrefixRequired: document.getElementById('bot-prefix-required')?.checked ?? false,
         prefixes: prefixes,
-        permission: document.getElementById('bot-permission').value,
-        blockRareLanguages: document.getElementById('bot-block-rare-languages').checked,
-        maxCharacters: parseInt(document.getElementById('bot-max-characters').value) || 150,
+        permission: document.getElementById('bot-permission')?.value || 'all',
+        blockRareLanguages: document.getElementById('bot-block-rare-languages')?.checked ?? false,
+        maxCharacters: parseInt(document.getElementById('bot-max-characters')?.value, 10) || 150,
         bannedWords: bannedWords,
-        bannedWordsAction: document.getElementById('bot-banned-action').value,
+        bannedWordsAction: document.getElementById('bot-banned-action')?.value || 'ignore',
         ignoreUserList: ignoreUserList,
         bannedUsernames: bannedUsernames,
-        ttsEngine: (document.getElementById('bot-tts-engine').value === 'cloud') ? 'google_cloud' : document.getElementById('bot-tts-engine').value,
-        cloudVoiceName: document.getElementById('bot-cloud-voice') ? document.getElementById('bot-cloud-voice').value : 'es-CO-Neural2-B',
-        geminiModel: document.getElementById('bot-gemini-model').value,
-        geminiLanguage: document.getElementById('bot-gemini-language').value,
-        geminiVoiceName: document.getElementById('bot-gemini-voice').value,
-        geminiStyleInstructions: document.getElementById('bot-gemini-style').value.trim(),
-        voiceName: (document.getElementById('bot-tts-engine').value === 'cloud' || document.getElementById('bot-tts-engine').value === 'google_cloud')
-            ? (document.getElementById('bot-cloud-voice') ? document.getElementById('bot-cloud-voice').value : 'es-CO-Neural2-B')
-            : document.getElementById('bot-default-voice').value,
-        defaultVoice: (document.getElementById('bot-tts-engine').value === 'cloud' || document.getElementById('bot-tts-engine').value === 'google_cloud')
-            ? (document.getElementById('bot-cloud-voice') ? document.getElementById('bot-cloud-voice').value : 'es-CO-Neural2-B')
-            : document.getElementById('bot-default-voice').value,
-        volume: parseFloat(document.getElementById('bot-default-volume').value),
-        pitch: parseFloat(document.getElementById('bot-default-pitch').value),
-        rate: parseFloat(document.getElementById('bot-default-rate').value),
+        ttsEngine: isCloud ? 'google_cloud' : ttsEngineVal,
+        cloudVoiceName: cloudVoice,
+        geminiModel: document.getElementById('bot-gemini-model')?.value || 'gemini-1.5-flash',
+        geminiLanguage: document.getElementById('bot-gemini-language')?.value || 'es',
+        geminiVoiceName: document.getElementById('bot-gemini-voice')?.value || 'Puck',
+        geminiStyleInstructions: document.getElementById('bot-gemini-style')?.value?.trim() || '',
+        voiceName: isCloud ? cloudVoice : defaultVoice,
+        defaultVoice: isCloud ? cloudVoice : defaultVoice,
+        volume: parseFloat(document.getElementById('bot-default-volume')?.value || '0.8'),
+        pitch: parseFloat(document.getElementById('bot-default-pitch')?.value || '1'),
+        rate: parseFloat(document.getElementById('bot-default-rate')?.value || '1'),
         
         // Direct events read settings
-        readFollowsEnabled: document.getElementById('bot-read-follows').checked,
-        readSharesEnabled: document.getElementById('bot-read-shares').checked,
-        readGiftsEnabled: document.getElementById('bot-read-gifts').checked,
-        readLikesMilestoneEnabled: document.getElementById('bot-read-likes').checked,
-        likesMilestoneValue: parseInt(document.getElementById('bot-likes-milestone').value) || 100,
+        readFollowsEnabled: document.getElementById('bot-read-follows')?.checked ?? true,
+        readSharesEnabled: document.getElementById('bot-read-shares')?.checked ?? true,
+        readGiftsEnabled: document.getElementById('bot-read-gifts')?.checked ?? true,
+        readLikesMilestoneEnabled: document.getElementById('bot-read-likes')?.checked ?? true,
+        likesMilestoneValue: parseInt(document.getElementById('bot-likes-milestone')?.value, 10) || 100,
         
         // New Settings fields
-        tiktokUsername: document.getElementById('setup-tiktok-username').value.trim().replace('@', ''),
-        autoConnect: document.getElementById('setup-auto-connect').checked,
+        tiktokUsername: document.getElementById('setup-tiktok-username')?.value?.trim()?.replace('@', '') || '',
+        autoConnect: document.getElementById('setup-auto-connect')?.checked ?? false,
         themeName: (chatbotConfig && chatbotConfig.themeName) || 'neutral',
         visualStyle: document.getElementById('setup-visual-style') ? document.getElementById('setup-visual-style').value : 'glassmorphism',
 
@@ -1749,37 +1754,37 @@ function sendUpdatedSettings() {
             : (document.getElementById('cloud-tts-api-key') ? document.getElementById('cloud-tts-api-key').value.trim() : ''),
         spotifyClientId: document.getElementById('spotify-client-id') ? document.getElementById('spotify-client-id').value.trim() : '',
         spotifyClientSecret: document.getElementById('spotify-client-secret') ? document.getElementById('spotify-client-secret').value.trim() : '',
-        spotifyEnabled: document.getElementById('spotify-active') ? document.getElementById('spotify-active').checked : false,
-        spotifyTheme: document.getElementById('spotify-theme') ? document.getElementById('spotify-theme').value : 'apple-music',
-        spotifyPosition: document.getElementById('spotify-position') ? document.getElementById('spotify-position').value : 'bottom-left',
-        spotifyNeonColor: document.getElementById('spotify-neon-color') ? document.getElementById('spotify-neon-color').value : 'cyan',
-        songlistColor: document.getElementById('songlist-color') ? document.getElementById('songlist-color').value : 'cyan',
-        ttsWaveColor: document.getElementById('tts-wave-color') ? document.getElementById('tts-wave-color').value : 'cyan',
-        spotifyVinylDesign: document.getElementById('spotify-vinyl-design') ? document.getElementById('spotify-vinyl-design').value : 'classic',
-        spotifyVinylSpeed: document.getElementById('spotify-vinyl-speed') ? document.getElementById('spotify-vinyl-speed').value : 'normal',
-        
-        // Spotify interactive settings
-        spotifyVolume: document.getElementById('spotify-volume-slider') ? parseInt(document.getElementById('spotify-volume-slider').value) || 80 : 80,
-        spotifyChatQueueEnabled: document.getElementById('spotify-chat-queue-enabled') ? document.getElementById('spotify-chat-queue-enabled').checked : true,
-        spotifyExplicitAllowed: document.getElementById('spotify-explicit-allowed') ? document.getElementById('spotify-explicit-allowed').checked : false,
-        spotifyPermission: document.getElementById('spotify-permission') ? document.getElementById('spotify-permission').value : 'all',
-        spotifyCommandPrefix: document.getElementById('spotify-command-prefix') ? document.getElementById('spotify-command-prefix').value.trim() : '!song',
-        spotifyVoteSkipLimit: document.getElementById('spotify-voteskip-limit') ? parseInt(document.getElementById('spotify-voteskip-limit').value) || 3 : 3,
-        spotifySkipAllowedUsers: document.getElementById('spotify-skip-allowed-users') ? document.getElementById('spotify-skip-allowed-users').value.trim() : '',
-        
-        // Music Request Monetization settings
-        spotifyMonetizationEnabled: document.getElementById('spotify-monetization-active').checked,
-        spotifyMinCoins: parseInt(document.getElementById('spotify-monetization-coins').value) || 5,
+        spotifyEnabled: document.getElementById('spotify-active')?.checked ?? false,
+        spotifyTheme: document.getElementById('spotify-theme')?.value || 'apple-music',
+        spotifyPosition: document.getElementById('spotify-position')?.value || 'bottom-left',
+        spotifyNeonColor: document.getElementById('spotify-neon-color')?.value || 'cyan',
+        songlistColor: document.getElementById('songlist-color')?.value || 'cyan',
+        ttsWaveColor: document.getElementById('tts-wave-color')?.value || 'cyan',
+        spotifyVinylDesign: document.getElementById('spotify-vinyl-design')?.value || 'classic',
+        spotifyVinylSpeed: document.getElementById('spotify-vinyl-speed')?.value || 'normal',
+        spotifyVolume: parseInt(document.getElementById('spotify-volume-slider')?.value, 10) || 80,
+        spotifyChatQueueEnabled: document.getElementById('spotify-chat-queue-enabled')?.checked ?? true,
+        spotifyExplicitAllowed: document.getElementById('spotify-explicit-allowed')?.checked ?? false,
+        spotifyMonetizationEnabled: document.getElementById('spotify-monetization-active')?.checked || false,
+        spotifyPaidOnly: document.getElementById('spotify-monetization-active')?.checked || false,
+        musicPaidOnly: document.getElementById('spotify-monetization-active')?.checked || false,
+        spotifyMinCoins: parseInt(document.getElementById('spotify-monetization-coins')?.value, 10) || 1,
+        spotifyPermission: document.getElementById('spotify-permission')?.value || 'all',
+        spotifyAllowedRole: document.getElementById('spotify-permission')?.value || 'all',
+        spotifyUserRole: document.getElementById('spotify-permission')?.value || 'all',
+        spotifyCommandPrefix: document.getElementById('spotify-command-prefix')?.value?.trim() || '!song',
+        spotifyVoteSkipLimit: parseInt(document.getElementById('spotify-voteskip-limit')?.value, 10) || 3,
+        spotifySkipAllowedUsers: document.getElementById('spotify-skip-allowed-users')?.value?.trim() || '',
         
         // Sound alerts setting
-        soundAlertsEnabled: document.getElementById('sound-alerts-active').checked,
+        soundAlertsEnabled: document.getElementById('sound-alerts-active')?.checked ?? true,
         
         // Custom events / formatting
-        filterEmojisFromNames: document.getElementById('bot-filter-emojis-names').checked,
-        thankYouSharePhrase: document.getElementById('bot-thank-share-phrase').value,
-        thankYouFollowPhrase: document.getElementById('bot-thank-follow-phrase').value,
-        thankYouGiftPhrase: document.getElementById('bot-thank-gift-phrase').value,
-        thankYouLikePhrase: document.getElementById('bot-thank-like-phrase') ? document.getElementById('bot-thank-like-phrase').value : '',
+        filterEmojisFromNames: document.getElementById('bot-filter-emojis-names')?.checked ?? false,
+        thankYouSharePhrase: document.getElementById('bot-thank-share-phrase')?.value || '',
+        thankYouFollowPhrase: document.getElementById('bot-thank-follow-phrase')?.value || '',
+        thankYouGiftPhrase: document.getElementById('bot-thank-gift-phrase')?.value || '',
+        thankYouLikePhrase: document.getElementById('bot-thank-like-phrase')?.value || '',
 
         // Event Alert Actions & Sounds
         shareAction: document.getElementById('bot-share-action') ? document.getElementById('bot-share-action').value : 'read',
@@ -1827,15 +1832,15 @@ function sendUpdatedSettings() {
         },
 
         // Metas, Ruleta, Overlays
-        goals: chatbotConfig.goals || [],
-        wheelEnabled: document.getElementById('wheel-enabled').checked,
-        wheelTriggerGift: document.getElementById('wheel-trigger-gift').value,
-        wheelTriggerCoins: parseInt(document.getElementById('wheel-trigger-coins').value) || 10,
-        overlayMusicQueueEnabled: document.getElementById('overlay-music-enabled').checked,
-        overlayChatEnabled: document.getElementById('overlay-chat-enabled').checked,
-        overlayChatFilterPremium: document.getElementById('overlay-chat-premium').checked,
-        ttsEffectsEnabled: document.getElementById('tts-effects-enabled').checked,
-        recipeGoalColor: document.getElementById('recipe-goal-color-input') ? document.getElementById('recipe-goal-color-input').value : '#ff477e',
+        goals: (chatbotConfig && chatbotConfig.goals) || [],
+        wheelEnabled: false,
+        wheelTriggerGift: document.getElementById('wheel-trigger-gift')?.value || '',
+        wheelTriggerCoins: parseInt(document.getElementById('wheel-trigger-coins')?.value, 10) || 10,
+        overlayMusicQueueEnabled: document.getElementById('overlay-music-enabled')?.checked ?? true,
+        overlayChatEnabled: document.getElementById('overlay-chat-enabled')?.checked ?? true,
+        overlayChatFilterPremium: document.getElementById('overlay-chat-premium')?.checked ?? false,
+        ttsEffectsEnabled: document.getElementById('tts-effects-enabled')?.checked ?? false,
+        recipeGoalColor: document.getElementById('recipe-goal-color-input')?.value || '#ff477e',
 
         // Rotador de Redes Sociales
         socials: (() => {
@@ -1854,9 +1859,9 @@ function sendUpdatedSettings() {
             return list;
         })(),
         socialsSettings: {
-            enabled: document.getElementById('social-rotator-enabled') ? document.getElementById('social-rotator-enabled').checked : false,
-            displayTime: document.getElementById('social-display-time') ? (parseInt(document.getElementById('social-display-time').value) || 10) : 10,
-            pauseTime: document.getElementById('social-pause-time') ? (parseInt(document.getElementById('social-pause-time').value) !== undefined ? parseInt(document.getElementById('social-pause-time').value) : 2) : 2
+            enabled: document.getElementById('social-rotator-enabled')?.checked ?? false,
+            displayTime: parseInt(document.getElementById('social-display-time')?.value, 10) || 10,
+            pauseTime: parseInt(document.getElementById('social-pause-time')?.value, 10) || 2
         },
         
         // AI Gemini configuration
@@ -1864,18 +1869,18 @@ function sendUpdatedSettings() {
             const themeName = (chatbotConfig && chatbotConfig.themeName) || 'neutral';
             const aiProfile = themeName === 'majo' ? 'majo' : 'naya';
             
-            const aiBotActive = document.getElementById('ai-bot-active') ? document.getElementById('ai-bot-active').checked : false;
-            const aiMonetizationActive = document.getElementById('ai-monetization-active') ? document.getElementById('ai-monetization-active').checked : false;
-            const aiMinCoins = document.getElementById('ai-min-coins') ? (parseInt(document.getElementById('ai-min-coins').value) || 5) : 5;
-            const aiMaxChars = document.getElementById('ai-max-chars') ? (parseInt(document.getElementById('ai-max-chars').value) || 150) : 150;
-            const aiCooldown = document.getElementById('ai-cooldown') ? (parseInt(document.getElementById('ai-cooldown').value) || 10) : 10;
-            const aiReadUsername = document.getElementById('ai-read-username') ? document.getElementById('ai-read-username').checked : true;
-            const aiVoiceName = document.getElementById('ai-voice-name') ? document.getElementById('ai-voice-name').value : "default";
-            const aiVoiceStyle = document.getElementById('ai-voice-style') ? document.getElementById('ai-voice-style').value.trim() : "";
-            const aiPromptPersonality = document.getElementById('ai-prompt-personality') ? document.getElementById('ai-prompt-personality').value : "";
-            const aiCommandPrefix = document.getElementById('ai-command-prefix') ? document.getElementById('ai-command-prefix').value.trim() || "!ia" : "!ia";
-            const aiGiftAuto = document.getElementById('ai-gift-auto-respond') ? document.getElementById('ai-gift-auto-respond').checked : false;
-            const aiGiftMinCoins = document.getElementById('ai-gift-min-coins') ? parseInt(document.getElementById('ai-gift-min-coins').value) || 100 : 100;
+            const aiBotActive = document.getElementById('ai-bot-active')?.checked ?? false;
+            const aiMonetizationActive = document.getElementById('ai-monetization-active')?.checked ?? false;
+            const aiMinCoins = parseInt(document.getElementById('ai-min-coins')?.value, 10) || 5;
+            const aiMaxChars = parseInt(document.getElementById('ai-max-chars')?.value, 10) || 150;
+            const aiCooldown = parseInt(document.getElementById('ai-cooldown')?.value, 10) || 10;
+            const aiReadUsername = document.getElementById('ai-read-username')?.checked ?? true;
+            const aiVoiceName = document.getElementById('ai-voice-name')?.value || "default";
+            const aiVoiceStyle = document.getElementById('ai-voice-style')?.value?.trim() || "";
+            const aiPromptPersonality = document.getElementById('ai-prompt-personality')?.value || "";
+            const aiCommandPrefix = document.getElementById('ai-command-prefix')?.value?.trim() || "!ia";
+            const aiGiftAuto = document.getElementById('ai-gift-auto-respond')?.checked ?? false;
+            const aiGiftMinCoins = parseInt(document.getElementById('ai-gift-min-coins')?.value, 10) || 100;
             
             return {
                 [aiProfile]: {
@@ -1903,6 +1908,10 @@ function sendUpdatedSettings() {
     };
     
     socket.emit('update_chatbot_settings', updated);
+    socket.emit('update_settings', updated);
+    if (typeof showToast === 'function') {
+        showToast('Configuración guardada correctamente', 'success');
+    }
 }
 
 // Event Listeners for inputs changing
@@ -2037,6 +2046,12 @@ textInputsToWatch.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('blur', sendUpdatedSettings);
 });
+
+const spotCoinsInput = document.getElementById('spotify-monetization-coins');
+if (spotCoinsInput) {
+    spotCoinsInput.addEventListener('input', sendUpdatedSettings);
+    spotCoinsInput.addEventListener('change', sendUpdatedSettings);
+}
 
 // Chatbot local Save button click event handler
 const btnSaveChatbot = document.getElementById('btn-save-chatbot-settings');
