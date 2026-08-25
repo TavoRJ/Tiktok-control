@@ -1,6 +1,6 @@
 {
-  "maintenanceMode": true,
-  "maintenanceMessage": "Estamos actualizando la arquitectura visual y optimizando el motor de audio.",
+  "showOverlay": true,
+  "overlayUrl": "https://raw.githubusercontent.com/TavoRJ/Tiktok-control/main/maintenance-remote.html",
   "devSettingsUnlocked": false,
   "aiSettingsUnlocked": false
 }
