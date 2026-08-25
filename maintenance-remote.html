@@ -1,330 +1,237 @@
-<div class="tav-maintenance-wrapper">
-    <div class="tav-maintenance-card">
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TavLive • Actualización en curso</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            user-select: none;
+        }
+
+        body {
+            background-color: #030712;
+            background-image: 
+                radial-gradient(circle at 50% 0%, rgba(0, 242, 254, 0.04) 0%, transparent 60%),
+                radial-gradient(circle at 80% 100%, rgba(16, 185, 129, 0.03) 0%, transparent 50%);
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            color: #f8fafc;
+        }
+
+        .maintenance-card {
+            width: 100%;
+            max-width: 440px;
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 24px;
+            padding: 40px 32px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Badge de Estado */
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 242, 254, 0.08);
+            border: 1px solid rgba(0, 242, 254, 0.2);
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            color: #00f2fe;
+            margin-bottom: 24px;
+        }
+
+        .pulse-dot {
+            width: 6px;
+            height: 6px;
+            background: #00f2fe;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #00f2fe;
+            animation: pulse 2s infinite ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.85); }
+        }
+
+        /* Logo y Versión */
+        .brand-title {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: #ffffff;
+            line-height: 1;
+        }
+
+        .brand-title span {
+            color: #00f2fe;
+        }
+
+        .brand-subtitle {
+            font-size: 11px;
+            font-weight: 700;
+            color: #475569;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            margin-top: 6px;
+            margin-bottom: 28px;
+        }
+
+        /* Caja de Detalle */
+        .info-panel {
+            background: rgba(4, 7, 17, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 16px;
+            padding: 18px 20px;
+            width: 100%;
+            margin-bottom: 28px;
+        }
+
+        .info-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 6px;
+        }
+
+        .info-desc {
+            font-size: 12px;
+            color: #64748b;
+            line-height: 1.5;
+        }
+
+        /* Barra de Progreso Minimalista */
+        .progress-section {
+            width: 100%;
+            margin-bottom: 28px;
+        }
+
+        .progress-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            font-weight: 700;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .progress-labels .percentage {
+            color: #00f2fe;
+            font-family: monospace;
+        }
+
+        .progress-track {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            width: 92%;
+            height: 100%;
+            background: linear-gradient(90deg, #00f2fe, #10b981);
+            border-radius: 999px;
+        }
+
+        /* Botón de Acción */
+        .btn-check {
+            width: 100%;
+            background: #ffffff;
+            color: #030712;
+            border: none;
+            padding: 14px 20px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-check:hover {
+            background: #e2e8f0;
+            transform: translateY(-1px);
+        }
+
+        .btn-check:active {
+            transform: translateY(0);
+        }
+
+        /* Footer */
+        .footer-note {
+            margin-top: 24px;
+            font-size: 11px;
+            color: #334155;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="maintenance-card">
         
-        <!-- Status Indicator Pill -->
+        <!-- Estado -->
         <div class="status-pill">
-            <span class="status-radar"></span>
-            <span class="status-text">DESPLIEGUE EN CURSO</span>
+            <span class="pulse-dot"></span>
+            Actualización del Sistema
         </div>
 
-        <!-- Identity / Logo -->
-        <div class="brand-title">
-            Tav<span class="brand-gradient">Live</span>
-        </div>
-        <div class="brand-subtitle">STUDIO ENGINE • v1.5.2</div>
+        <!-- Marca -->
+        <h1 class="brand-title">Tav<span>Live</span></h1>
+        <p class="brand-subtitle">Studio Engine • v1.5.2</p>
 
-        <!-- Technical Pulse Centerpiece -->
-        <div class="visual-node-container">
-            <div class="visual-ring ring-outer"></div>
-            <div class="visual-ring ring-mid"></div>
-            <div class="visual-core">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-                </svg>
-            </div>
+        <!-- Detalle -->
+        <div class="info-panel">
+            <h2 class="info-title">Optimizando Servidores y Audio</h2>
+            <p class="info-desc">Estamos desplegando mejoras en la sincronización en vivo y estabilidad del motor de sonido.</p>
         </div>
 
-        <!-- Message Block -->
-        <div class="content-box">
-            <div class="content-heading">Optimizando Servidores y Audio</div>
-            <div class="content-desc">
-                Estamos implementando la nueva arquitectura visual, aceleración por hardware y sincronización directa con Spotify.
-            </div>
-        </div>
-
-        <!-- Sync Progress Bar -->
+        <!-- Progreso -->
         <div class="progress-section">
             <div class="progress-labels">
-                <span>ESTADO DE IMPLEMENTACIÓN</span>
-                <span class="progress-percent">92%</span>
+                <span>Despliegue</span>
+                <span class="percentage">92%</span>
             </div>
             <div class="progress-track">
                 <div class="progress-fill"></div>
             </div>
         </div>
 
-        <!-- Action Button -->
-        <button type="button" class="btn-action" onclick="window.location.reload()">
-            <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
-            </svg>
-            COMPROBAR DISPONIBILIDAD
+        <!-- Botón -->
+        <button class="btn-check" onclick="window.location.reload()">
+            Comprobar Disponibilidad
         </button>
 
-        <!-- Footer Info -->
-        <div class="footer-meta">
-            <span>TavLive Core System</span>
-            <span class="bullet">•</span>
-            <span>Acceso Seguro Restringido</span>
-        </div>
+        <p class="footer-note">TavLive Core System • Acceso Restringido</p>
 
     </div>
-</div>
 
-<style>
-.tav-maintenance-wrapper {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    min-height: 100vh;
-    background: radial-gradient(circle at 50% 30%, #0d1527 0%, #030712 100%);
-    box-sizing: border-box;
-    padding: 24px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    user-select: none;
-}
-
-.tav-maintenance-card {
-    position: relative;
-    width: 100%;
-    max-width: 410px;
-    background: rgba(13, 20, 36, 0.78);
-    border: 1px solid rgba(0, 242, 254, 0.18);
-    border-radius: 28px;
-    padding: 38px 30px 30px;
-    box-sizing: border-box;
-    text-align: center;
-    box-shadow: 
-        0 0 60px -15px rgba(0, 242, 254, 0.15),
-        0 30px 60px -12px rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    overflow: hidden;
-}
-
-.tav-maintenance-card::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(circle, rgba(0, 242, 254, 0.04) 0%, transparent 60%);
-    pointer-events: none;
-}
-
-.status-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 5px 14px;
-    border-radius: 999px;
-    background: rgba(0, 242, 254, 0.06);
-    border: 1px solid rgba(0, 242, 254, 0.22);
-    margin-bottom: 22px;
-}
-
-.status-radar {
-    position: relative;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #00f2fe;
-}
-
-.status-radar::after {
-    content: '';
-    position: absolute;
-    top: -3px;
-    left: -3px;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    border: 1.5px solid #00f2fe;
-    animation: radar-ping 2s cubic-bezier(0, 0.2, 0.8, 1) infinite;
-}
-
-.status-text {
-    color: #00f2fe;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.8px;
-}
-
-.brand-title {
-    font-size: 38px;
-    font-weight: 900;
-    letter-spacing: -1.5px;
-    color: #f8fafc;
-    line-height: 1;
-    margin-bottom: 6px;
-}
-
-.brand-gradient {
-    background: linear-gradient(90deg, #00f2fe 0%, #1DB954 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-.brand-subtitle {
-    color: #64748b;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 1.5px;
-    margin-bottom: 26px;
-}
-
-.visual-node-container {
-    position: relative;
-    width: 72px;
-    height: 72px;
-    margin: 0 auto 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.visual-ring {
-    position: absolute;
-    border-radius: 50%;
-    border: 1px solid transparent;
-}
-
-.ring-outer {
-    width: 72px;
-    height: 72px;
-    border-top: 1px solid rgba(0, 242, 254, 0.4);
-    border-bottom: 1px solid rgba(29, 185, 84, 0.3);
-    animation: spin-clockwise 8s linear infinite;
-}
-
-.ring-mid {
-    width: 56px;
-    height: 56px;
-    border-left: 1px solid rgba(0, 242, 254, 0.5);
-    border-right: 1px solid transparent;
-    animation: spin-counter 5s linear infinite;
-}
-
-.visual-core {
-    width: 44px;
-    height: 44px;
-    border-radius: 14px;
-    background: rgba(15, 23, 42, 0.8);
-    border: 1px solid rgba(0, 242, 254, 0.25);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #00f2fe;
-    box-shadow: 0 0 20px rgba(0, 242, 254, 0.15);
-}
-
-.content-box {
-    background: rgba(15, 23, 42, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 16px;
-    padding: 18px 16px;
-    margin-bottom: 22px;
-}
-
-.content-heading {
-    color: #f1f5f9;
-    font-size: 15px;
-    font-weight: 800;
-    margin-bottom: 6px;
-    letter-spacing: -0.2px;
-}
-
-.content-desc {
-    color: #94a3b8;
-    font-size: 12px;
-    line-height: 1.55;
-    font-weight: 400;
-}
-
-.progress-section {
-    margin-bottom: 24px;
-    text-align: left;
-}
-
-.progress-labels {
-    display: flex;
-    justify-content: space-between;
-    font-size: 10px;
-    font-weight: 700;
-    color: #64748b;
-    margin-bottom: 6px;
-    letter-spacing: 0.5px;
-    font-family: monospace;
-}
-
-.progress-percent {
-    color: #00f2fe;
-}
-
-.progress-track {
-    width: 100%;
-    height: 5px;
-    background: rgba(30, 41, 59, 0.8);
-    border-radius: 999px;
-    overflow: hidden;
-}
-
-.progress-fill {
-    width: 92%;
-    height: 100%;
-    background: linear-gradient(90deg, #00f2fe 0%, #1DB954 100%);
-    border-radius: 999px;
-    box-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
-}
-
-.btn-action {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 13px 20px;
-    border-radius: 12px;
-    background: linear-gradient(135deg, rgba(0, 242, 254, 0.12) 0%, rgba(29, 185, 84, 0.08) 100%);
-    border: 1px solid rgba(0, 242, 254, 0.35);
-    color: #f8fafc;
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: 0.6px;
-    cursor: pointer;
-    transition: all 0.25s ease;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-}
-
-.btn-action:hover {
-    background: linear-gradient(135deg, rgba(0, 242, 254, 0.2) 0%, rgba(29, 185, 84, 0.15) 100%);
-    border-color: rgba(0, 242, 254, 0.7);
-    box-shadow: 0 0 25px rgba(0, 242, 254, 0.25);
-    transform: translateY(-1px);
-}
-
-.btn-action:active {
-    transform: translateY(0);
-}
-
-.footer-meta {
-    margin-top: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    font-size: 10px;
-    color: #475569;
-    font-weight: 500;
-    letter-spacing: 0.3px;
-}
-
-.bullet {
-    color: #334155;
-}
-
-@keyframes radar-ping {
-    0% { transform: scale(1); opacity: 0.8; }
-    100% { transform: scale(2.6); opacity: 0; }
-}
-
-@keyframes spin-clockwise {
-    100% { transform: rotate(360deg); }
-}
-
-@keyframes spin-counter {
-    100% { transform: rotate(-360deg); }
-}
-</style>
+</body>
+</html>
