@@ -1,4 +1,6 @@
 {
+  "maintenanceMode": true,
+  "maintenanceMessage": "Estamos actualizando la arquitectura visual y optimizando el motor de audio.",
   "devSettingsUnlocked": false,
   "aiSettingsUnlocked": false
 }
