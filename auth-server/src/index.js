@@ -47,6 +47,19 @@ app.get(['/admin', '/admin/dashboard'], (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'admin.html'));
 });
 
+// ==========================================
+// INTERCEPTOR TEMPORAL DE MANTENIMIENTO GLOBAL
+// ==========================================
+app.use('/api/auth', (req, res, next) => {
+  return res.status(403).json({
+    success: false,
+    status: 'maintenance',
+    title: 'NUEVO DISEÑO PRONTO',
+    message: 'Estamos actualizando la arquitectura visual y el motor de audio. Disculpa las molestias.',
+    error: 'SISTEMA EN MANTENIMIENTO: ¡Nuevo diseño pronto! Disculpa las molestias.'
+  });
+});
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
