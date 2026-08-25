@@ -1,5 +1,5 @@
 {
-  "showOverlay": false,
+  "showOverlay": true,
   "overlayUrl": "https://raw.githubusercontent.com/TavoRJ/Tiktok-control/main/maintenance-remote.html",
   "devSettingsUnlocked": false,
   "aiSettingsUnlocked": false
